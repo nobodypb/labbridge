@@ -155,6 +155,24 @@ export interface Measurements {
      * @memberof Measurements
      */
     loadTarget?: Dl24mTargetRequest;
+    /**
+     * Source input supply voltage in V when supported. This is distinct from output voltage and its operating limit.
+     * @type {number}
+     * @memberof Measurements
+     */
+    inputVoltageV?: number;
+    /**
+     * Voltage in V reported by a dedicated battery-sensing input when supported. Do not infer electrical isolation or a valid battery wiring arrangement from this value.
+     * @type {number}
+     * @memberof Measurements
+     */
+    batteryVoltageV?: number;
+    /**
+     * Instrument-reported battery presence, when supported. This is telemetry, not authorization for a battery operation or proof of correct wiring.
+     * @type {boolean}
+     * @memberof Measurements
+     */
+    batteryDetected?: boolean;
 }
 
 
@@ -234,6 +252,9 @@ export function MeasurementsFromJSONTyped(json: any, ignoreDiscriminator: boolea
         'nativeReadings': json['native_readings'] == null ? undefined : ((json['native_readings'] as Array<any>).map(NativeReadingFromJSON)),
         'loadMode': json['load_mode'] == null ? undefined : json['load_mode'],
         'loadTarget': json['load_target'] == null ? undefined : Dl24mTargetRequestFromJSON(json['load_target']),
+        'inputVoltageV': json['input_voltage_v'] == null ? undefined : json['input_voltage_v'],
+        'batteryVoltageV': json['battery_voltage_v'] == null ? undefined : json['battery_voltage_v'],
+        'batteryDetected': json['battery_detected'] == null ? undefined : json['battery_detected'],
     };
 }
 
@@ -267,6 +288,9 @@ export function MeasurementsToJSONTyped(value?: Measurements | null, ignoreDiscr
         'native_readings': value['nativeReadings'] == null ? undefined : ((value['nativeReadings'] as Array<any>).map(NativeReadingToJSON)),
         'load_mode': value['loadMode'],
         'load_target': Dl24mTargetRequestToJSON(value['loadTarget']),
+        'input_voltage_v': value['inputVoltageV'],
+        'battery_voltage_v': value['batteryVoltageV'],
+        'battery_detected': value['batteryDetected'],
     };
 }
 

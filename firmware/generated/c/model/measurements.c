@@ -75,7 +75,10 @@ static measurements_t *measurements_create_internal(
     char *boot_id,
     list_t *native_readings,
     labbridge_api_measurements_LOADMODE_e load_mode,
-    dl24m_target_request_t *load_target
+    dl24m_target_request_t *load_target,
+    double input_voltage_v,
+    double battery_voltage_v,
+    int battery_detected
     ) {
     measurements_t *measurements_local_var = malloc(sizeof(measurements_t));
     if (!measurements_local_var) {
@@ -100,6 +103,9 @@ static measurements_t *measurements_create_internal(
     measurements_local_var->native_readings = native_readings;
     measurements_local_var->load_mode = load_mode;
     measurements_local_var->load_target = load_target;
+    measurements_local_var->input_voltage_v = input_voltage_v;
+    measurements_local_var->battery_voltage_v = battery_voltage_v;
+    measurements_local_var->battery_detected = battery_detected;
 
     measurements_local_var->_library_owned = 1;
     return measurements_local_var;
@@ -124,7 +130,10 @@ __attribute__((deprecated)) measurements_t *measurements_create(
     char *boot_id,
     list_t *native_readings,
     labbridge_api_measurements_LOADMODE_e load_mode,
-    dl24m_target_request_t *load_target
+    dl24m_target_request_t *load_target,
+    double input_voltage_v,
+    double battery_voltage_v,
+    int battery_detected
     ) {
     return measurements_create_internal (
         device_id,
@@ -145,7 +154,10 @@ __attribute__((deprecated)) measurements_t *measurements_create(
         boot_id,
         native_readings,
         load_mode,
-        load_target
+        load_target,
+        input_voltage_v,
+        battery_voltage_v,
+        battery_detected
         );
 }
 
@@ -376,6 +388,30 @@ cJSON *measurements_convertToJSON(measurements_t *measurements) {
     cJSON_AddItemToObject(item, "load_target", load_target_local_JSON);
     if(item->child == NULL) {
     goto fail;
+    }
+    }
+
+
+    // measurements->input_voltage_v
+    if(measurements->input_voltage_v) {
+    if(cJSON_AddNumberToObject(item, "input_voltage_v", measurements->input_voltage_v) == NULL) {
+    goto fail; //Numeric
+    }
+    }
+
+
+    // measurements->battery_voltage_v
+    if(measurements->battery_voltage_v) {
+    if(cJSON_AddNumberToObject(item, "battery_voltage_v", measurements->battery_voltage_v) == NULL) {
+    goto fail; //Numeric
+    }
+    }
+
+
+    // measurements->battery_detected
+    if(measurements->battery_detected) {
+    if(cJSON_AddBoolToObject(item, "battery_detected", measurements->battery_detected) == NULL) {
+    goto fail; //Bool
     }
     }
 
@@ -673,6 +709,42 @@ measurements_t *measurements_parseFromJSON(cJSON *measurementsJSON){
     load_target_local_nonprim = dl24m_target_request_parseFromJSON(load_target); //nonprimitive
     }
 
+    // measurements->input_voltage_v
+    cJSON *input_voltage_v = cJSON_GetObjectItemCaseSensitive(measurementsJSON, "input_voltage_v");
+    if (cJSON_IsNull(input_voltage_v)) {
+        input_voltage_v = NULL;
+    }
+    if (input_voltage_v) { 
+    if(!cJSON_IsNumber(input_voltage_v))
+    {
+    goto end; //Numeric
+    }
+    }
+
+    // measurements->battery_voltage_v
+    cJSON *battery_voltage_v = cJSON_GetObjectItemCaseSensitive(measurementsJSON, "battery_voltage_v");
+    if (cJSON_IsNull(battery_voltage_v)) {
+        battery_voltage_v = NULL;
+    }
+    if (battery_voltage_v) { 
+    if(!cJSON_IsNumber(battery_voltage_v))
+    {
+    goto end; //Numeric
+    }
+    }
+
+    // measurements->battery_detected
+    cJSON *battery_detected = cJSON_GetObjectItemCaseSensitive(measurementsJSON, "battery_detected");
+    if (cJSON_IsNull(battery_detected)) {
+        battery_detected = NULL;
+    }
+    if (battery_detected) { 
+    if(!cJSON_IsBool(battery_detected))
+    {
+    goto end; //Bool
+    }
+    }
+
 
     measurements_local_var = measurements_create_internal (
         strdup(device_id->valuestring),
@@ -693,7 +765,10 @@ measurements_t *measurements_parseFromJSON(cJSON *measurementsJSON){
         boot_id && !cJSON_IsNull(boot_id) ? strdup(boot_id->valuestring) : NULL,
         native_readings ? native_readingsList : NULL,
         load_mode ? load_modeVariable : labbridge_api_measurements_LOADMODE_NULL,
-        load_target ? load_target_local_nonprim : NULL
+        load_target ? load_target_local_nonprim : NULL,
+        input_voltage_v ? input_voltage_v->valuedouble : 0,
+        battery_voltage_v ? battery_voltage_v->valuedouble : 0,
+        battery_detected ? battery_detected->valueint : 0
         );
 
     return measurements_local_var;

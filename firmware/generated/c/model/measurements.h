@@ -65,6 +65,9 @@ typedef struct measurements_t {
     list_t *native_readings; //nonprimitive container
     labbridge_api_measurements_LOADMODE_e load_mode; //enum
     struct dl24m_target_request_t *load_target; //model
+    double input_voltage_v; //numeric
+    double battery_voltage_v; //numeric
+    int battery_detected; //boolean
 
     int _library_owned; // Is the library responsible for freeing this object?
 } measurements_t;
@@ -88,7 +91,10 @@ __attribute__((deprecated)) measurements_t *measurements_create(
     char *boot_id,
     list_t *native_readings,
     labbridge_api_measurements_LOADMODE_e load_mode,
-    dl24m_target_request_t *load_target
+    dl24m_target_request_t *load_target,
+    double input_voltage_v,
+    double battery_voltage_v,
+    int battery_detected
 );
 
 void measurements_free(measurements_t *measurements);

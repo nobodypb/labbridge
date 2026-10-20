@@ -3177,6 +3177,20 @@
           },
           "load_target": {
             "$ref": "#/components/schemas/Dl24mTargetRequest"
+          },
+          "input_voltage_v": {
+            "type": "number",
+            "format": "double",
+            "description": "Source input supply voltage in V when supported. This is distinct from output voltage and its operating limit."
+          },
+          "battery_voltage_v": {
+            "type": "number",
+            "format": "double",
+            "description": "Voltage in V reported by a dedicated battery-sensing input when supported. Do not infer electrical isolation or a valid battery wiring arrangement from this value."
+          },
+          "battery_detected": {
+            "type": "boolean",
+            "description": "Instrument-reported battery presence, when supported. This is telemetry, not authorization for a battery operation or proof of correct wiring."
           }
         },
         "required": [
@@ -4732,6 +4746,14 @@
               true
             ],
             "description": "Must be true after physically checking that the target PSU output is OFF."
+          },
+          "profile": {
+            "type": "string",
+            "enum": [
+              "pc_v22",
+              "pc_v22_target_ssid"
+            ],
+            "description": "Default pc_v22 reproduces RIDEN PC v1.0.0.22. Experimental pc_v22_target_ssid changes ONLY the phase-one SSID field from RD6006 to the actual AP SSID; CRC/XOR adapt to that field, while destinations, remaining format and scheduling stay identical. For controlled compatibility comparisons, not a commissioned alternative."
           }
         }
       },
@@ -4863,7 +4885,7 @@
           "provision_packets": {
             "type": "integer",
             "format": "int64",
-            "description": "ESPTouch packets accepted by the selected send API: UDP on a WPA2 AP, direct unencrypted frames on the open-AP diagnostic path. This is not a receiver acknowledgement.",
+            "description": "Zero-filled PC-profile multicast UDP packets accepted by sendto. This is not a radio completion or receiver acknowledgement.",
             "minimum": 0
           },
           "provision_tx_completed": {
@@ -4877,13 +4899,25 @@
             "format": "int64",
             "minimum": 0,
             "description": "ESPTouch frames for which the radio callback reported failed transmission. Immediate submission errors also fail the active provisioning session."
+          },
+          "provision_bursts": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0,
+            "description": "Complete PC-profile bursts submitted: 39 guide groups followed by all data triples. The sender then waits one second. Counter is boot-local."
+          },
+          "provision_join_acks": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0,
+            "description": "Distinct eleven-byte phase-two UDP results received on AP port 18266 with matching peer/embedded AP-subnet address. Stops credential transmission but does not prove instrument identity or authorize output."
           }
         }
       },
       "RdProvisioning": {
         "type": "object",
         "additionalProperties": false,
-        "description": "Provisioning and AP transport status. One session at a time; each sending phase and connection-wait phase expires after 120 seconds. The AP is open, server address 192.168.4.1, TCP port 8080. The original PSU initiates the connection; payloads are CRC-protected Modbus RTU, not MBAP-framed Modbus TCP. No NAT/Internet access is required.",
+        "description": "Provisioning and AP transport status. One session at a time; management phases expire after 120 seconds. Each PC-profile sender transmits for at most 60 seconds, with 39 guide groups and all data triples per burst followed by a one-second pause. Phase two starts after 300 ms. The AP defaults to open; WPA2 is configurable. Server address is 192.168.4.1, TCP port 8080. The original PSU initiates the connection; payloads are CRC-protected Modbus RTU, not MBAP-framed Modbus TCP. No NAT/Internet access is required.",
         "required": [
           "state",
           "ap_ssid",
@@ -4964,6 +4998,14 @@
             "minimum": 1,
             "maximum": 14,
             "description": "Current shared AP/STA primary Wi-Fi channel, for commissioning."
+          },
+          "profile": {
+            "type": "string",
+            "enum": [
+              "pc_v22",
+              "pc_v22_target_ssid"
+            ],
+            "description": "Selected wire profile for the current or most recent session. pc_v22 is the hardware-accepted baseline; pc_v22_target_ssid is the controlled phase-one SSID comparison."
           }
         }
       },
@@ -5097,7 +5139,9 @@
         "output",
         "voltage.measure",
         "current.measure",
-        "power.measure"
+        "power.measure",
+        "energy.measure",
+        "charge.measure"
       ]
     },
     {

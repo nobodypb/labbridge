@@ -17,7 +17,7 @@ import pprint
 import re  # noqa: F401
 import json
 
-from pydantic import BaseModel, ConfigDict, Field, StrictFloat, StrictInt, StrictStr, field_validator
+from pydantic import BaseModel, ConfigDict, Field, StrictBool, StrictFloat, StrictInt, StrictStr, field_validator
 from typing import Any, ClassVar, Dict, List, Optional, Union
 from typing_extensions import Annotated
 from labbridge_generated.models.dl24m_target_request import Dl24mTargetRequest
@@ -49,7 +49,10 @@ class Measurements(BaseModel):
     native_readings: Optional[List[NativeReading]] = Field(default=None, description="Independent native readings; browser integrals are not device counters.")
     load_mode: Optional[StrictStr] = Field(default=None, description="Confirmed selected native load mode.")
     load_target: Optional[Dl24mTargetRequest] = None
-    __properties: ClassVar[List[str]] = ["device_id", "sequence", "received_ms", "age_ms", "quality", "voltage_v", "current_a", "power_w", "capacity_ah", "energy_wh", "temperature_channels", "set_voltage_v", "set_current_a", "regulation_mode", "protection_code", "boot_id", "native_readings", "load_mode", "load_target"]
+    input_voltage_v: Optional[Union[StrictFloat, StrictInt]] = Field(default=None, description="Source input supply voltage in V when supported. This is distinct from output voltage and its operating limit.")
+    battery_voltage_v: Optional[Union[StrictFloat, StrictInt]] = Field(default=None, description="Voltage in V reported by a dedicated battery-sensing input when supported. Do not infer electrical isolation or a valid battery wiring arrangement from this value.")
+    battery_detected: Optional[StrictBool] = Field(default=None, description="Instrument-reported battery presence, when supported. This is telemetry, not authorization for a battery operation or proof of correct wiring.")
+    __properties: ClassVar[List[str]] = ["device_id", "sequence", "received_ms", "age_ms", "quality", "voltage_v", "current_a", "power_w", "capacity_ah", "energy_wh", "temperature_channels", "set_voltage_v", "set_current_a", "regulation_mode", "protection_code", "boot_id", "native_readings", "load_mode", "load_target", "input_voltage_v", "battery_voltage_v", "battery_detected"]
 
     @field_validator('quality')
     def quality_validate_enum(cls, value):
@@ -165,7 +168,10 @@ class Measurements(BaseModel):
             "boot_id": obj.get("boot_id"),
             "native_readings": [NativeReading.from_dict(_item) for _item in obj["native_readings"]] if obj.get("native_readings") is not None else None,
             "load_mode": obj.get("load_mode"),
-            "load_target": Dl24mTargetRequest.from_dict(obj["load_target"]) if obj.get("load_target") is not None else None
+            "load_target": Dl24mTargetRequest.from_dict(obj["load_target"]) if obj.get("load_target") is not None else None,
+            "input_voltage_v": obj.get("input_voltage_v"),
+            "battery_voltage_v": obj.get("battery_voltage_v"),
+            "battery_detected": obj.get("battery_detected")
         })
         return _obj
 

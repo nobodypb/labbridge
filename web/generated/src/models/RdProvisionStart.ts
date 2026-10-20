@@ -25,7 +25,24 @@ export interface RdProvisionStart {
      * @memberof RdProvisionStart
      */
     confirmOutputsOff: boolean;
+    /**
+     * Default pc_v22 reproduces RIDEN PC v1.0.0.22. Experimental pc_v22_target_ssid changes ONLY the phase-one SSID field from RD6006 to the actual AP SSID; CRC/XOR adapt to that field, while destinations, remaining format and scheduling stay identical. For controlled compatibility comparisons, not a commissioned alternative.
+     * @type {string}
+     * @memberof RdProvisionStart
+     */
+    profile?: RdProvisionStartProfileEnum;
 }
+
+
+/**
+ * @export
+ */
+export const RdProvisionStartProfileEnum = {
+    PcV22: 'pc_v22',
+    PcV22TargetSsid: 'pc_v22_target_ssid'
+} as const;
+export type RdProvisionStartProfileEnum = typeof RdProvisionStartProfileEnum[keyof typeof RdProvisionStartProfileEnum];
+
 
 /**
  * Check if a given object implements the RdProvisionStart interface.
@@ -46,6 +63,7 @@ export function RdProvisionStartFromJSONTyped(json: any, ignoreDiscriminator: bo
     return {
         
         'confirmOutputsOff': json['confirm_outputs_off'],
+        'profile': json['profile'] == null ? undefined : json['profile'],
     };
 }
 
@@ -61,6 +79,7 @@ export function RdProvisionStartToJSONTyped(value?: RdProvisionStart | null, ign
     return {
         
         'confirm_outputs_off': value['confirmOutputsOff'],
+        'profile': value['profile'],
     };
 }
 
