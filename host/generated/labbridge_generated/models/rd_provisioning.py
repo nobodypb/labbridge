@@ -27,7 +27,7 @@ from typing_extensions import Self
 
 class RdProvisioning(BaseModel):
     """
-    Provisioning and AP transport status. One session at a time; each sending phase and connection-wait phase expires after 120 seconds. The AP is open, server address 192.168.4.1, TCP port 8080. The original PSU initiates the connection; payloads are CRC-protected Modbus RTU, not MBAP-framed Modbus TCP. No NAT/Internet access is required.
+    Provisioning and AP transport status. One session at a time; management phases expire after 120 seconds. Each PC-profile sender transmits for at most 60 seconds, with 39 guide groups and all data triples per burst followed by a one-second pause. Phase two starts after 300 ms. The AP defaults to open; WPA2 is configurable. Server address is 192.168.4.1, TCP port 8080. The original PSU initiates the connection; payloads are CRC-protected Modbus RTU, not MBAP-framed Modbus TCP. No NAT/Internet access is required.
     """ # noqa: E501
     state: StrictStr = Field(description="idle, sending server_address, sending wifi, waiting_connection, complete (identity seen), cancelled, timed_out or failed. Completion never enables or auto-configures an output.")
     session_id: Optional[StrictStr] = Field(default=None, description="Boot-local session identifier, absent before the first session.")

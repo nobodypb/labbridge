@@ -1,7 +1,7 @@
 /*
  * rd_provisioning.h
  *
- * Provisioning and AP transport status. One session at a time; each sending phase and connection-wait phase expires after 120 seconds. The AP is open, server address 192.168.4.1, TCP port 8080. The original PSU initiates the connection; payloads are CRC-protected Modbus RTU, not MBAP-framed Modbus TCP. No NAT/Internet access is required.
+ * Provisioning and AP transport status. One session at a time; management phases expire after 120 seconds. Each PC-profile sender transmits for at most 60 seconds, with 39 guide groups and all data triples per burst followed by a one-second pause. Phase two starts after 300 ms. The AP defaults to open; WPA2 is configurable. Server address is 192.168.4.1, TCP port 8080. The original PSU initiates the connection; payloads are CRC-protected Modbus RTU, not MBAP-framed Modbus TCP. No NAT/Internet access is required.
  */
 
 #ifndef _rd_provisioning_H_
