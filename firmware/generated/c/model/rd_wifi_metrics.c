@@ -11,7 +11,9 @@ static rd_wifi_metrics_t *rd_wifi_metrics_create_internal(
     long rejected,
     long rx_bytes,
     long tx_bytes,
-    long provision_packets
+    long provision_packets,
+    long provision_tx_completed,
+    long provision_tx_failed
     ) {
     rd_wifi_metrics_t *rd_wifi_metrics_local_var = malloc(sizeof(rd_wifi_metrics_t));
     if (!rd_wifi_metrics_local_var) {
@@ -23,6 +25,8 @@ static rd_wifi_metrics_t *rd_wifi_metrics_create_internal(
     rd_wifi_metrics_local_var->rx_bytes = rx_bytes;
     rd_wifi_metrics_local_var->tx_bytes = tx_bytes;
     rd_wifi_metrics_local_var->provision_packets = provision_packets;
+    rd_wifi_metrics_local_var->provision_tx_completed = provision_tx_completed;
+    rd_wifi_metrics_local_var->provision_tx_failed = provision_tx_failed;
 
     rd_wifi_metrics_local_var->_library_owned = 1;
     return rd_wifi_metrics_local_var;
@@ -34,7 +38,9 @@ __attribute__((deprecated)) rd_wifi_metrics_t *rd_wifi_metrics_create(
     long rejected,
     long rx_bytes,
     long tx_bytes,
-    long provision_packets
+    long provision_packets,
+    long provision_tx_completed,
+    long provision_tx_failed
     ) {
     return rd_wifi_metrics_create_internal (
         accepted,
@@ -42,7 +48,9 @@ __attribute__((deprecated)) rd_wifi_metrics_t *rd_wifi_metrics_create(
         rejected,
         rx_bytes,
         tx_bytes,
-        provision_packets
+        provision_packets,
+        provision_tx_completed,
+        provision_tx_failed
         );
 }
 
@@ -112,6 +120,22 @@ cJSON *rd_wifi_metrics_convertToJSON(rd_wifi_metrics_t *rd_wifi_metrics) {
     }
     if(cJSON_AddNumberToObject(item, "provision_packets", rd_wifi_metrics->provision_packets) == NULL) {
     goto fail; //Numeric
+    }
+
+
+    // rd_wifi_metrics->provision_tx_completed
+    if(rd_wifi_metrics->provision_tx_completed) {
+    if(cJSON_AddNumberToObject(item, "provision_tx_completed", rd_wifi_metrics->provision_tx_completed) == NULL) {
+    goto fail; //Numeric
+    }
+    }
+
+
+    // rd_wifi_metrics->provision_tx_failed
+    if(rd_wifi_metrics->provision_tx_failed) {
+    if(cJSON_AddNumberToObject(item, "provision_tx_failed", rd_wifi_metrics->provision_tx_failed) == NULL) {
+    goto fail; //Numeric
+    }
     }
 
     return item;
@@ -216,6 +240,30 @@ rd_wifi_metrics_t *rd_wifi_metrics_parseFromJSON(cJSON *rd_wifi_metricsJSON){
     goto end; //Numeric
     }
 
+    // rd_wifi_metrics->provision_tx_completed
+    cJSON *provision_tx_completed = cJSON_GetObjectItemCaseSensitive(rd_wifi_metricsJSON, "provision_tx_completed");
+    if (cJSON_IsNull(provision_tx_completed)) {
+        provision_tx_completed = NULL;
+    }
+    if (provision_tx_completed) { 
+    if(!cJSON_IsNumber(provision_tx_completed))
+    {
+    goto end; //Numeric
+    }
+    }
+
+    // rd_wifi_metrics->provision_tx_failed
+    cJSON *provision_tx_failed = cJSON_GetObjectItemCaseSensitive(rd_wifi_metricsJSON, "provision_tx_failed");
+    if (cJSON_IsNull(provision_tx_failed)) {
+        provision_tx_failed = NULL;
+    }
+    if (provision_tx_failed) { 
+    if(!cJSON_IsNumber(provision_tx_failed))
+    {
+    goto end; //Numeric
+    }
+    }
+
 
     rd_wifi_metrics_local_var = rd_wifi_metrics_create_internal (
         accepted->valuedouble,
@@ -223,7 +271,9 @@ rd_wifi_metrics_t *rd_wifi_metrics_parseFromJSON(cJSON *rd_wifi_metricsJSON){
         rejected->valuedouble,
         rx_bytes->valuedouble,
         tx_bytes->valuedouble,
-        provision_packets->valuedouble
+        provision_packets->valuedouble,
+        provision_tx_completed ? provision_tx_completed->valuedouble : 0,
+        provision_tx_failed ? provision_tx_failed->valuedouble : 0
         );
 
     return rd_wifi_metrics_local_var;

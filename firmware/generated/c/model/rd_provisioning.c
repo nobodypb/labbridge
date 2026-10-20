@@ -32,7 +32,9 @@ static rd_provisioning_t *rd_provisioning_create_internal(
     int listener_running,
     list_t *candidates,
     rd_wifi_metrics_t *metrics,
-    char *error
+    char *error,
+    long ap_clients,
+    long ap_channel
     ) {
     rd_provisioning_t *rd_provisioning_local_var = malloc(sizeof(rd_provisioning_t));
     if (!rd_provisioning_local_var) {
@@ -48,6 +50,8 @@ static rd_provisioning_t *rd_provisioning_create_internal(
     rd_provisioning_local_var->candidates = candidates;
     rd_provisioning_local_var->metrics = metrics;
     rd_provisioning_local_var->error = error;
+    rd_provisioning_local_var->ap_clients = ap_clients;
+    rd_provisioning_local_var->ap_channel = ap_channel;
 
     rd_provisioning_local_var->_library_owned = 1;
     return rd_provisioning_local_var;
@@ -63,7 +67,9 @@ __attribute__((deprecated)) rd_provisioning_t *rd_provisioning_create(
     int listener_running,
     list_t *candidates,
     rd_wifi_metrics_t *metrics,
-    char *error
+    char *error,
+    long ap_clients,
+    long ap_channel
     ) {
     return rd_provisioning_create_internal (
         state,
@@ -75,7 +81,9 @@ __attribute__((deprecated)) rd_provisioning_t *rd_provisioning_create(
         listener_running,
         candidates,
         metrics,
-        error
+        error,
+        ap_clients,
+        ap_channel
         );
 }
 
@@ -222,6 +230,22 @@ cJSON *rd_provisioning_convertToJSON(rd_provisioning_t *rd_provisioning) {
     if(rd_provisioning->error) {
     if(cJSON_AddStringToObject(item, "error", rd_provisioning->error) == NULL) {
     goto fail; //String
+    }
+    }
+
+
+    // rd_provisioning->ap_clients
+    if(rd_provisioning->ap_clients) {
+    if(cJSON_AddNumberToObject(item, "ap_clients", rd_provisioning->ap_clients) == NULL) {
+    goto fail; //Numeric
+    }
+    }
+
+
+    // rd_provisioning->ap_channel
+    if(rd_provisioning->ap_channel) {
+    if(cJSON_AddNumberToObject(item, "ap_channel", rd_provisioning->ap_channel) == NULL) {
+    goto fail; //Numeric
     }
     }
 
@@ -395,6 +419,30 @@ rd_provisioning_t *rd_provisioning_parseFromJSON(cJSON *rd_provisioningJSON){
     }
     }
 
+    // rd_provisioning->ap_clients
+    cJSON *ap_clients = cJSON_GetObjectItemCaseSensitive(rd_provisioningJSON, "ap_clients");
+    if (cJSON_IsNull(ap_clients)) {
+        ap_clients = NULL;
+    }
+    if (ap_clients) { 
+    if(!cJSON_IsNumber(ap_clients))
+    {
+    goto end; //Numeric
+    }
+    }
+
+    // rd_provisioning->ap_channel
+    cJSON *ap_channel = cJSON_GetObjectItemCaseSensitive(rd_provisioningJSON, "ap_channel");
+    if (cJSON_IsNull(ap_channel)) {
+        ap_channel = NULL;
+    }
+    if (ap_channel) { 
+    if(!cJSON_IsNumber(ap_channel))
+    {
+    goto end; //Numeric
+    }
+    }
+
 
     rd_provisioning_local_var = rd_provisioning_create_internal (
         stateVariable,
@@ -406,7 +454,9 @@ rd_provisioning_t *rd_provisioning_parseFromJSON(cJSON *rd_provisioningJSON){
         listener_running->valueint,
         candidatesList,
         metrics_local_nonprim,
-        error && !cJSON_IsNull(error) ? strdup(error->valuestring) : NULL
+        error && !cJSON_IsNull(error) ? strdup(error->valuestring) : NULL,
+        ap_clients ? ap_clients->valuedouble : 0,
+        ap_channel ? ap_channel->valuedouble : 0
         );
 
     return rd_provisioning_local_var;

@@ -94,6 +94,18 @@ export interface RdProvisioning {
      * @memberof RdProvisioning
      */
     error?: string;
+    /**
+     * Number of stations currently associated with the ESP AP. Diagnostic only; an association is not RD identity or protocol readiness.
+     * @type {number}
+     * @memberof RdProvisioning
+     */
+    apClients?: number;
+    /**
+     * Current shared AP/STA primary Wi-Fi channel, for commissioning.
+     * @type {number}
+     * @memberof RdProvisioning
+     */
+    apChannel?: number;
 }
 
 
@@ -147,6 +159,8 @@ export function RdProvisioningFromJSONTyped(json: any, ignoreDiscriminator: bool
         'candidates': ((json['candidates'] as Array<any>).map(RdWifiCandidateFromJSON)),
         'metrics': RdWifiMetricsFromJSON(json['metrics']),
         'error': json['error'] == null ? undefined : json['error'],
+        'apClients': json['ap_clients'] == null ? undefined : json['ap_clients'],
+        'apChannel': json['ap_channel'] == null ? undefined : json['ap_channel'],
     };
 }
 
@@ -171,6 +185,8 @@ export function RdProvisioningToJSONTyped(value?: RdProvisioning | null, ignoreD
         'candidates': ((value['candidates'] as Array<any>).map(RdWifiCandidateToJSON)),
         'metrics': RdWifiMetricsToJSON(value['metrics']),
         'error': value['error'],
+        'ap_clients': value['apClients'],
+        'ap_channel': value['apChannel'],
     };
 }
 

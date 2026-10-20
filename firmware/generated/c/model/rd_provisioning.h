@@ -39,6 +39,8 @@ typedef struct rd_provisioning_t {
     list_t *candidates; //nonprimitive container
     struct rd_wifi_metrics_t *metrics; //model
     char *error; // string
+    long ap_clients; //numeric
+    long ap_channel; //numeric
 
     int _library_owned; // Is the library responsible for freeing this object?
 } rd_provisioning_t;
@@ -53,7 +55,9 @@ __attribute__((deprecated)) rd_provisioning_t *rd_provisioning_create(
     int listener_running,
     list_t *candidates,
     rd_wifi_metrics_t *metrics,
-    char *error
+    char *error,
+    long ap_clients,
+    long ap_channel
 );
 
 void rd_provisioning_free(rd_provisioning_t *rd_provisioning);

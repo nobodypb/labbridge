@@ -50,11 +50,23 @@ export interface RdWifiMetrics {
      */
     txBytes: number;
     /**
-     * ESPTouch datagrams successfully submitted to the AP interface.
+     * ESPTouch frames accepted by the AP radio submission API. This is not a transmission-completion or receiver acknowledgement.
      * @type {number}
      * @memberof RdWifiMetrics
      */
     provisionPackets: number;
+    /**
+     * ESPTouch AP frames for which the Wi-Fi driver reported successful transmission. Broadcasts have no receiver acknowledgement; this does not prove PSU reception.
+     * @type {number}
+     * @memberof RdWifiMetrics
+     */
+    provisionTxCompleted?: number;
+    /**
+     * ESPTouch frames for which the radio callback reported failed transmission. Immediate submission errors also fail the active provisioning session.
+     * @type {number}
+     * @memberof RdWifiMetrics
+     */
+    provisionTxFailed?: number;
 }
 
 /**
@@ -86,6 +98,8 @@ export function RdWifiMetricsFromJSONTyped(json: any, ignoreDiscriminator: boole
         'rxBytes': json['rx_bytes'],
         'txBytes': json['tx_bytes'],
         'provisionPackets': json['provision_packets'],
+        'provisionTxCompleted': json['provision_tx_completed'] == null ? undefined : json['provision_tx_completed'],
+        'provisionTxFailed': json['provision_tx_failed'] == null ? undefined : json['provision_tx_failed'],
     };
 }
 
@@ -106,6 +120,8 @@ export function RdWifiMetricsToJSONTyped(value?: RdWifiMetrics | null, ignoreDis
         'rx_bytes': value['rxBytes'],
         'tx_bytes': value['txBytes'],
         'provision_packets': value['provisionPackets'],
+        'provision_tx_completed': value['provisionTxCompleted'],
+        'provision_tx_failed': value['provisionTxFailed'],
     };
 }
 
