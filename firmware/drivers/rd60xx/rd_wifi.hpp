@@ -38,6 +38,10 @@ TouchPackets esptouch_lengths(const std::string &ssid,
                               const std::string &password,
                               std::array<uint8_t, 4> ip,
                               std::array<uint8_t, 6> bssid);
+// Open AP FromDS/LLC/IPv4/UDP broadcast, without radio FCS. The Wi-Fi driver
+// supplies the sequence number/FCS. Only ESPTouch's bounded lengths are
+// accepted.
+Bytes esptouch_frame(size_t payload_length, std::array<uint8_t, 6> bssid);
 class Provisioning {
   std::string id_, state_ = "idle";
   uint64_t deadline_ = 0;

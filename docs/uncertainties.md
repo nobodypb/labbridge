@@ -55,7 +55,7 @@ RD6018 register scales/model selection are characterized in portable tests;
 actual USB/TCP identity/readback and original-module pairing still need physical
 acceptance. In particular, open-AP two-stage ESPTouch transmission originates on
 the ESP AP itself; packet vectors/state tests do not establish RF delivery to a
-particular module revision. The original app working does not prove all module
+particular module revision. A W01 module showed no server IP in the initial UDP-based trial, both with and without an associated phone. No TCP connection was observed. This does not yet distinguish AP transmission, decoder compatibility or module setup state. The direct non-QoS AP broadcast path reports driver transmission completions separately from submissions; a completion is still not a receiver acknowledgement. The original app working does not prove all module
 revisions behave identically on reconnect. RD6018P is explicitly excluded.
 
 A 60-minute AP+STA+DL24M BLE soak and deliberate connection-loss/STOP checks are

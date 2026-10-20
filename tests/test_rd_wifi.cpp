@@ -93,6 +93,44 @@ int main() {
   assert(checksum == 0);
   assert(decoded[0] == 24 && decoded[1] == 0 && decoded[5] == 192 &&
          decoded[8] == 1 && decoded[9] == 'L');
+  // The radio path must preserve every UDP payload length, use our AP BSSID
+  // and produce a decodable open-network FromDS broadcast (no station needed).
+  const std::array<uint8_t, 6> mac{2, 1, 2, 3, 4, 5};
+  for (auto length : {40, 296, 512, 515}) {
+    auto frame = esptouch_frame(length, mac);
+    assert(frame.size() == size_t(60 + length));
+    assert(frame[0] == 8 && frame[1] == 2);
+    for (int i = 0; i < 6; ++i) {
+      assert(frame[4 + i] == 255);
+      assert(frame[10 + i] == mac[i] && frame[16 + i] == mac[i]);
+    }
+    assert(frame[24] == 0xaa && frame[30] == 8 && frame[31] == 0);
+    auto word = [&](size_t offset) {
+      return (unsigned(frame[offset]) << 8) | frame[offset + 1];
+    };
+    assert(frame[32] == 0x45 && word(34) == unsigned(28 + length));
+    assert(frame[41] == 17 && frame[44] == 192 && frame[47] == 1);
+    assert(word(48) == 0xffff && word(50) == 0xffff);
+    unsigned sum = 0;
+    for (int i = 32; i < 52; i += 2)
+      sum += word(i);
+    while (sum >> 16)
+      sum = (sum & 0xffff) + (sum >> 16);
+    assert(sum == 0xffff);
+    assert(word(54) == 7001 && word(56) == unsigned(8 + length));
+    assert(word(58) == 0); // IPv4 UDP checksum may be omitted.
+    for (size_t i = 60; i < frame.size(); ++i)
+      assert(frame[i] == 1);
+  }
+  for (auto length : {0, 39, 516}) {
+    rejected = false;
+    try {
+      esptouch_frame(length, mac);
+    } catch (const std::invalid_argument &) {
+      rejected = true;
+    }
+    assert(rejected);
+  }
   IdentityBindings bindings;
   bindings.configure(123, 6018);
   bindings.configure(456, 6018);

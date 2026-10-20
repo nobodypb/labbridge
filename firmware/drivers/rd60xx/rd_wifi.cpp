@@ -125,6 +125,42 @@ TouchPackets esptouch_lengths(const std::string &ssid,
   }
   return result;
 }
+Bytes esptouch_frame(size_t payload_length, std::array<uint8_t, 6> bssid) {
+  if (payload_length < 40 || payload_length > 515)
+    throw std::invalid_argument("ESPTouch payload length");
+  Bytes frame(60 + payload_length, 1);
+  std::fill(frame.begin(), frame.begin() + 60, 0);
+  frame[0] = 0x08; // Data, non-QoS
+  frame[1] = 0x02; // FromDS
+  std::fill(frame.begin() + 4, frame.begin() + 10, 0xff);
+  std::copy(bssid.begin(), bssid.end(), frame.begin() + 10);
+  std::copy(bssid.begin(), bssid.end(), frame.begin() + 16);
+  const Bytes llc{0xaa, 0xaa, 0x03, 0, 0, 0, 0x08, 0};
+  std::copy(llc.begin(), llc.end(), frame.begin() + 24);
+  auto word = [&](size_t offset, uint16_t value) {
+    frame[offset] = value >> 8;
+    frame[offset + 1] = value;
+  };
+  frame[32] = 0x45;
+  word(34, 28 + payload_length);
+  frame[40] = 64;
+  frame[41] = 17;
+  frame[44] = 192;
+  frame[45] = 168;
+  frame[46] = 4;
+  frame[47] = 1;
+  std::fill(frame.begin() + 48, frame.begin() + 52, 0xff);
+  uint32_t sum = 0;
+  for (size_t i = 32; i < 52; i += 2)
+    sum += (uint16_t(frame[i]) << 8) | frame[i + 1];
+  while (sum >> 16)
+    sum = (sum & 0xffff) + (sum >> 16);
+  word(42, uint16_t(~sum));
+  word(52, 18266);
+  word(54, 7001);
+  word(56, 8 + payload_length);
+  return frame;
+}
 bool Provisioning::active() const {
   return state_ == "server_address" || state_ == "wifi" ||
          state_ == "waiting_connection";

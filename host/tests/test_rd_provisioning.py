@@ -21,6 +21,8 @@ class RecordingRest:
             ap_address="192.168.4.1",
             tcp_port=8080,
             listener_running=True,
+            ap_clients=1,
+            ap_channel=6,
             candidates=[],
             metrics=dict(
                 accepted=0,
@@ -29,6 +31,8 @@ class RecordingRest:
                 rx_bytes=0,
                 tx_bytes=0,
                 provision_packets=0,
+                provision_tx_completed=4,
+                provision_tx_failed=1,
             ),
         )
         from urllib3.response import HTTPResponse
@@ -42,6 +46,14 @@ class RecordingRest:
 
 
 class ProvisioningTests(unittest.TestCase):
+    def test_status_preserves_radio_diagnostics_for_automation(self):
+        with Node("serial:/synthetic", rest=RecordingRest()) as node:
+            status = node.rd60xx.get_rd_provisioning()
+            self.assertEqual(status.ap_clients, 1)
+            self.assertEqual(status.ap_channel, 6)
+            self.assertEqual(status.metrics.provision_tx_completed, 4)
+            self.assertEqual(status.metrics.provision_tx_failed, 1)
+
     def test_cli_uses_generated_provisioning_requests_without_operation_polling(self):
         rest = RecordingRest()
         node = Node("serial:/synthetic", rest=rest)

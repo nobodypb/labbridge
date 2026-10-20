@@ -66,6 +66,15 @@ uint64_t session_number = 0, accepted = 0, disconnects = 0, rejected = 0,
          rx_bytes = 0, tx_bytes = 0, provision_packets = 0;
 bool listening = false;
 std::string listener_error;
+std::atomic<uint32_t> provision_tx_completed{0}, provision_tx_failed{0};
+void touch_tx_done(const esp_80211_tx_info_t *info) {
+  if (!info || info->ifidx != WIFI_IF_AP)
+    return;
+  if (info->tx_status == WIFI_SEND_SUCCESS)
+    ++provision_tx_completed;
+  else
+    ++provision_tx_failed;
+}
 void nonblocking(int fd) {
   fcntl(fd, F_SETFL, fcntl(fd, F_GETFL, 0) | O_NONBLOCK);
 }
@@ -103,13 +112,22 @@ Json status(uint64_t now) {
       .set("rejected", double(rejected))
       .set("rx_bytes", double(rx_bytes))
       .set("tx_bytes", double(tx_bytes))
-      .set("provision_packets", double(provision_packets));
+      .set("provision_packets", double(provision_packets))
+      .set("provision_tx_completed", double(provision_tx_completed.load()))
+      .set("provision_tx_failed", double(provision_tx_failed.load()));
   j.set("ap_ssid", ap_ssid)
       .set("ap_address", ap_address)
       .set("tcp_port", double(tcp_port))
       .set("listener_running", listening)
       .set("candidates", all)
       .set("metrics", metrics);
+  wifi_sta_list_t stations{};
+  if (esp_wifi_ap_get_sta_list(&stations) == ESP_OK)
+    j.set("ap_clients", double(stations.num));
+  uint8_t channel = 0;
+  wifi_second_chan_t secondary;
+  if (esp_wifi_get_channel(&channel, &secondary) == ESP_OK && channel)
+    j.set("ap_channel", double(channel));
   if (!listener_error.empty())
     j.set("error", listener_error);
   return j;
@@ -254,39 +272,20 @@ void worker(void *) {
   }
 }
 void touch_worker(void *) {
-  int sock = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
-  if (sock < 0) {
+  if (esp_wifi_register_80211_tx_cb(touch_tx_done) != ESP_OK) {
     {
       std::lock_guard<std::mutex> lock(management);
-      listener_error = "Provisioning UDP unavailable";
+      listener_error = "Provisioning radio diagnostics unavailable";
       provisioning.fail();
     }
     vTaskDelete(nullptr);
     return;
   }
-  int yes = 1;
-  setsockopt(sock, SOL_SOCKET, SO_BROADCAST, &yes, sizeof(yes));
-  sockaddr_in local{};
-  local.sin_family = AF_INET;
-  local.sin_addr.s_addr = inet_addr(ap_address);
-  if (bind(sock, reinterpret_cast<sockaddr *>(&local), sizeof(local)) < 0) {
-    close(sock);
-    {
-      std::lock_guard<std::mutex> lock(management);
-      listener_error = "Cannot bind provisioning to AP";
-    }
-    vTaskDelete(nullptr);
-    return;
-  }
-  sockaddr_in target{};
-  target.sin_family = AF_INET;
-  target.sin_port = htons(7001);
-  target.sin_addr.s_addr = inet_addr("192.168.4.255");
   std::string previous;
   uint64_t cycle = 0;
-  size_t index = 0;
+  size_t guide_index = 0, data_index = 0;
   rd60xx::TouchPackets packets;
-  std::array<uint8_t, 1024> payload{};
+  std::array<uint8_t, 6> mac{};
   for (;;) {
     std::string phase;
     {
@@ -300,23 +299,30 @@ void touch_worker(void *) {
       continue;
     }
     if (previous != phase) {
-      std::array<uint8_t, 6> mac{};
-      esp_wifi_get_mac(WIFI_IF_AP, mac.data());
+      if (esp_wifi_get_mac(WIFI_IF_AP, mac.data()) != ESP_OK) {
+        std::lock_guard<std::mutex> lock(management);
+        provisioning.fail();
+        continue;
+      }
       packets = rd60xx::esptouch_lengths(
           ap_ssid, phase == "server_address" ? ap_address : "",
           {192, 168, 4, 1}, mac);
       previous = phase;
       cycle = now_ms();
-      index = 0;
+      guide_index = data_index = 0;
     }
     auto elapsed = (now_ms() - cycle) % 6000;
     auto &lengths = elapsed < 2000 ? packets.guide : packets.data;
-    auto size = lengths[index++ % lengths.size()];
-    auto n = sendto(sock, payload.data(), size, 0,
-                    reinterpret_cast<sockaddr *>(&target), sizeof(target));
+    auto &index = elapsed < 2000 ? guide_index : data_index;
+    auto frame = rd60xx::esptouch_frame(lengths[index++ % lengths.size()], mac);
+    // Bypass SoftAP broadcast buffering/suppression. SmartConfig needs the
+    // exact frame-length sequence on air even before a station associates.
+    // Driver-managed sequence numbers are required while AP+STA is connected.
+    auto result =
+        esp_wifi_80211_tx(WIFI_IF_AP, frame.data(), frame.size(), true);
     {
       std::lock_guard<std::mutex> lock(management);
-      if (n == size)
+      if (result == ESP_OK)
         ++provision_packets;
       else
         provisioning.fail();
