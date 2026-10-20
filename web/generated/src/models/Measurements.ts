@@ -2,7 +2,7 @@
 /* eslint-disable */
 /**
  * LabBridge API
- * Configure and automate laboratory instruments through one ESP32 bridge. Physical devices expose discoverable source, sink and scalar sensor components; prefer their common routes for portable scripts. Driver-specific routes remain available for specialized settings and compatibility.  ## Typical automation sequence 1. Read node identity/boot_id and discover devices, components, actions and limits. 2. Reserve all actor devices on this node with createLease and heartbeat at least once per second. Ownership is per physical device, not per component. 3. Send a setting/output mutation with X-Lab-Lease and a new Idempotency-Key. A 202 response is only acceptance: poll Location until a terminal Operation, checking final_output and restore_pending. 4. Use valid, fresh sensor readings; preserve sign and units. Integrate only across consecutive samples with unchanged boot_id/epoch and bounded gaps. 5. Request independent STOP when finished or uncertain, verify OFF, then release the lease. Output OFF is not electrical isolation.  ## Failure and retry contract The bridge performs bounded device retries, write/readback verification and recovery. Never infer hardware success from an ATT acknowledgement, an HTTP 202 or a saved setpoint. A terminal failure can still have changed hardware. Device/component STOP requires no lease. Reconnect/reboot never resumes ON. Leases, operation IDs and idempotency keys are boot-local; do not replay an uncertain mutation after a reboot. Monotonic timestamps are not Unix time and cannot be compared across nodes/boots.  ## Access and provisioning LAN HTTP uses Authorization: Bearer <token> on a trusted network. Obtain the secret using getManagementToken over physically trusted USB. The open LabBridge-Setup AP at 192.168.4.1 allows Wi-Fi setup/scan without bearer credentials; it does not grant laboratory control. The separate UI pages are /wifi, /devices and /dl24 (DL24M Bench). The Bench page uses these same authenticated APIs; unsupported original controls remain visible but disabled. USB uses the same methods/paths with JSON-line requests {id, method, path, headers, body} and replies prefixed LABJSON; ignore other boot/log lines and correlate IDs. Target Wi-Fi PSKs are never returned.  ## Local safeguards and hardware scope Configured limits, lease expiry, measurement freshness, activation deadlines and optional external cell-temperature guards operate on the node. They supplement instrument protections and an explicit external battery test profile/wiring arrangement. Read-only sensors may omit actuator limits. Supported endpoint/pin combinations depend on the board. DL24M BLE behavior is commissioned on display Ver: 2.0; RD6018/RD6024, INA228 and Yocto physical commissioning is tracked separately. RD6018 original Wi-Fi modules connect to the ESP AP using RTU-over-TCP; use the module provisioning operations to configure them. Native Yocto USB on ESP is not implemented (use native PC USB or HTTP VirtualHub/YoctoHub).
+ * Configure and automate laboratory instruments through one ESP32 bridge. Physical devices expose discoverable source, sink and scalar sensor components; prefer their common routes for portable scripts. Driver-specific routes remain available for specialized settings and compatibility.  ## Typical automation sequence 1. Read node identity/boot_id and discover devices, components, actions and limits. 2. Reserve all actor devices on this node with createLease and heartbeat at least once per second. Ownership is per physical device, not per component. 3. Send a setting/output mutation with X-Lab-Lease and a new Idempotency-Key. A 202 response is only acceptance: poll Location until a terminal Operation, checking final_output and restore_pending. 4. Use valid, fresh sensor readings; preserve sign and units. Integrate only across consecutive samples with unchanged boot_id/epoch and bounded gaps. 5. Request independent STOP when finished or uncertain, verify OFF, then release the lease. Output OFF is not electrical isolation.  ## Failure and retry contract The bridge performs bounded device retries, write/readback verification and recovery. Never infer hardware success from an ATT acknowledgement, an HTTP 202 or a saved setpoint. A terminal failure can still have changed hardware. Device/component STOP requires no lease. Reconnect/reboot never resumes ON. Leases, operation IDs and idempotency keys are boot-local; do not replay an uncertain mutation after a reboot. Monotonic timestamps are not Unix time and cannot be compared across nodes/boots.  ## Access and provisioning LAN HTTP uses Authorization: Bearer <token> on a trusted network. Obtain the secret using getManagementToken over physically trusted USB. The open LabBridge-Setup AP at 192.168.4.1 allows Wi-Fi setup/scan without bearer credentials; it does not grant laboratory control. The separate UI pages are /wifi, /devices and /dl24 (DL24M Bench). The Bench page uses these same authenticated APIs; unsupported original controls remain visible but disabled. USB uses the same methods/paths with JSON-line requests {id, method, path, headers, body} and replies prefixed LABJSON; ignore other boot/log lines and correlate IDs. Target Wi-Fi PSKs are never returned.  ## Local safeguards and hardware scope Configured limits, lease expiry, measurement freshness, activation deadlines and optional external cell-temperature guards operate on the node. They supplement instrument protections and an explicit external battery test profile/wiring arrangement. Read-only sensors may omit actuator limits. Supported endpoint/pin combinations depend on the board. DL24M BLE behavior is commissioned on display Ver: 2.0; RD6018/RD6024, INA228 and Yocto physical commissioning is tracked separately. RD6018 original Wi-Fi modules connect to the ESP AP using RTU-over-TCP; use the module provisioning operations to configure them. Native Yocto USB on ESP is not implemented (use native PC USB or HTTP VirtualHub/YoctoHub).  ## WebSocket Connect /api/v1/ws, authenticate with StreamAuth as the first text message, then use StreamRpc (the USB envelope) and StreamSubscription. Initial/full StreamSnapshot events include boot_id, stream sequence, measurement sequences, output, settings and tracked operations. Continue explicit lease heartbeats over RPC. See x-labbridge-websocket for message schemas and bounded resource rules. /dl24 uses this connection without HTTP polling.
  *
  * The version of the OpenAPI document: 0.1.0
  * 
@@ -13,6 +13,13 @@
  */
 
 import { mapValues } from '../runtime';
+import type { Dl24mTargetRequest } from './Dl24mTargetRequest';
+import {
+    Dl24mTargetRequestFromJSON,
+    Dl24mTargetRequestFromJSONTyped,
+    Dl24mTargetRequestToJSON,
+    Dl24mTargetRequestToJSONTyped,
+} from './Dl24mTargetRequest';
 import type { TemperatureChannel } from './TemperatureChannel';
 import {
     TemperatureChannelFromJSON,
@@ -20,6 +27,13 @@ import {
     TemperatureChannelToJSON,
     TemperatureChannelToJSONTyped,
 } from './TemperatureChannel';
+import type { NativeReading } from './NativeReading';
+import {
+    NativeReadingFromJSON,
+    NativeReadingFromJSONTyped,
+    NativeReadingToJSON,
+    NativeReadingToJSONTyped,
+} from './NativeReading';
 
 /**
  * Compatibility device-level snapshot. Optional fields are present only when supported/available; absence must never be converted into a measured zero. Prefer SensorReading for new meter/composite integrations.
@@ -76,13 +90,13 @@ export interface Measurements {
      */
     powerW?: number;
     /**
-     * Native instrument capacity counter in Ah when its scale is supported; do not assume DL24M raw counter scales are commissioned.
+     * Native instrument capacity counter in Ah, emitted only while its own reading is fresh. DL24M read 14 counts integer mAh (divide by 1000); native_readings[id=capacity] provides origin and individual age. Native counters and browser/host integrals are separate; absolute accuracy is not certified.
      * @type {number}
      * @memberof Measurements
      */
     capacityAh?: number;
     /**
-     * Native instrument energy counter in Wh when its scale is supported. Prefer traceable host integration where native scaling is uncertain.
+     * Native instrument energy counter in Wh, emitted only while its own reading is fresh. DL24M read 15 counts integer mWh (divide by 1000); native_readings[id=energy] provides origin and individual age. This is separate from host/browser integration; absolute accuracy is not certified.
      * @type {number}
      * @memberof Measurements
      */
@@ -106,7 +120,7 @@ export interface Measurements {
      */
     setCurrentA?: number;
     /**
-     * Observed/selected regulation mode where available: cc (constant current), cv (constant voltage), or unknown. Do not infer it solely from a setpoint.
+     * Observed/selected regulation mode: CC (A), CV (V), CR (Ohm), CP (W), or unknown. Targets alone do not confirm active output.
      * @type {string}
      * @memberof Measurements
      */
@@ -123,6 +137,24 @@ export interface Measurements {
      * @memberof Measurements
      */
     bootId?: string;
+    /**
+     * Independent native readings; browser integrals are not device counters.
+     * @type {Array<NativeReading>}
+     * @memberof Measurements
+     */
+    nativeReadings?: Array<NativeReading>;
+    /**
+     * Confirmed selected native load mode.
+     * @type {string}
+     * @memberof Measurements
+     */
+    loadMode?: MeasurementsLoadModeEnum;
+    /**
+     * 
+     * @type {Dl24mTargetRequest}
+     * @memberof Measurements
+     */
+    loadTarget?: Dl24mTargetRequest;
 }
 
 
@@ -142,9 +174,22 @@ export type MeasurementsQualityEnum = typeof MeasurementsQualityEnum[keyof typeo
 export const MeasurementsRegulationModeEnum = {
     Cc: 'cc',
     Cv: 'cv',
+    Cr: 'cr',
+    Cp: 'cp',
     Unknown: 'unknown'
 } as const;
 export type MeasurementsRegulationModeEnum = typeof MeasurementsRegulationModeEnum[keyof typeof MeasurementsRegulationModeEnum];
+
+/**
+ * @export
+ */
+export const MeasurementsLoadModeEnum = {
+    Cc: 'cc',
+    Cv: 'cv',
+    Cr: 'cr',
+    Cp: 'cp'
+} as const;
+export type MeasurementsLoadModeEnum = typeof MeasurementsLoadModeEnum[keyof typeof MeasurementsLoadModeEnum];
 
 
 /**
@@ -186,6 +231,9 @@ export function MeasurementsFromJSONTyped(json: any, ignoreDiscriminator: boolea
         'regulationMode': json['regulation_mode'] == null ? undefined : json['regulation_mode'],
         'protectionCode': json['protection_code'] == null ? undefined : json['protection_code'],
         'bootId': json['boot_id'] == null ? undefined : json['boot_id'],
+        'nativeReadings': json['native_readings'] == null ? undefined : ((json['native_readings'] as Array<any>).map(NativeReadingFromJSON)),
+        'loadMode': json['load_mode'] == null ? undefined : json['load_mode'],
+        'loadTarget': json['load_target'] == null ? undefined : Dl24mTargetRequestFromJSON(json['load_target']),
     };
 }
 
@@ -216,6 +264,9 @@ export function MeasurementsToJSONTyped(value?: Measurements | null, ignoreDiscr
         'regulation_mode': value['regulationMode'],
         'protection_code': value['protectionCode'],
         'boot_id': value['bootId'],
+        'native_readings': value['nativeReadings'] == null ? undefined : ((value['nativeReadings'] as Array<any>).map(NativeReadingToJSON)),
+        'load_mode': value['loadMode'],
+        'load_target': Dl24mTargetRequestToJSON(value['loadTarget']),
     };
 }
 
