@@ -72,6 +72,7 @@ Category | Method | HTTP request | Description
  - [access_point_request_t](docs/access_point_request.md)
  - [actuator_settings_t](docs/actuator_settings.md)
  - [actuator_state_t](docs/actuator_state.md)
+ - [auth_status_t](docs/auth_status.md)
  - [cell_temperature_guard_t](docs/cell_temperature_guard.md)
  - [component_t](docs/component.md)
  - [component_list_t](docs/component_list.md)
@@ -121,6 +122,9 @@ Category | Method | HTTP request | Description
  - [switch_path_request_t](docs/switch_path_request.md)
  - [temperature_channel_t](docs/temperature_channel.md)
  - [temperature_channels_t](docs/temperature_channels.md)
+ - [ui_login_t](docs/ui_login.md)
+ - [ui_password_change_t](docs/ui_password_change.md)
+ - [ui_password_setup_t](docs/ui_password_setup.md)
  - [voltage_request_t](docs/voltage_request.md)
  - [wifi_network_t](docs/wifi_network.md)
  - [wifi_request_t](docs/wifi_request.md)
@@ -137,6 +141,13 @@ Authentication schemes defined for the API:
 
 
 - **Type**: HTTP Bearer Token authentication
+
+### browserSession
+
+- **Type**: API key
+
+- **API key parameter name**: LabBridgeSession
+- **Location**: 
 
 
 ## Author

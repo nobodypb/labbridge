@@ -18,6 +18,8 @@ model/actuator_settings.h
 model/actuator_state.c
 model/actuator_state.h
 model/any_type.h
+model/auth_status.c
+model/auth_status.h
 model/cell_temperature_guard.c
 model/cell_temperature_guard.h
 model/component.c
@@ -118,6 +120,12 @@ model/temperature_channel.c
 model/temperature_channel.h
 model/temperature_channels.c
 model/temperature_channels.h
+model/ui_login.c
+model/ui_login.h
+model/ui_password_change.c
+model/ui_password_change.h
+model/ui_password_setup.c
+model/ui_password_setup.h
 model/voltage_request.c
 model/voltage_request.h
 model/wifi_network.c

@@ -2,7 +2,7 @@
 /* eslint-disable */
 /**
  * LabBridge API
- * Configure and automate laboratory instruments through one ESP32 bridge. Physical devices expose discoverable source, sink and scalar sensor components; prefer their common routes for portable scripts. Driver-specific routes remain available for specialized settings and compatibility.  ## Typical automation sequence 1. Read node identity/boot_id and discover devices, components, actions and limits. 2. Reserve all actor devices on this node with createLease and heartbeat at least once per second. Ownership is per physical device, not per component. 3. Send a setting/output mutation with X-Lab-Lease and a new Idempotency-Key. A 202 response is only acceptance: poll Location until a terminal Operation, checking final_output and restore_pending. 4. Use valid, fresh sensor readings; preserve sign and units. Integrate only across consecutive samples with unchanged boot_id/epoch and bounded gaps. 5. Request independent STOP when finished or uncertain, verify OFF, then release the lease. Output OFF is not electrical isolation.  ## Failure and retry contract The bridge performs bounded device retries, write/readback verification and recovery. Never infer hardware success from an ATT acknowledgement, an HTTP 202 or a saved setpoint. A terminal failure can still have changed hardware. Device/component STOP requires no lease. Reconnect/reboot never resumes ON. Leases, operation IDs and idempotency keys are boot-local; do not replay an uncertain mutation after a reboot. Monotonic timestamps are not Unix time and cannot be compared across nodes/boots.  ## Access and provisioning LAN HTTP uses Authorization: Bearer <token> on a trusted network. Obtain the secret using getManagementToken over physically trusted USB. The open LabBridge-Setup AP at 192.168.4.1 allows Wi-Fi setup/scan without bearer credentials; it does not grant laboratory control. The separate UI pages are /wifi, /devices and /dl24 (DL24M Bench). The Bench page uses these same authenticated APIs; unsupported original controls remain visible but disabled. USB uses the same methods/paths with JSON-line requests {id, method, path, headers, body} and replies prefixed LABJSON; ignore other boot/log lines and correlate IDs. Target Wi-Fi PSKs are never returned.  ## Local safeguards and hardware scope Configured limits, lease expiry, measurement freshness, activation deadlines and optional external cell-temperature guards operate on the node. They supplement instrument protections and an explicit external battery test profile/wiring arrangement. Read-only sensors may omit actuator limits. Supported endpoint/pin combinations depend on the board. DL24M BLE behavior is commissioned on display Ver: 2.0; RD6018/RD6024, INA228 and Yocto physical commissioning is tracked separately. RD6018 original Wi-Fi modules connect to the ESP AP using RTU-over-TCP; use the module provisioning operations to configure them. Native Yocto USB on ESP is not implemented (use native PC USB or HTTP VirtualHub/YoctoHub).  ## WebSocket Connect /api/v1/ws, authenticate with StreamAuth as the first text message, then use StreamRpc (the USB envelope) and StreamSubscription. Initial/full StreamSnapshot events include boot_id, stream sequence, measurement sequences, output, settings and tracked operations. Continue explicit lease heartbeats over RPC. See x-labbridge-websocket for message schemas and bounded resource rules. /dl24 uses this connection without HTTP polling.
+ * Configure and automate laboratory instruments through one ESP32 bridge. Physical devices expose discoverable source, sink and scalar sensor components; prefer their common routes for portable scripts. Driver-specific routes remain available for specialized settings and compatibility.  ## Typical automation sequence 1. Read node identity/boot_id and discover devices, components, actions and limits. 2. Reserve all actor devices on this node with createLease and heartbeat at least once per second. Ownership is per physical device, not per component. 3. Send a setting/output mutation with X-Lab-Lease and a new Idempotency-Key. A 202 response is only acceptance: poll Location until a terminal Operation, checking final_output and restore_pending. 4. Use valid, fresh sensor readings; preserve sign and units. Integrate only across consecutive samples with unchanged boot_id/epoch and bounded gaps. 5. Request independent STOP when finished or uncertain, verify OFF, then release the lease. Output OFF is not electrical isolation.  ## Failure and retry contract The bridge performs bounded device retries, write/readback verification and recovery. Never infer hardware success from an ATT acknowledgement, an HTTP 202 or a saved setpoint. A terminal failure can still have changed hardware. Device/component STOP requires no lease. Reconnect/reboot never resumes ON. Leases, operation IDs and idempotency keys are boot-local; do not replay an uncertain mutation after a reboot. Monotonic timestamps are not Unix time and cannot be compared across nodes/boots.  ## Access and provisioning LAN HTTP accepts Authorization: Bearer <token> for scripts or a UI password session on a trusted network. The UI redirects unauthenticated access to password login and resumes read-only discovery, never an uncertain mutation. UI passwords use salted version-two PBKDF2-HMAC-SHA256 verifiers with 6,000 iterations, deliberately tuned for basic protection and a login below three seconds on the ESP. Experimental 600,000-round verifiers require trusted USB password recovery; their hashes are never reinterpreted with fewer rounds. Choose the first password via the setup AP or trusted USB. HTTP is unencrypted; HTTPS with optional mTLS authentication is a separate planned feature. Obtain the API bearer secret using getManagementToken over physically trusted USB. The open LabBridge-Setup AP at 192.168.4.1 allows Wi-Fi setup/scan without bearer credentials; it does not grant laboratory control. The separate UI pages are /wifi, /devices and /dl24 (DL24M Bench). The Bench page shares the UI password session and CSRF protection and uses the same laboratory APIs; unsupported original controls remain visible but disabled. USB uses the same methods/paths with JSON-line requests {id, method, path, headers, body} and replies prefixed LABJSON; ignore other boot/log lines and correlate IDs. Target Wi-Fi PSKs are never returned.  ## Local safeguards and hardware scope Configured limits, lease expiry, measurement freshness, activation deadlines and optional external cell-temperature guards operate on the node. They supplement instrument protections and an explicit external battery test profile/wiring arrangement. Read-only sensors may omit actuator limits. Supported endpoint/pin combinations depend on the board. DL24M BLE behavior is commissioned on display Ver: 2.0; RD6018/RD6024, INA228 and Yocto physical commissioning is tracked separately. RD6018 original Wi-Fi modules connect to the ESP AP using RTU-over-TCP; use the module provisioning operations to configure them. Native Yocto USB on ESP is not implemented (use native PC USB or HTTP VirtualHub/YoctoHub).  ## WebSocket Connect /api/v1/ws, authenticate with StreamAuth as the first text message, then use StreamRpc (the USB envelope) and StreamSubscription. Initial/full StreamSnapshot events include boot_id, stream sequence, measurement sequences, output, settings and tracked operations. Continue explicit lease heartbeats over RPC. See x-labbridge-websocket for message schemas and bounded resource rules. /dl24 uses this connection without HTTP polling.
  *
  * The version of the OpenAPI document: 0.1.0
  * 
@@ -16,6 +16,7 @@
 import * as runtime from '../runtime';
 import type {
   AccessPointRequest,
+  AuthStatus,
   Device,
   DeviceList,
   Lease,
@@ -28,6 +29,9 @@ import type {
   OutputRequest,
   Problem,
   StopRequest,
+  UiLogin,
+  UiPasswordChange,
+  UiPasswordSetup,
   WifiRequest,
   WifiScan,
   WifiState,
@@ -35,6 +39,8 @@ import type {
 import {
     AccessPointRequestFromJSON,
     AccessPointRequestToJSON,
+    AuthStatusFromJSON,
+    AuthStatusToJSON,
     DeviceFromJSON,
     DeviceToJSON,
     DeviceListFromJSON,
@@ -59,6 +65,12 @@ import {
     ProblemToJSON,
     StopRequestFromJSON,
     StopRequestToJSON,
+    UiLoginFromJSON,
+    UiLoginToJSON,
+    UiPasswordChangeFromJSON,
+    UiPasswordChangeToJSON,
+    UiPasswordSetupFromJSON,
+    UiPasswordSetupToJSON,
     WifiRequestFromJSON,
     WifiRequestToJSON,
     WifiScanFromJSON,
@@ -66,6 +78,11 @@ import {
     WifiStateFromJSON,
     WifiStateToJSON,
 } from '../models/index';
+
+export interface ChangeUiPasswordRequest {
+    uiPasswordChange: UiPasswordChange;
+    xLabCSRF?: string;
+}
 
 export interface ConfigureAccessPointRequest {
     accessPointRequest: AccessPointRequest;
@@ -100,6 +117,14 @@ export interface HeartbeatLeaseRequest {
     stopRequest: StopRequest;
 }
 
+export interface LoginUiRequest {
+    uiLogin: UiLogin;
+}
+
+export interface LogoutUiRequest {
+    xLabCSRF?: string;
+}
+
 export interface SetConfigurationRequest {
     ifMatch: string;
     nodeConfiguration: NodeConfiguration;
@@ -110,6 +135,10 @@ export interface SetOutputRequest {
     xLabLease: string;
     idempotencyKey: string;
     outputRequest: OutputRequest;
+}
+
+export interface SetupUiPasswordRequest {
+    uiPasswordSetup: UiPasswordSetup;
 }
 
 export interface StopDeviceRequest {
@@ -129,7 +158,49 @@ export interface StopLeaseRequest {
 export class CoreApi extends runtime.BaseAPI {
 
     /**
-     * Persist AP security and apply after the response (about 300 ms). Requires confirmed OFF/quiescent instruments, released leases and no pending Wi-Fi operation; returns 409 otherwise. AP clients disconnect and must reconnect with the new passphrase. Station credentials are unchanged. Use USB or the station address to retain management access. Requires bearer authentication on all HTTP interfaces, including the open AP. Independent instrument STOP remains available. Empty PSK explicitly restores the open default; no automatic fallback opens a secured AP.
+     * Network access requires a valid browser session, X-Lab-CSRF and current_password. Trusted USB permits recovery without an old password. A successful replacement invalidates all browser sessions, clears failed-login state and leaves existing API bearer tokens intact.
+     * Change or recover the UI password
+     */
+    async changeUiPasswordRaw(requestParameters: ChangeUiPasswordRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<AuthStatus>> {
+        if (requestParameters['uiPasswordChange'] == null) {
+            throw new runtime.RequiredError(
+                'uiPasswordChange',
+                'Required parameter "uiPasswordChange" was null or undefined when calling changeUiPassword().'
+            );
+        }
+
+        const queryParameters: any = {};
+
+        const headerParameters: runtime.HTTPHeaders = {};
+
+        headerParameters['Content-Type'] = 'application/json';
+
+        if (requestParameters['xLabCSRF'] != null) {
+            headerParameters['X-Lab-CSRF'] = String(requestParameters['xLabCSRF']);
+        }
+
+        const response = await this.request({
+            path: `/api/v1/auth/password`,
+            method: 'PUT',
+            headers: headerParameters,
+            query: queryParameters,
+            body: UiPasswordChangeToJSON(requestParameters['uiPasswordChange']),
+        }, initOverrides);
+
+        return new runtime.JSONApiResponse(response, (jsonValue) => AuthStatusFromJSON(jsonValue));
+    }
+
+    /**
+     * Network access requires a valid browser session, X-Lab-CSRF and current_password. Trusted USB permits recovery without an old password. A successful replacement invalidates all browser sessions, clears failed-login state and leaves existing API bearer tokens intact.
+     * Change or recover the UI password
+     */
+    async changeUiPassword(requestParameters: ChangeUiPasswordRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<AuthStatus> {
+        const response = await this.changeUiPasswordRaw(requestParameters, initOverrides);
+        return await response.value();
+    }
+
+    /**
+     * Persist AP security and apply after the response (about 300 ms). Requires confirmed OFF/quiescent instruments, released leases and no pending Wi-Fi operation; returns 409 otherwise. AP clients disconnect and must reconnect with the new passphrase. Station credentials are unchanged. Use USB or the station address to retain management access. Requires a bearer token or UI session with X-Lab-CSRF on all HTTP interfaces, including the open AP. Independent instrument STOP remains available. Empty PSK explicitly restores the open default; no automatic fallback opens a secured AP.
      * Set access-point security independently
      */
     async configureAccessPointRaw(requestParameters: ConfigureAccessPointRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<WifiState>> {
@@ -166,7 +237,7 @@ export class CoreApi extends runtime.BaseAPI {
     }
 
     /**
-     * Persist AP security and apply after the response (about 300 ms). Requires confirmed OFF/quiescent instruments, released leases and no pending Wi-Fi operation; returns 409 otherwise. AP clients disconnect and must reconnect with the new passphrase. Station credentials are unchanged. Use USB or the station address to retain management access. Requires bearer authentication on all HTTP interfaces, including the open AP. Independent instrument STOP remains available. Empty PSK explicitly restores the open default; no automatic fallback opens a secured AP.
+     * Persist AP security and apply after the response (about 300 ms). Requires confirmed OFF/quiescent instruments, released leases and no pending Wi-Fi operation; returns 409 otherwise. AP clients disconnect and must reconnect with the new passphrase. Station credentials are unchanged. Use USB or the station address to retain management access. Requires a bearer token or UI session with X-Lab-CSRF on all HTTP interfaces, including the open AP. Independent instrument STOP remains available. Empty PSK explicitly restores the open default; no automatic fallback opens a secured AP.
      * Set access-point security independently
      */
     async configureAccessPoint(requestParameters: ConfigureAccessPointRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<WifiState> {
@@ -263,6 +334,34 @@ export class CoreApi extends runtime.BaseAPI {
      */
     async createLease(requestParameters: CreateLeaseRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<Lease> {
         const response = await this.createLeaseRaw(requestParameters, initOverrides);
+        return await response.value();
+    }
+
+    /**
+     * Public status for UI bootstrap. Does not start a session, reveal a password or return the API bearer token. setup_allowed depends on the receiving interface, not on client-supplied headers.
+     * Read browser authentication state
+     */
+    async getAuthStatusRaw(initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<AuthStatus>> {
+        const queryParameters: any = {};
+
+        const headerParameters: runtime.HTTPHeaders = {};
+
+        const response = await this.request({
+            path: `/api/v1/auth/status`,
+            method: 'GET',
+            headers: headerParameters,
+            query: queryParameters,
+        }, initOverrides);
+
+        return new runtime.JSONApiResponse(response, (jsonValue) => AuthStatusFromJSON(jsonValue));
+    }
+
+    /**
+     * Public status for UI bootstrap. Does not start a session, reveal a password or return the API bearer token. setup_allowed depends on the receiving interface, not on client-supplied headers.
+     * Read browser authentication state
+     */
+    async getAuthStatus(initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<AuthStatus> {
+        const response = await this.getAuthStatusRaw(initOverrides);
         return await response.value();
     }
 
@@ -672,6 +771,76 @@ export class CoreApi extends runtime.BaseAPI {
     }
 
     /**
+     * Same-origin JSON password login. Creates an opaque cookie session, not a bearer token. Eight concurrent sessions maximum. After five failed verifications in a rolling minute, return 429 with Retry-After; a busy password worker also returns 429. Hashing must not block laboratory STOP.
+     * Sign in with the UI password
+     */
+    async loginUiRaw(requestParameters: LoginUiRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<AuthStatus>> {
+        if (requestParameters['uiLogin'] == null) {
+            throw new runtime.RequiredError(
+                'uiLogin',
+                'Required parameter "uiLogin" was null or undefined when calling loginUi().'
+            );
+        }
+
+        const queryParameters: any = {};
+
+        const headerParameters: runtime.HTTPHeaders = {};
+
+        headerParameters['Content-Type'] = 'application/json';
+
+        const response = await this.request({
+            path: `/api/v1/auth/login`,
+            method: 'POST',
+            headers: headerParameters,
+            query: queryParameters,
+            body: UiLoginToJSON(requestParameters['uiLogin']),
+        }, initOverrides);
+
+        return new runtime.JSONApiResponse(response, (jsonValue) => AuthStatusFromJSON(jsonValue));
+    }
+
+    /**
+     * Same-origin JSON password login. Creates an opaque cookie session, not a bearer token. Eight concurrent sessions maximum. After five failed verifications in a rolling minute, return 429 with Retry-After; a busy password worker also returns 429. Hashing must not block laboratory STOP.
+     * Sign in with the UI password
+     */
+    async loginUi(requestParameters: LoginUiRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<AuthStatus> {
+        const response = await this.loginUiRaw(requestParameters, initOverrides);
+        return await response.value();
+    }
+
+    /**
+     * Requires a current browser session and X-Lab-CSRF. Invalidates this session and clears its cookie. The UI first attempts lease STOP/release; logout itself does not confirm physical OFF.
+     * End this browser session
+     */
+    async logoutUiRaw(requestParameters: LogoutUiRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<AuthStatus>> {
+        const queryParameters: any = {};
+
+        const headerParameters: runtime.HTTPHeaders = {};
+
+        if (requestParameters['xLabCSRF'] != null) {
+            headerParameters['X-Lab-CSRF'] = String(requestParameters['xLabCSRF']);
+        }
+
+        const response = await this.request({
+            path: `/api/v1/auth/session`,
+            method: 'DELETE',
+            headers: headerParameters,
+            query: queryParameters,
+        }, initOverrides);
+
+        return new runtime.JSONApiResponse(response, (jsonValue) => AuthStatusFromJSON(jsonValue));
+    }
+
+    /**
+     * Requires a current browser session and X-Lab-CSRF. Invalidates this session and clears its cookie. The UI first attempts lease STOP/release; logout itself does not confirm physical OFF.
+     * End this browser session
+     */
+    async logoutUi(requestParameters: LogoutUiRequest = {}, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<AuthStatus> {
+        const response = await this.logoutUiRaw(requestParameters, initOverrides);
+        return await response.value();
+    }
+
+    /**
      * Start or poll an asynchronous Wi-Fi scan. Repeat while state is scanning; completed results are cached for about five seconds. Instruments must be idle and leases released, otherwise 409. Available without bearer credentials through the open setup AP; normal LAN requests require authentication.
      * Scan nearby Wi-Fi networks
      */
@@ -836,6 +1005,44 @@ export class CoreApi extends runtime.BaseAPI {
      */
     async setOutput(requestParameters: SetOutputRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<Operation> {
         const response = await this.setOutputRaw(requestParameters, initOverrides);
+        return await response.value();
+    }
+
+    /**
+     * Only through the setup AP or trusted USB while no password exists. HTTP requires same-origin JSON. Confirm both password entries. Concurrent setup cannot overwrite an existing password. Does not automatically log in.
+     * Choose the first UI password
+     */
+    async setupUiPasswordRaw(requestParameters: SetupUiPasswordRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<AuthStatus>> {
+        if (requestParameters['uiPasswordSetup'] == null) {
+            throw new runtime.RequiredError(
+                'uiPasswordSetup',
+                'Required parameter "uiPasswordSetup" was null or undefined when calling setupUiPassword().'
+            );
+        }
+
+        const queryParameters: any = {};
+
+        const headerParameters: runtime.HTTPHeaders = {};
+
+        headerParameters['Content-Type'] = 'application/json';
+
+        const response = await this.request({
+            path: `/api/v1/auth/setup`,
+            method: 'POST',
+            headers: headerParameters,
+            query: queryParameters,
+            body: UiPasswordSetupToJSON(requestParameters['uiPasswordSetup']),
+        }, initOverrides);
+
+        return new runtime.JSONApiResponse(response, (jsonValue) => AuthStatusFromJSON(jsonValue));
+    }
+
+    /**
+     * Only through the setup AP or trusted USB while no password exists. HTTP requires same-origin JSON. Confirm both password entries. Concurrent setup cannot overwrite an existing password. Does not automatically log in.
+     * Choose the first UI password
+     */
+    async setupUiPassword(requestParameters: SetupUiPasswordRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<AuthStatus> {
+        const response = await this.setupUiPasswordRaw(requestParameters, initOverrides);
         return await response.value();
     }
 

@@ -21,6 +21,7 @@ labbridge_generated/models/__init__.py
 labbridge_generated/models/access_point_request.py
 labbridge_generated/models/actuator_settings.py
 labbridge_generated/models/actuator_state.py
+labbridge_generated/models/auth_status.py
 labbridge_generated/models/cell_temperature_guard.py
 labbridge_generated/models/component.py
 labbridge_generated/models/component_list.py
@@ -70,6 +71,9 @@ labbridge_generated/models/stream_subscription.py
 labbridge_generated/models/switch_path_request.py
 labbridge_generated/models/temperature_channel.py
 labbridge_generated/models/temperature_channels.py
+labbridge_generated/models/ui_login.py
+labbridge_generated/models/ui_password_change.py
+labbridge_generated/models/ui_password_setup.py
 labbridge_generated/models/voltage_request.py
 labbridge_generated/models/wifi_network.py
 labbridge_generated/models/wifi_request.py
