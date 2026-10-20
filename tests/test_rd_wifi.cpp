@@ -91,6 +91,22 @@ static void pc_profile_acceptance() {
     sender.stop();
     assert(!sender.peek(ready + 1000));
   }
+  // Controlled rollback: only the phase-one SSID changes. Phase two is
+  // identical.
+  auto changed = pc_touch_data(true, "Fixture-WLAN", "fixture-psk",
+                               {192, 168, 4, 1}, "pc_v22_target_ssid");
+  std::string decoded;
+  for (size_t i = 0; i < changed.size(); i += 3)
+    decoded +=
+        char((((changed[i] - 40) & 15) << 4) | ((changed[i + 2] - 40) & 15));
+  assert(decoded.size() == 32 && uint8_t(decoded[1]) == 11 &&
+         uint8_t(decoded[3]) == 199);
+  assert(decoded.substr(9) == "192.168.4.1Fixture-WLAN");
+  assert(changed !=
+         pc_touch_data(true, "Fixture-WLAN", "fixture-psk", {192, 168, 4, 1}));
+  assert(pc_touch_data(false, "Fixture-WLAN", "fixture-psk", {192, 168, 4, 1},
+                       "pc_v22_target_ssid") ==
+         pc_touch_data(false, "Fixture-WLAN", "fixture-psk", {192, 168, 4, 1}));
   // Every guide group/triple wraps once, across burst boundaries too.
   sender = PcTouchSender{};
   sender.start(pc_touch_data(true, "ignored", "ignored", {192, 168, 4, 1}), 0,

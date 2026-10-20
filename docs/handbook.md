@@ -230,6 +230,16 @@ labbridge --endpoint serial:/dev/ttyACM0 call rd60xx.cancel_rd_provisioning --ar
 See [single-node configuration](../examples/configuration/rd6018-ap-sticks3.json).
 Replace all synthetic identities and bench limits for the actual circuit.
 
+Provisioning defaults to `profile: "pc_v22"`. For a controlled commissioning
+comparison, trusted USB/CLI may explicitly select `pc_v22_target_ssid` in the
+start request. That variant changes only the phase-one SSID field to the AP
+SSID, with the resulting CRC/XOR/length changes; phase two, multicast and timing
+are identical. It is experimental until a repeated hardware comparison succeeds.
+Status returns the selected `profile`. Start a new session for each comparison;
+never change profiles midway through a phase. Keep the known working baseline
+and re-pair the module with it after a failed comparison.
+
+
 ### RIDEN PC provisioning wire profile
 
 The original-module setup uses **two ESPTouch length-coded transmissions**.

@@ -47,7 +47,8 @@ Bytes esptouch_frame(size_t payload_length, std::array<uint8_t, 6> bssid);
 std::vector<uint16_t> pc_touch_data(bool server_address,
                                     const std::string &ssid,
                                     const std::string &password,
-                                    std::array<uint8_t, 4> ip);
+                                    std::array<uint8_t, 4> ip,
+                                    const std::string &profile = "pc_v22");
 struct TouchDatagram {
   uint16_t length;
   uint8_t group; // IPv4 destination 234.group.group.group, UDP port 7001.

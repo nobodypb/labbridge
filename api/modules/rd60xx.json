@@ -376,6 +376,14 @@
             true
           ],
           "description": "Must be true after physically checking that the target PSU output is OFF."
+        },
+        "profile": {
+          "type": "string",
+          "enum": [
+            "pc_v22",
+            "pc_v22_target_ssid"
+          ],
+          "description": "Default pc_v22 reproduces RIDEN PC v1.0.0.22. Experimental pc_v22_target_ssid changes ONLY the phase-one SSID field from RD6006 to the actual AP SSID; CRC/XOR adapt to that field, while destinations, remaining format and scheduling stay identical. For controlled compatibility comparisons, not a commissioned alternative."
         }
       }
     },
@@ -620,6 +628,14 @@
           "minimum": 1,
           "maximum": 14,
           "description": "Current shared AP/STA primary Wi-Fi channel, for commissioning."
+        },
+        "profile": {
+          "type": "string",
+          "enum": [
+            "pc_v22",
+            "pc_v22_target_ssid"
+          ],
+          "description": "Selected wire profile for the current or most recent session. pc_v22 is the hardware-accepted baseline; pc_v22_target_ssid is the controlled phase-one SSID comparison."
         }
       }
     }

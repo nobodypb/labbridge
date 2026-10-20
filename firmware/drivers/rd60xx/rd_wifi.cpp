@@ -163,8 +163,11 @@ Bytes esptouch_frame(size_t payload_length, std::array<uint8_t, 6> bssid) {
 }
 std::vector<uint16_t> pc_touch_data(bool server, const std::string &ssid,
                                     const std::string &password,
-                                    std::array<uint8_t, 4> ip) {
-  std::string s = server ? "RD6006" : ssid, p = password;
+                                    std::array<uint8_t, 4> ip,
+                                    const std::string &profile) {
+  if (profile != "pc_v22" && profile != "pc_v22_target_ssid")
+    throw std::invalid_argument("Unknown PC provisioning profile");
+  std::string s = server && profile == "pc_v22" ? "RD6006" : ssid, p = password;
   if (server) {
     p.clear();
     for (auto octet : ip) {

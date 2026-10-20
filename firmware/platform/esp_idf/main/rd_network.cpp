@@ -67,7 +67,7 @@ uint64_t session_number = 0, accepted = 0, disconnects = 0, rejected = 0,
          rx_bytes = 0, tx_bytes = 0, provision_packets = 0;
 uint64_t provision_bursts = 0, provision_join_acks = 0;
 bool listening = false;
-std::string listener_error, provision_error;
+std::string listener_error, provision_error, provision_profile = "pc_v22";
 std::atomic<uint32_t> provision_tx_completed{0}, provision_tx_failed{0};
 void touch_tx_done(const esp_80211_tx_info_t *info) {
   if (!info || info->ifidx != WIFI_IF_AP)
@@ -119,7 +119,8 @@ Json status(uint64_t now) {
       .set("provision_join_acks", double(provision_join_acks))
       .set("provision_tx_completed", double(provision_tx_completed.load()))
       .set("provision_tx_failed", double(provision_tx_failed.load()));
-  j.set("ap_ssid", ap_ssid)
+  j.set("profile", provision_profile)
+      .set("ap_ssid", ap_ssid)
       .set("ap_address", ap_address)
       .set("tcp_port", double(tcp_port))
       .set("listener_running", listening)
@@ -320,12 +321,13 @@ void touch_worker(void *) {
   size_t burst_packets = 0, burst_size = 0;
   bool acknowledged = false;
   for (;;) {
-    std::string phase, session;
+    std::string phase, session, profile;
     {
       std::lock_guard<std::mutex> lock(management);
       provisioning.tick(now_ms());
       phase = provisioning.phase();
       session = provisioning.session_id();
+      profile = provision_profile;
     }
     if (phase != "server_address" && phase != "wifi") {
       sender.stop();
@@ -347,7 +349,7 @@ void touch_worker(void *) {
       try {
         auto password = read_nvs("ap").text("psk");
         auto data = rd60xx::pc_touch_data(phase == "server_address", ap_ssid,
-                                          password, {192, 168, 4, 1});
+                                          password, {192, 168, 4, 1}, profile);
         burst_size = 156 + data.size();
         burst_packets = 0;
         sender.start(std::move(data), now_ms(), phase == "wifi");
@@ -456,7 +458,7 @@ void start_rd_network() {
                return Response{200, status(now)};
              });
   node->bind(
-      "startRdProvisioning", [](const Json &, const Headers &, uint64_t now) {
+      "startRdProvisioning", [](const Json &j, const Headers &, uint64_t now) {
         if (!node->quiescent(now) || wifi_network_busy())
           return problem(409, "Stop/release instruments and finish Wi-Fi "
                               "changes before provisioning");
@@ -468,6 +470,7 @@ void start_rd_network() {
             provision_error.clear();
             provisioning.start(
                 random_id() + "-p" + std::to_string(++session_number), now);
+            provision_profile = j.text("profile", "pc_v22");
           } catch (const std::invalid_argument &e) {
             return problem(409, e.what());
           }
