@@ -3,7 +3,7 @@
 """
     LabBridge API
 
-    Configure and automate laboratory instruments through one ESP32 bridge. Physical devices expose discoverable source, sink and scalar sensor components; prefer their common routes for portable scripts. Driver-specific routes remain available for specialized settings and compatibility.  ## Typical automation sequence 1. Read node identity/boot_id and discover devices, components, actions and limits. 2. Reserve all actor devices on this node with createLease and heartbeat at least once per second. Ownership is per physical device, not per component. 3. Send a setting/output mutation with X-Lab-Lease and a new Idempotency-Key. A 202 response is only acceptance: poll Location until a terminal Operation, checking final_output and restore_pending. 4. Use valid, fresh sensor readings; preserve sign and units. Integrate only across consecutive samples with unchanged boot_id/epoch and bounded gaps. 5. Request independent STOP when finished or uncertain, verify OFF, then release the lease. Output OFF is not electrical isolation.  ## Failure and retry contract The bridge performs bounded device retries, write/readback verification and recovery. Never infer hardware success from an ATT acknowledgement, an HTTP 202 or a saved setpoint. A terminal failure can still have changed hardware. Device/component STOP requires no lease. Reconnect/reboot never resumes ON. Leases, operation IDs and idempotency keys are boot-local; do not replay an uncertain mutation after a reboot. Monotonic timestamps are not Unix time and cannot be compared across nodes/boots.  ## Access and provisioning LAN HTTP uses Authorization: Bearer <token> on a trusted network. Obtain the secret using getManagementToken over physically trusted USB. The open LabBridge-Setup AP at 192.168.4.1 allows Wi-Fi setup/scan without bearer credentials; it does not grant laboratory control. The separate UI pages are /wifi, /devices and /dl24 (DL24M Bench). The Bench page uses these same authenticated APIs; unsupported original controls remain visible but disabled. USB uses the same methods/paths with JSON-line requests {id, method, path, headers, body} and replies prefixed LABJSON; ignore other boot/log lines and correlate IDs. Target Wi-Fi PSKs are never returned.  ## Local safeguards and hardware scope Configured limits, lease expiry, measurement freshness, activation deadlines and optional external cell-temperature guards operate on the node. They supplement instrument protections and an explicit external battery test profile/wiring arrangement. Read-only sensors may omit actuator limits. Supported endpoint/pin combinations depend on the board. DL24M BLE behavior is commissioned on display Ver: 2.0; RD6018/RD6024, INA228 and Yocto physical commissioning is tracked separately. RD6018 original Wi-Fi modules connect to the ESP AP using RTU-over-TCP; use the module provisioning operations to configure them. Native Yocto USB on ESP is not implemented (use native PC USB or HTTP VirtualHub/YoctoHub).
+    Configure and automate laboratory instruments through one ESP32 bridge. Physical devices expose discoverable source, sink and scalar sensor components; prefer their common routes for portable scripts. Driver-specific routes remain available for specialized settings and compatibility.  ## Typical automation sequence 1. Read node identity/boot_id and discover devices, components, actions and limits. 2. Reserve all actor devices on this node with createLease and heartbeat at least once per second. Ownership is per physical device, not per component. 3. Send a setting/output mutation with X-Lab-Lease and a new Idempotency-Key. A 202 response is only acceptance: poll Location until a terminal Operation, checking final_output and restore_pending. 4. Use valid, fresh sensor readings; preserve sign and units. Integrate only across consecutive samples with unchanged boot_id/epoch and bounded gaps. 5. Request independent STOP when finished or uncertain, verify OFF, then release the lease. Output OFF is not electrical isolation.  ## Failure and retry contract The bridge performs bounded device retries, write/readback verification and recovery. Never infer hardware success from an ATT acknowledgement, an HTTP 202 or a saved setpoint. A terminal failure can still have changed hardware. Device/component STOP requires no lease. Reconnect/reboot never resumes ON. Leases, operation IDs and idempotency keys are boot-local; do not replay an uncertain mutation after a reboot. Monotonic timestamps are not Unix time and cannot be compared across nodes/boots.  ## Access and provisioning LAN HTTP accepts Authorization: Bearer <token> for scripts or a UI password session on a trusted network. The UI redirects unauthenticated access to password login and resumes read-only discovery, never an uncertain mutation. UI passwords use salted version-two PBKDF2-HMAC-SHA256 verifiers with 6,000 iterations, deliberately tuned for basic protection and a login below three seconds on the ESP. Experimental 600,000-round verifiers require trusted USB password recovery; their hashes are never reinterpreted with fewer rounds. Choose the first password via the setup AP or trusted USB. HTTP is unencrypted; HTTPS with optional mTLS authentication is a separate planned feature. Obtain the API bearer secret using getManagementToken over physically trusted USB. The open LabBridge-Setup AP at 192.168.4.1 allows Wi-Fi setup/scan without bearer credentials; it does not grant laboratory control. The separate UI pages are /wifi, /devices and /dl24 (DL24M Bench). The Bench page shares the UI password session and CSRF protection and uses the same laboratory APIs; unsupported original controls remain visible but disabled. USB uses the same methods/paths with JSON-line requests {id, method, path, headers, body} and replies prefixed LABJSON; ignore other boot/log lines and correlate IDs. Target Wi-Fi PSKs are never returned.  ## Local safeguards and hardware scope Configured limits, lease expiry, measurement freshness, activation deadlines and optional external cell-temperature guards operate on the node. They supplement instrument protections and an explicit external battery test profile/wiring arrangement. Read-only sensors may omit actuator limits. Supported endpoint/pin combinations depend on the board. DL24M BLE behavior is commissioned on display Ver: 2.0; RD6018/RD6024, INA228 and Yocto physical commissioning is tracked separately. RD6018 original Wi-Fi modules connect to the ESP AP using RTU-over-TCP; use the module provisioning operations to configure them. Native Yocto USB on ESP is not implemented (use native PC USB or HTTP VirtualHub/YoctoHub).
 
     The version of the OpenAPI document: 0.1.0
     Generated by OpenAPI Generator (https://openapi-generator.tech)
@@ -17,8 +17,10 @@ from typing import Any, Dict, List, Optional, Tuple, Union
 from typing_extensions import Annotated
 
 from pydantic import Field, StrictStr, field_validator
+from typing import Optional
 from typing_extensions import Annotated
 from labbridge_generated.models.access_point_request import AccessPointRequest
+from labbridge_generated.models.auth_status import AuthStatus
 from labbridge_generated.models.device import Device
 from labbridge_generated.models.device_list import DeviceList
 from labbridge_generated.models.lease import Lease
@@ -30,6 +32,9 @@ from labbridge_generated.models.node_info import NodeInfo
 from labbridge_generated.models.operation import Operation
 from labbridge_generated.models.output_request import OutputRequest
 from labbridge_generated.models.stop_request import StopRequest
+from labbridge_generated.models.ui_login import UiLogin
+from labbridge_generated.models.ui_password_change import UiPasswordChange
+from labbridge_generated.models.ui_password_setup import UiPasswordSetup
 from labbridge_generated.models.wifi_request import WifiRequest
 from labbridge_generated.models.wifi_scan import WifiScan
 from labbridge_generated.models.wifi_state import WifiState
@@ -53,6 +58,296 @@ class CoreApi:
 
 
     @validate_call
+    def change_ui_password(
+        self,
+        ui_password_change: Annotated[UiPasswordChange, Field(description="Closed typed request. Passwords are secrets; never put them in shared logs or command history.")],
+        x_lab_csrf: Annotated[Optional[StrictStr], Field(description="Session-bound anti-CSRF secret for browser mutations. Required over HTTP; trusted USB bypasses browser authentication.")] = None,
+        _request_timeout: Union[
+            None,
+            Annotated[StrictFloat, Field(gt=0)],
+            Tuple[
+                Annotated[StrictFloat, Field(gt=0)],
+                Annotated[StrictFloat, Field(gt=0)]
+            ]
+        ] = None,
+        _request_auth: Optional[Dict[StrictStr, Any]] = None,
+        _content_type: Optional[StrictStr] = None,
+        _headers: Optional[Dict[StrictStr, Any]] = None,
+        _host_index: Annotated[StrictInt, Field(ge=0, le=0)] = 0,
+    ) -> AuthStatus:
+        """Change or recover the UI password
+
+        Network access requires a valid browser session, X-Lab-CSRF and current_password. Trusted USB permits recovery without an old password. A successful replacement invalidates all browser sessions, clears failed-login state and leaves existing API bearer tokens intact.
+
+        :param ui_password_change: Closed typed request. Passwords are secrets; never put them in shared logs or command history. (required)
+        :type ui_password_change: UiPasswordChange
+        :param x_lab_csrf: Session-bound anti-CSRF secret for browser mutations. Required over HTTP; trusted USB bypasses browser authentication.
+        :type x_lab_csrf: str
+        :param _request_timeout: timeout setting for this request. If one
+                                 number provided, it will be total request
+                                 timeout. It can also be a pair (tuple) of
+                                 (connection, read) timeouts.
+        :type _request_timeout: int, tuple(int, int), optional
+        :param _request_auth: set to override the auth_settings for an a single
+                              request; this effectively ignores the
+                              authentication in the spec for a single request.
+        :type _request_auth: dict, optional
+        :param _content_type: force content-type for the request.
+        :type _content_type: str, Optional
+        :param _headers: set to override the headers for a single
+                         request; this effectively ignores the headers
+                         in the spec for a single request.
+        :type _headers: dict, optional
+        :param _host_index: set to override the host_index for a single
+                            request; this effectively ignores the host_index
+                            in the spec for a single request.
+        :type _host_index: int, optional
+        :return: Returns the result object.
+        """ # noqa: E501
+
+        _param = self._change_ui_password_serialize(
+            ui_password_change=ui_password_change,
+            x_lab_csrf=x_lab_csrf,
+            _request_auth=_request_auth,
+            _content_type=_content_type,
+            _headers=_headers,
+            _host_index=_host_index
+        )
+
+        _response_types_map: Dict[str, Optional[str]] = {
+            '200': "AuthStatus",
+        }
+        response_data = self.api_client.call_api(
+            *_param,
+            _request_timeout=_request_timeout
+        )
+        response_data.read()
+        return self.api_client.response_deserialize(
+            response_data=response_data,
+            response_types_map=_response_types_map,
+        ).data
+
+
+    @validate_call
+    def change_ui_password_with_http_info(
+        self,
+        ui_password_change: Annotated[UiPasswordChange, Field(description="Closed typed request. Passwords are secrets; never put them in shared logs or command history.")],
+        x_lab_csrf: Annotated[Optional[StrictStr], Field(description="Session-bound anti-CSRF secret for browser mutations. Required over HTTP; trusted USB bypasses browser authentication.")] = None,
+        _request_timeout: Union[
+            None,
+            Annotated[StrictFloat, Field(gt=0)],
+            Tuple[
+                Annotated[StrictFloat, Field(gt=0)],
+                Annotated[StrictFloat, Field(gt=0)]
+            ]
+        ] = None,
+        _request_auth: Optional[Dict[StrictStr, Any]] = None,
+        _content_type: Optional[StrictStr] = None,
+        _headers: Optional[Dict[StrictStr, Any]] = None,
+        _host_index: Annotated[StrictInt, Field(ge=0, le=0)] = 0,
+    ) -> ApiResponse[AuthStatus]:
+        """Change or recover the UI password
+
+        Network access requires a valid browser session, X-Lab-CSRF and current_password. Trusted USB permits recovery without an old password. A successful replacement invalidates all browser sessions, clears failed-login state and leaves existing API bearer tokens intact.
+
+        :param ui_password_change: Closed typed request. Passwords are secrets; never put them in shared logs or command history. (required)
+        :type ui_password_change: UiPasswordChange
+        :param x_lab_csrf: Session-bound anti-CSRF secret for browser mutations. Required over HTTP; trusted USB bypasses browser authentication.
+        :type x_lab_csrf: str
+        :param _request_timeout: timeout setting for this request. If one
+                                 number provided, it will be total request
+                                 timeout. It can also be a pair (tuple) of
+                                 (connection, read) timeouts.
+        :type _request_timeout: int, tuple(int, int), optional
+        :param _request_auth: set to override the auth_settings for an a single
+                              request; this effectively ignores the
+                              authentication in the spec for a single request.
+        :type _request_auth: dict, optional
+        :param _content_type: force content-type for the request.
+        :type _content_type: str, Optional
+        :param _headers: set to override the headers for a single
+                         request; this effectively ignores the headers
+                         in the spec for a single request.
+        :type _headers: dict, optional
+        :param _host_index: set to override the host_index for a single
+                            request; this effectively ignores the host_index
+                            in the spec for a single request.
+        :type _host_index: int, optional
+        :return: Returns the result object.
+        """ # noqa: E501
+
+        _param = self._change_ui_password_serialize(
+            ui_password_change=ui_password_change,
+            x_lab_csrf=x_lab_csrf,
+            _request_auth=_request_auth,
+            _content_type=_content_type,
+            _headers=_headers,
+            _host_index=_host_index
+        )
+
+        _response_types_map: Dict[str, Optional[str]] = {
+            '200': "AuthStatus",
+        }
+        response_data = self.api_client.call_api(
+            *_param,
+            _request_timeout=_request_timeout
+        )
+        response_data.read()
+        return self.api_client.response_deserialize(
+            response_data=response_data,
+            response_types_map=_response_types_map,
+        )
+
+
+    @validate_call
+    def change_ui_password_without_preload_content(
+        self,
+        ui_password_change: Annotated[UiPasswordChange, Field(description="Closed typed request. Passwords are secrets; never put them in shared logs or command history.")],
+        x_lab_csrf: Annotated[Optional[StrictStr], Field(description="Session-bound anti-CSRF secret for browser mutations. Required over HTTP; trusted USB bypasses browser authentication.")] = None,
+        _request_timeout: Union[
+            None,
+            Annotated[StrictFloat, Field(gt=0)],
+            Tuple[
+                Annotated[StrictFloat, Field(gt=0)],
+                Annotated[StrictFloat, Field(gt=0)]
+            ]
+        ] = None,
+        _request_auth: Optional[Dict[StrictStr, Any]] = None,
+        _content_type: Optional[StrictStr] = None,
+        _headers: Optional[Dict[StrictStr, Any]] = None,
+        _host_index: Annotated[StrictInt, Field(ge=0, le=0)] = 0,
+    ) -> RESTResponseType:
+        """Change or recover the UI password
+
+        Network access requires a valid browser session, X-Lab-CSRF and current_password. Trusted USB permits recovery without an old password. A successful replacement invalidates all browser sessions, clears failed-login state and leaves existing API bearer tokens intact.
+
+        :param ui_password_change: Closed typed request. Passwords are secrets; never put them in shared logs or command history. (required)
+        :type ui_password_change: UiPasswordChange
+        :param x_lab_csrf: Session-bound anti-CSRF secret for browser mutations. Required over HTTP; trusted USB bypasses browser authentication.
+        :type x_lab_csrf: str
+        :param _request_timeout: timeout setting for this request. If one
+                                 number provided, it will be total request
+                                 timeout. It can also be a pair (tuple) of
+                                 (connection, read) timeouts.
+        :type _request_timeout: int, tuple(int, int), optional
+        :param _request_auth: set to override the auth_settings for an a single
+                              request; this effectively ignores the
+                              authentication in the spec for a single request.
+        :type _request_auth: dict, optional
+        :param _content_type: force content-type for the request.
+        :type _content_type: str, Optional
+        :param _headers: set to override the headers for a single
+                         request; this effectively ignores the headers
+                         in the spec for a single request.
+        :type _headers: dict, optional
+        :param _host_index: set to override the host_index for a single
+                            request; this effectively ignores the host_index
+                            in the spec for a single request.
+        :type _host_index: int, optional
+        :return: Returns the result object.
+        """ # noqa: E501
+
+        _param = self._change_ui_password_serialize(
+            ui_password_change=ui_password_change,
+            x_lab_csrf=x_lab_csrf,
+            _request_auth=_request_auth,
+            _content_type=_content_type,
+            _headers=_headers,
+            _host_index=_host_index
+        )
+
+        _response_types_map: Dict[str, Optional[str]] = {
+            '200': "AuthStatus",
+        }
+        response_data = self.api_client.call_api(
+            *_param,
+            _request_timeout=_request_timeout
+        )
+        return response_data.response
+
+
+    def _change_ui_password_serialize(
+        self,
+        ui_password_change,
+        x_lab_csrf,
+        _request_auth,
+        _content_type,
+        _headers,
+        _host_index,
+    ) -> RequestSerialized:
+
+        _host = None
+
+        _collection_formats: Dict[str, str] = {
+        }
+
+        _path_params: Dict[str, str] = {}
+        _query_params: List[Tuple[str, str]] = []
+        _header_params: Dict[str, Optional[str]] = _headers or {}
+        _form_params: List[Tuple[str, str]] = []
+        _files: Dict[
+            str, Union[str, bytes, List[str], List[bytes], List[Tuple[str, bytes]]]
+        ] = {}
+        _body_params: Optional[bytes] = None
+
+        # process the path parameters
+        # process the query parameters
+        # process the header parameters
+        if x_lab_csrf is not None:
+            _header_params['X-Lab-CSRF'] = x_lab_csrf
+        # process the form parameters
+        # process the body parameter
+        if ui_password_change is not None:
+            _body_params = ui_password_change
+
+
+        # set the HTTP header `Accept`
+        if 'Accept' not in _header_params:
+            _header_params['Accept'] = self.api_client.select_header_accept(
+                [
+                    'application/json', 
+                    'application/problem+json'
+                ]
+            )
+
+        # set the HTTP header `Content-Type`
+        if _content_type:
+            _header_params['Content-Type'] = _content_type
+        else:
+            _default_content_type = (
+                self.api_client.select_header_content_type(
+                    [
+                        'application/json'
+                    ]
+                )
+            )
+            if _default_content_type is not None:
+                _header_params['Content-Type'] = _default_content_type
+
+        # authentication setting
+        _auth_settings: List[str] = [
+            'browserSession'
+        ]
+
+        return self.api_client.param_serialize(
+            method='PUT',
+            resource_path='/api/v1/auth/password',
+            path_params=_path_params,
+            query_params=_query_params,
+            header_params=_header_params,
+            body=_body_params,
+            post_params=_form_params,
+            files=_files,
+            auth_settings=_auth_settings,
+            collection_formats=_collection_formats,
+            _host=_host,
+            _request_auth=_request_auth
+        )
+
+
+
+
+    @validate_call
     def configure_access_point(
         self,
         access_point_request: Annotated[AccessPointRequest, Field(description="JSON request with the fields documented by the referenced schema. Unknown properties are rejected; use {} for an empty StopRequest.")],
@@ -71,7 +366,7 @@ class CoreApi:
     ) -> WifiState:
         """Set access-point security independently
 
-        Persist AP security and apply after the response (about 300 ms). Requires confirmed OFF/quiescent instruments, released leases and no pending Wi-Fi operation; returns 409 otherwise. AP clients disconnect and must reconnect with the new passphrase. Station credentials are unchanged. Use USB or the station address to retain management access. Requires bearer authentication on all HTTP interfaces, including the open AP. Independent instrument STOP remains available. Empty PSK explicitly restores the open default; no automatic fallback opens a secured AP.
+        Persist AP security and apply after the response (about 300 ms). Requires confirmed OFF/quiescent instruments, released leases and no pending Wi-Fi operation; returns 409 otherwise. AP clients disconnect and must reconnect with the new passphrase. Station credentials are unchanged. Use USB or the station address to retain management access. Requires a bearer token or UI session with X-Lab-CSRF on all HTTP interfaces, including the open AP. Independent instrument STOP remains available. Empty PSK explicitly restores the open default; no automatic fallback opens a secured AP.
 
         :param access_point_request: JSON request with the fields documented by the referenced schema. Unknown properties are rejected; use {} for an empty StopRequest. (required)
         :type access_point_request: AccessPointRequest
@@ -138,7 +433,7 @@ class CoreApi:
     ) -> ApiResponse[WifiState]:
         """Set access-point security independently
 
-        Persist AP security and apply after the response (about 300 ms). Requires confirmed OFF/quiescent instruments, released leases and no pending Wi-Fi operation; returns 409 otherwise. AP clients disconnect and must reconnect with the new passphrase. Station credentials are unchanged. Use USB or the station address to retain management access. Requires bearer authentication on all HTTP interfaces, including the open AP. Independent instrument STOP remains available. Empty PSK explicitly restores the open default; no automatic fallback opens a secured AP.
+        Persist AP security and apply after the response (about 300 ms). Requires confirmed OFF/quiescent instruments, released leases and no pending Wi-Fi operation; returns 409 otherwise. AP clients disconnect and must reconnect with the new passphrase. Station credentials are unchanged. Use USB or the station address to retain management access. Requires a bearer token or UI session with X-Lab-CSRF on all HTTP interfaces, including the open AP. Independent instrument STOP remains available. Empty PSK explicitly restores the open default; no automatic fallback opens a secured AP.
 
         :param access_point_request: JSON request with the fields documented by the referenced schema. Unknown properties are rejected; use {} for an empty StopRequest. (required)
         :type access_point_request: AccessPointRequest
@@ -205,7 +500,7 @@ class CoreApi:
     ) -> RESTResponseType:
         """Set access-point security independently
 
-        Persist AP security and apply after the response (about 300 ms). Requires confirmed OFF/quiescent instruments, released leases and no pending Wi-Fi operation; returns 409 otherwise. AP clients disconnect and must reconnect with the new passphrase. Station credentials are unchanged. Use USB or the station address to retain management access. Requires bearer authentication on all HTTP interfaces, including the open AP. Independent instrument STOP remains available. Empty PSK explicitly restores the open default; no automatic fallback opens a secured AP.
+        Persist AP security and apply after the response (about 300 ms). Requires confirmed OFF/quiescent instruments, released leases and no pending Wi-Fi operation; returns 409 otherwise. AP clients disconnect and must reconnect with the new passphrase. Station credentials are unchanged. Use USB or the station address to retain management access. Requires a bearer token or UI session with X-Lab-CSRF on all HTTP interfaces, including the open AP. Independent instrument STOP remains available. Empty PSK explicitly restores the open default; no automatic fallback opens a secured AP.
 
         :param access_point_request: JSON request with the fields documented by the referenced schema. Unknown properties are rejected; use {} for an empty StopRequest. (required)
         :type access_point_request: AccessPointRequest
@@ -306,6 +601,7 @@ class CoreApi:
 
         # authentication setting
         _auth_settings: List[str] = [
+            'browserSession', 
             'bearerAuth'
         ]
 
@@ -581,6 +877,7 @@ class CoreApi:
 
         # authentication setting
         _auth_settings: List[str] = [
+            'browserSession', 
             'bearerAuth'
         ]
 
@@ -856,12 +1153,259 @@ class CoreApi:
 
         # authentication setting
         _auth_settings: List[str] = [
+            'browserSession', 
             'bearerAuth'
         ]
 
         return self.api_client.param_serialize(
             method='POST',
             resource_path='/api/v1/leases',
+            path_params=_path_params,
+            query_params=_query_params,
+            header_params=_header_params,
+            body=_body_params,
+            post_params=_form_params,
+            files=_files,
+            auth_settings=_auth_settings,
+            collection_formats=_collection_formats,
+            _host=_host,
+            _request_auth=_request_auth
+        )
+
+
+
+
+    @validate_call
+    def get_auth_status(
+        self,
+        _request_timeout: Union[
+            None,
+            Annotated[StrictFloat, Field(gt=0)],
+            Tuple[
+                Annotated[StrictFloat, Field(gt=0)],
+                Annotated[StrictFloat, Field(gt=0)]
+            ]
+        ] = None,
+        _request_auth: Optional[Dict[StrictStr, Any]] = None,
+        _content_type: Optional[StrictStr] = None,
+        _headers: Optional[Dict[StrictStr, Any]] = None,
+        _host_index: Annotated[StrictInt, Field(ge=0, le=0)] = 0,
+    ) -> AuthStatus:
+        """Read browser authentication state
+
+        Public status for UI bootstrap. Does not start a session, reveal a password or return the API bearer token. setup_allowed depends on the receiving interface, not on client-supplied headers.
+
+        :param _request_timeout: timeout setting for this request. If one
+                                 number provided, it will be total request
+                                 timeout. It can also be a pair (tuple) of
+                                 (connection, read) timeouts.
+        :type _request_timeout: int, tuple(int, int), optional
+        :param _request_auth: set to override the auth_settings for an a single
+                              request; this effectively ignores the
+                              authentication in the spec for a single request.
+        :type _request_auth: dict, optional
+        :param _content_type: force content-type for the request.
+        :type _content_type: str, Optional
+        :param _headers: set to override the headers for a single
+                         request; this effectively ignores the headers
+                         in the spec for a single request.
+        :type _headers: dict, optional
+        :param _host_index: set to override the host_index for a single
+                            request; this effectively ignores the host_index
+                            in the spec for a single request.
+        :type _host_index: int, optional
+        :return: Returns the result object.
+        """ # noqa: E501
+
+        _param = self._get_auth_status_serialize(
+            _request_auth=_request_auth,
+            _content_type=_content_type,
+            _headers=_headers,
+            _host_index=_host_index
+        )
+
+        _response_types_map: Dict[str, Optional[str]] = {
+            '200': "AuthStatus",
+        }
+        response_data = self.api_client.call_api(
+            *_param,
+            _request_timeout=_request_timeout
+        )
+        response_data.read()
+        return self.api_client.response_deserialize(
+            response_data=response_data,
+            response_types_map=_response_types_map,
+        ).data
+
+
+    @validate_call
+    def get_auth_status_with_http_info(
+        self,
+        _request_timeout: Union[
+            None,
+            Annotated[StrictFloat, Field(gt=0)],
+            Tuple[
+                Annotated[StrictFloat, Field(gt=0)],
+                Annotated[StrictFloat, Field(gt=0)]
+            ]
+        ] = None,
+        _request_auth: Optional[Dict[StrictStr, Any]] = None,
+        _content_type: Optional[StrictStr] = None,
+        _headers: Optional[Dict[StrictStr, Any]] = None,
+        _host_index: Annotated[StrictInt, Field(ge=0, le=0)] = 0,
+    ) -> ApiResponse[AuthStatus]:
+        """Read browser authentication state
+
+        Public status for UI bootstrap. Does not start a session, reveal a password or return the API bearer token. setup_allowed depends on the receiving interface, not on client-supplied headers.
+
+        :param _request_timeout: timeout setting for this request. If one
+                                 number provided, it will be total request
+                                 timeout. It can also be a pair (tuple) of
+                                 (connection, read) timeouts.
+        :type _request_timeout: int, tuple(int, int), optional
+        :param _request_auth: set to override the auth_settings for an a single
+                              request; this effectively ignores the
+                              authentication in the spec for a single request.
+        :type _request_auth: dict, optional
+        :param _content_type: force content-type for the request.
+        :type _content_type: str, Optional
+        :param _headers: set to override the headers for a single
+                         request; this effectively ignores the headers
+                         in the spec for a single request.
+        :type _headers: dict, optional
+        :param _host_index: set to override the host_index for a single
+                            request; this effectively ignores the host_index
+                            in the spec for a single request.
+        :type _host_index: int, optional
+        :return: Returns the result object.
+        """ # noqa: E501
+
+        _param = self._get_auth_status_serialize(
+            _request_auth=_request_auth,
+            _content_type=_content_type,
+            _headers=_headers,
+            _host_index=_host_index
+        )
+
+        _response_types_map: Dict[str, Optional[str]] = {
+            '200': "AuthStatus",
+        }
+        response_data = self.api_client.call_api(
+            *_param,
+            _request_timeout=_request_timeout
+        )
+        response_data.read()
+        return self.api_client.response_deserialize(
+            response_data=response_data,
+            response_types_map=_response_types_map,
+        )
+
+
+    @validate_call
+    def get_auth_status_without_preload_content(
+        self,
+        _request_timeout: Union[
+            None,
+            Annotated[StrictFloat, Field(gt=0)],
+            Tuple[
+                Annotated[StrictFloat, Field(gt=0)],
+                Annotated[StrictFloat, Field(gt=0)]
+            ]
+        ] = None,
+        _request_auth: Optional[Dict[StrictStr, Any]] = None,
+        _content_type: Optional[StrictStr] = None,
+        _headers: Optional[Dict[StrictStr, Any]] = None,
+        _host_index: Annotated[StrictInt, Field(ge=0, le=0)] = 0,
+    ) -> RESTResponseType:
+        """Read browser authentication state
+
+        Public status for UI bootstrap. Does not start a session, reveal a password or return the API bearer token. setup_allowed depends on the receiving interface, not on client-supplied headers.
+
+        :param _request_timeout: timeout setting for this request. If one
+                                 number provided, it will be total request
+                                 timeout. It can also be a pair (tuple) of
+                                 (connection, read) timeouts.
+        :type _request_timeout: int, tuple(int, int), optional
+        :param _request_auth: set to override the auth_settings for an a single
+                              request; this effectively ignores the
+                              authentication in the spec for a single request.
+        :type _request_auth: dict, optional
+        :param _content_type: force content-type for the request.
+        :type _content_type: str, Optional
+        :param _headers: set to override the headers for a single
+                         request; this effectively ignores the headers
+                         in the spec for a single request.
+        :type _headers: dict, optional
+        :param _host_index: set to override the host_index for a single
+                            request; this effectively ignores the host_index
+                            in the spec for a single request.
+        :type _host_index: int, optional
+        :return: Returns the result object.
+        """ # noqa: E501
+
+        _param = self._get_auth_status_serialize(
+            _request_auth=_request_auth,
+            _content_type=_content_type,
+            _headers=_headers,
+            _host_index=_host_index
+        )
+
+        _response_types_map: Dict[str, Optional[str]] = {
+            '200': "AuthStatus",
+        }
+        response_data = self.api_client.call_api(
+            *_param,
+            _request_timeout=_request_timeout
+        )
+        return response_data.response
+
+
+    def _get_auth_status_serialize(
+        self,
+        _request_auth,
+        _content_type,
+        _headers,
+        _host_index,
+    ) -> RequestSerialized:
+
+        _host = None
+
+        _collection_formats: Dict[str, str] = {
+        }
+
+        _path_params: Dict[str, str] = {}
+        _query_params: List[Tuple[str, str]] = []
+        _header_params: Dict[str, Optional[str]] = _headers or {}
+        _form_params: List[Tuple[str, str]] = []
+        _files: Dict[
+            str, Union[str, bytes, List[str], List[bytes], List[Tuple[str, bytes]]]
+        ] = {}
+        _body_params: Optional[bytes] = None
+
+        # process the path parameters
+        # process the query parameters
+        # process the header parameters
+        # process the form parameters
+        # process the body parameter
+
+
+        # set the HTTP header `Accept`
+        if 'Accept' not in _header_params:
+            _header_params['Accept'] = self.api_client.select_header_accept(
+                [
+                    'application/json', 
+                    'application/problem+json'
+                ]
+            )
+
+
+        # authentication setting
+        _auth_settings: List[str] = [
+        ]
+
+        return self.api_client.param_serialize(
+            method='GET',
+            resource_path='/api/v1/auth/status',
             path_params=_path_params,
             query_params=_query_params,
             header_params=_header_params,
@@ -1103,6 +1647,7 @@ class CoreApi:
 
         # authentication setting
         _auth_settings: List[str] = [
+            'browserSession', 
             'bearerAuth'
         ]
 
@@ -1365,6 +1910,7 @@ class CoreApi:
 
         # authentication setting
         _auth_settings: List[str] = [
+            'browserSession', 
             'bearerAuth'
         ]
 
@@ -1627,6 +2173,7 @@ class CoreApi:
 
         # authentication setting
         _auth_settings: List[str] = [
+            'browserSession', 
             'bearerAuth'
         ]
 
@@ -1874,6 +2421,7 @@ class CoreApi:
 
         # authentication setting
         _auth_settings: List[str] = [
+            'browserSession', 
             'bearerAuth'
         ]
 
@@ -2136,6 +2684,7 @@ class CoreApi:
 
         # authentication setting
         _auth_settings: List[str] = [
+            'browserSession', 
             'bearerAuth'
         ]
 
@@ -2383,6 +2932,7 @@ class CoreApi:
 
         # authentication setting
         _auth_settings: List[str] = [
+            'browserSession', 
             'bearerAuth'
         ]
 
@@ -2645,6 +3195,7 @@ class CoreApi:
 
         # authentication setting
         _auth_settings: List[str] = [
+            'browserSession', 
             'bearerAuth'
         ]
 
@@ -2892,6 +3443,7 @@ class CoreApi:
 
         # authentication setting
         _auth_settings: List[str] = [
+            'browserSession', 
             'bearerAuth'
         ]
 
@@ -3182,6 +3734,7 @@ class CoreApi:
 
         # authentication setting
         _auth_settings: List[str] = [
+            'browserSession', 
             'bearerAuth'
         ]
 
@@ -3429,12 +3982,549 @@ class CoreApi:
 
         # authentication setting
         _auth_settings: List[str] = [
+            'browserSession', 
             'bearerAuth'
         ]
 
         return self.api_client.param_serialize(
             method='GET',
             resource_path='/api/v1/devices',
+            path_params=_path_params,
+            query_params=_query_params,
+            header_params=_header_params,
+            body=_body_params,
+            post_params=_form_params,
+            files=_files,
+            auth_settings=_auth_settings,
+            collection_formats=_collection_formats,
+            _host=_host,
+            _request_auth=_request_auth
+        )
+
+
+
+
+    @validate_call
+    def login_ui(
+        self,
+        ui_login: Annotated[UiLogin, Field(description="Closed typed request. Passwords are secrets; never put them in shared logs or command history.")],
+        _request_timeout: Union[
+            None,
+            Annotated[StrictFloat, Field(gt=0)],
+            Tuple[
+                Annotated[StrictFloat, Field(gt=0)],
+                Annotated[StrictFloat, Field(gt=0)]
+            ]
+        ] = None,
+        _request_auth: Optional[Dict[StrictStr, Any]] = None,
+        _content_type: Optional[StrictStr] = None,
+        _headers: Optional[Dict[StrictStr, Any]] = None,
+        _host_index: Annotated[StrictInt, Field(ge=0, le=0)] = 0,
+    ) -> AuthStatus:
+        """Sign in with the UI password
+
+        Same-origin JSON password login. Creates an opaque cookie session, not a bearer token. Eight concurrent sessions maximum. After five failed verifications in a rolling minute, return 429 with Retry-After; a busy password worker also returns 429. Hashing must not block laboratory STOP.
+
+        :param ui_login: Closed typed request. Passwords are secrets; never put them in shared logs or command history. (required)
+        :type ui_login: UiLogin
+        :param _request_timeout: timeout setting for this request. If one
+                                 number provided, it will be total request
+                                 timeout. It can also be a pair (tuple) of
+                                 (connection, read) timeouts.
+        :type _request_timeout: int, tuple(int, int), optional
+        :param _request_auth: set to override the auth_settings for an a single
+                              request; this effectively ignores the
+                              authentication in the spec for a single request.
+        :type _request_auth: dict, optional
+        :param _content_type: force content-type for the request.
+        :type _content_type: str, Optional
+        :param _headers: set to override the headers for a single
+                         request; this effectively ignores the headers
+                         in the spec for a single request.
+        :type _headers: dict, optional
+        :param _host_index: set to override the host_index for a single
+                            request; this effectively ignores the host_index
+                            in the spec for a single request.
+        :type _host_index: int, optional
+        :return: Returns the result object.
+        """ # noqa: E501
+
+        _param = self._login_ui_serialize(
+            ui_login=ui_login,
+            _request_auth=_request_auth,
+            _content_type=_content_type,
+            _headers=_headers,
+            _host_index=_host_index
+        )
+
+        _response_types_map: Dict[str, Optional[str]] = {
+            '200': "AuthStatus",
+        }
+        response_data = self.api_client.call_api(
+            *_param,
+            _request_timeout=_request_timeout
+        )
+        response_data.read()
+        return self.api_client.response_deserialize(
+            response_data=response_data,
+            response_types_map=_response_types_map,
+        ).data
+
+
+    @validate_call
+    def login_ui_with_http_info(
+        self,
+        ui_login: Annotated[UiLogin, Field(description="Closed typed request. Passwords are secrets; never put them in shared logs or command history.")],
+        _request_timeout: Union[
+            None,
+            Annotated[StrictFloat, Field(gt=0)],
+            Tuple[
+                Annotated[StrictFloat, Field(gt=0)],
+                Annotated[StrictFloat, Field(gt=0)]
+            ]
+        ] = None,
+        _request_auth: Optional[Dict[StrictStr, Any]] = None,
+        _content_type: Optional[StrictStr] = None,
+        _headers: Optional[Dict[StrictStr, Any]] = None,
+        _host_index: Annotated[StrictInt, Field(ge=0, le=0)] = 0,
+    ) -> ApiResponse[AuthStatus]:
+        """Sign in with the UI password
+
+        Same-origin JSON password login. Creates an opaque cookie session, not a bearer token. Eight concurrent sessions maximum. After five failed verifications in a rolling minute, return 429 with Retry-After; a busy password worker also returns 429. Hashing must not block laboratory STOP.
+
+        :param ui_login: Closed typed request. Passwords are secrets; never put them in shared logs or command history. (required)
+        :type ui_login: UiLogin
+        :param _request_timeout: timeout setting for this request. If one
+                                 number provided, it will be total request
+                                 timeout. It can also be a pair (tuple) of
+                                 (connection, read) timeouts.
+        :type _request_timeout: int, tuple(int, int), optional
+        :param _request_auth: set to override the auth_settings for an a single
+                              request; this effectively ignores the
+                              authentication in the spec for a single request.
+        :type _request_auth: dict, optional
+        :param _content_type: force content-type for the request.
+        :type _content_type: str, Optional
+        :param _headers: set to override the headers for a single
+                         request; this effectively ignores the headers
+                         in the spec for a single request.
+        :type _headers: dict, optional
+        :param _host_index: set to override the host_index for a single
+                            request; this effectively ignores the host_index
+                            in the spec for a single request.
+        :type _host_index: int, optional
+        :return: Returns the result object.
+        """ # noqa: E501
+
+        _param = self._login_ui_serialize(
+            ui_login=ui_login,
+            _request_auth=_request_auth,
+            _content_type=_content_type,
+            _headers=_headers,
+            _host_index=_host_index
+        )
+
+        _response_types_map: Dict[str, Optional[str]] = {
+            '200': "AuthStatus",
+        }
+        response_data = self.api_client.call_api(
+            *_param,
+            _request_timeout=_request_timeout
+        )
+        response_data.read()
+        return self.api_client.response_deserialize(
+            response_data=response_data,
+            response_types_map=_response_types_map,
+        )
+
+
+    @validate_call
+    def login_ui_without_preload_content(
+        self,
+        ui_login: Annotated[UiLogin, Field(description="Closed typed request. Passwords are secrets; never put them in shared logs or command history.")],
+        _request_timeout: Union[
+            None,
+            Annotated[StrictFloat, Field(gt=0)],
+            Tuple[
+                Annotated[StrictFloat, Field(gt=0)],
+                Annotated[StrictFloat, Field(gt=0)]
+            ]
+        ] = None,
+        _request_auth: Optional[Dict[StrictStr, Any]] = None,
+        _content_type: Optional[StrictStr] = None,
+        _headers: Optional[Dict[StrictStr, Any]] = None,
+        _host_index: Annotated[StrictInt, Field(ge=0, le=0)] = 0,
+    ) -> RESTResponseType:
+        """Sign in with the UI password
+
+        Same-origin JSON password login. Creates an opaque cookie session, not a bearer token. Eight concurrent sessions maximum. After five failed verifications in a rolling minute, return 429 with Retry-After; a busy password worker also returns 429. Hashing must not block laboratory STOP.
+
+        :param ui_login: Closed typed request. Passwords are secrets; never put them in shared logs or command history. (required)
+        :type ui_login: UiLogin
+        :param _request_timeout: timeout setting for this request. If one
+                                 number provided, it will be total request
+                                 timeout. It can also be a pair (tuple) of
+                                 (connection, read) timeouts.
+        :type _request_timeout: int, tuple(int, int), optional
+        :param _request_auth: set to override the auth_settings for an a single
+                              request; this effectively ignores the
+                              authentication in the spec for a single request.
+        :type _request_auth: dict, optional
+        :param _content_type: force content-type for the request.
+        :type _content_type: str, Optional
+        :param _headers: set to override the headers for a single
+                         request; this effectively ignores the headers
+                         in the spec for a single request.
+        :type _headers: dict, optional
+        :param _host_index: set to override the host_index for a single
+                            request; this effectively ignores the host_index
+                            in the spec for a single request.
+        :type _host_index: int, optional
+        :return: Returns the result object.
+        """ # noqa: E501
+
+        _param = self._login_ui_serialize(
+            ui_login=ui_login,
+            _request_auth=_request_auth,
+            _content_type=_content_type,
+            _headers=_headers,
+            _host_index=_host_index
+        )
+
+        _response_types_map: Dict[str, Optional[str]] = {
+            '200': "AuthStatus",
+        }
+        response_data = self.api_client.call_api(
+            *_param,
+            _request_timeout=_request_timeout
+        )
+        return response_data.response
+
+
+    def _login_ui_serialize(
+        self,
+        ui_login,
+        _request_auth,
+        _content_type,
+        _headers,
+        _host_index,
+    ) -> RequestSerialized:
+
+        _host = None
+
+        _collection_formats: Dict[str, str] = {
+        }
+
+        _path_params: Dict[str, str] = {}
+        _query_params: List[Tuple[str, str]] = []
+        _header_params: Dict[str, Optional[str]] = _headers or {}
+        _form_params: List[Tuple[str, str]] = []
+        _files: Dict[
+            str, Union[str, bytes, List[str], List[bytes], List[Tuple[str, bytes]]]
+        ] = {}
+        _body_params: Optional[bytes] = None
+
+        # process the path parameters
+        # process the query parameters
+        # process the header parameters
+        # process the form parameters
+        # process the body parameter
+        if ui_login is not None:
+            _body_params = ui_login
+
+
+        # set the HTTP header `Accept`
+        if 'Accept' not in _header_params:
+            _header_params['Accept'] = self.api_client.select_header_accept(
+                [
+                    'application/json', 
+                    'application/problem+json'
+                ]
+            )
+
+        # set the HTTP header `Content-Type`
+        if _content_type:
+            _header_params['Content-Type'] = _content_type
+        else:
+            _default_content_type = (
+                self.api_client.select_header_content_type(
+                    [
+                        'application/json'
+                    ]
+                )
+            )
+            if _default_content_type is not None:
+                _header_params['Content-Type'] = _default_content_type
+
+        # authentication setting
+        _auth_settings: List[str] = [
+        ]
+
+        return self.api_client.param_serialize(
+            method='POST',
+            resource_path='/api/v1/auth/login',
+            path_params=_path_params,
+            query_params=_query_params,
+            header_params=_header_params,
+            body=_body_params,
+            post_params=_form_params,
+            files=_files,
+            auth_settings=_auth_settings,
+            collection_formats=_collection_formats,
+            _host=_host,
+            _request_auth=_request_auth
+        )
+
+
+
+
+    @validate_call
+    def logout_ui(
+        self,
+        x_lab_csrf: Annotated[Optional[StrictStr], Field(description="Session-bound anti-CSRF secret for browser mutations. Required over HTTP; trusted USB bypasses browser authentication.")] = None,
+        _request_timeout: Union[
+            None,
+            Annotated[StrictFloat, Field(gt=0)],
+            Tuple[
+                Annotated[StrictFloat, Field(gt=0)],
+                Annotated[StrictFloat, Field(gt=0)]
+            ]
+        ] = None,
+        _request_auth: Optional[Dict[StrictStr, Any]] = None,
+        _content_type: Optional[StrictStr] = None,
+        _headers: Optional[Dict[StrictStr, Any]] = None,
+        _host_index: Annotated[StrictInt, Field(ge=0, le=0)] = 0,
+    ) -> AuthStatus:
+        """End this browser session
+
+        Requires a current browser session and X-Lab-CSRF. Invalidates this session and clears its cookie. The UI first attempts lease STOP/release; logout itself does not confirm physical OFF.
+
+        :param x_lab_csrf: Session-bound anti-CSRF secret for browser mutations. Required over HTTP; trusted USB bypasses browser authentication.
+        :type x_lab_csrf: str
+        :param _request_timeout: timeout setting for this request. If one
+                                 number provided, it will be total request
+                                 timeout. It can also be a pair (tuple) of
+                                 (connection, read) timeouts.
+        :type _request_timeout: int, tuple(int, int), optional
+        :param _request_auth: set to override the auth_settings for an a single
+                              request; this effectively ignores the
+                              authentication in the spec for a single request.
+        :type _request_auth: dict, optional
+        :param _content_type: force content-type for the request.
+        :type _content_type: str, Optional
+        :param _headers: set to override the headers for a single
+                         request; this effectively ignores the headers
+                         in the spec for a single request.
+        :type _headers: dict, optional
+        :param _host_index: set to override the host_index for a single
+                            request; this effectively ignores the host_index
+                            in the spec for a single request.
+        :type _host_index: int, optional
+        :return: Returns the result object.
+        """ # noqa: E501
+
+        _param = self._logout_ui_serialize(
+            x_lab_csrf=x_lab_csrf,
+            _request_auth=_request_auth,
+            _content_type=_content_type,
+            _headers=_headers,
+            _host_index=_host_index
+        )
+
+        _response_types_map: Dict[str, Optional[str]] = {
+            '200': "AuthStatus",
+        }
+        response_data = self.api_client.call_api(
+            *_param,
+            _request_timeout=_request_timeout
+        )
+        response_data.read()
+        return self.api_client.response_deserialize(
+            response_data=response_data,
+            response_types_map=_response_types_map,
+        ).data
+
+
+    @validate_call
+    def logout_ui_with_http_info(
+        self,
+        x_lab_csrf: Annotated[Optional[StrictStr], Field(description="Session-bound anti-CSRF secret for browser mutations. Required over HTTP; trusted USB bypasses browser authentication.")] = None,
+        _request_timeout: Union[
+            None,
+            Annotated[StrictFloat, Field(gt=0)],
+            Tuple[
+                Annotated[StrictFloat, Field(gt=0)],
+                Annotated[StrictFloat, Field(gt=0)]
+            ]
+        ] = None,
+        _request_auth: Optional[Dict[StrictStr, Any]] = None,
+        _content_type: Optional[StrictStr] = None,
+        _headers: Optional[Dict[StrictStr, Any]] = None,
+        _host_index: Annotated[StrictInt, Field(ge=0, le=0)] = 0,
+    ) -> ApiResponse[AuthStatus]:
+        """End this browser session
+
+        Requires a current browser session and X-Lab-CSRF. Invalidates this session and clears its cookie. The UI first attempts lease STOP/release; logout itself does not confirm physical OFF.
+
+        :param x_lab_csrf: Session-bound anti-CSRF secret for browser mutations. Required over HTTP; trusted USB bypasses browser authentication.
+        :type x_lab_csrf: str
+        :param _request_timeout: timeout setting for this request. If one
+                                 number provided, it will be total request
+                                 timeout. It can also be a pair (tuple) of
+                                 (connection, read) timeouts.
+        :type _request_timeout: int, tuple(int, int), optional
+        :param _request_auth: set to override the auth_settings for an a single
+                              request; this effectively ignores the
+                              authentication in the spec for a single request.
+        :type _request_auth: dict, optional
+        :param _content_type: force content-type for the request.
+        :type _content_type: str, Optional
+        :param _headers: set to override the headers for a single
+                         request; this effectively ignores the headers
+                         in the spec for a single request.
+        :type _headers: dict, optional
+        :param _host_index: set to override the host_index for a single
+                            request; this effectively ignores the host_index
+                            in the spec for a single request.
+        :type _host_index: int, optional
+        :return: Returns the result object.
+        """ # noqa: E501
+
+        _param = self._logout_ui_serialize(
+            x_lab_csrf=x_lab_csrf,
+            _request_auth=_request_auth,
+            _content_type=_content_type,
+            _headers=_headers,
+            _host_index=_host_index
+        )
+
+        _response_types_map: Dict[str, Optional[str]] = {
+            '200': "AuthStatus",
+        }
+        response_data = self.api_client.call_api(
+            *_param,
+            _request_timeout=_request_timeout
+        )
+        response_data.read()
+        return self.api_client.response_deserialize(
+            response_data=response_data,
+            response_types_map=_response_types_map,
+        )
+
+
+    @validate_call
+    def logout_ui_without_preload_content(
+        self,
+        x_lab_csrf: Annotated[Optional[StrictStr], Field(description="Session-bound anti-CSRF secret for browser mutations. Required over HTTP; trusted USB bypasses browser authentication.")] = None,
+        _request_timeout: Union[
+            None,
+            Annotated[StrictFloat, Field(gt=0)],
+            Tuple[
+                Annotated[StrictFloat, Field(gt=0)],
+                Annotated[StrictFloat, Field(gt=0)]
+            ]
+        ] = None,
+        _request_auth: Optional[Dict[StrictStr, Any]] = None,
+        _content_type: Optional[StrictStr] = None,
+        _headers: Optional[Dict[StrictStr, Any]] = None,
+        _host_index: Annotated[StrictInt, Field(ge=0, le=0)] = 0,
+    ) -> RESTResponseType:
+        """End this browser session
+
+        Requires a current browser session and X-Lab-CSRF. Invalidates this session and clears its cookie. The UI first attempts lease STOP/release; logout itself does not confirm physical OFF.
+
+        :param x_lab_csrf: Session-bound anti-CSRF secret for browser mutations. Required over HTTP; trusted USB bypasses browser authentication.
+        :type x_lab_csrf: str
+        :param _request_timeout: timeout setting for this request. If one
+                                 number provided, it will be total request
+                                 timeout. It can also be a pair (tuple) of
+                                 (connection, read) timeouts.
+        :type _request_timeout: int, tuple(int, int), optional
+        :param _request_auth: set to override the auth_settings for an a single
+                              request; this effectively ignores the
+                              authentication in the spec for a single request.
+        :type _request_auth: dict, optional
+        :param _content_type: force content-type for the request.
+        :type _content_type: str, Optional
+        :param _headers: set to override the headers for a single
+                         request; this effectively ignores the headers
+                         in the spec for a single request.
+        :type _headers: dict, optional
+        :param _host_index: set to override the host_index for a single
+                            request; this effectively ignores the host_index
+                            in the spec for a single request.
+        :type _host_index: int, optional
+        :return: Returns the result object.
+        """ # noqa: E501
+
+        _param = self._logout_ui_serialize(
+            x_lab_csrf=x_lab_csrf,
+            _request_auth=_request_auth,
+            _content_type=_content_type,
+            _headers=_headers,
+            _host_index=_host_index
+        )
+
+        _response_types_map: Dict[str, Optional[str]] = {
+            '200': "AuthStatus",
+        }
+        response_data = self.api_client.call_api(
+            *_param,
+            _request_timeout=_request_timeout
+        )
+        return response_data.response
+
+
+    def _logout_ui_serialize(
+        self,
+        x_lab_csrf,
+        _request_auth,
+        _content_type,
+        _headers,
+        _host_index,
+    ) -> RequestSerialized:
+
+        _host = None
+
+        _collection_formats: Dict[str, str] = {
+        }
+
+        _path_params: Dict[str, str] = {}
+        _query_params: List[Tuple[str, str]] = []
+        _header_params: Dict[str, Optional[str]] = _headers or {}
+        _form_params: List[Tuple[str, str]] = []
+        _files: Dict[
+            str, Union[str, bytes, List[str], List[bytes], List[Tuple[str, bytes]]]
+        ] = {}
+        _body_params: Optional[bytes] = None
+
+        # process the path parameters
+        # process the query parameters
+        # process the header parameters
+        if x_lab_csrf is not None:
+            _header_params['X-Lab-CSRF'] = x_lab_csrf
+        # process the form parameters
+        # process the body parameter
+
+
+        # set the HTTP header `Accept`
+        if 'Accept' not in _header_params:
+            _header_params['Accept'] = self.api_client.select_header_accept(
+                [
+                    'application/json', 
+                    'application/problem+json'
+                ]
+            )
+
+
+        # authentication setting
+        _auth_settings: List[str] = [
+            'browserSession'
+        ]
+
+        return self.api_client.param_serialize(
+            method='DELETE',
+            resource_path='/api/v1/auth/session',
             path_params=_path_params,
             query_params=_query_params,
             header_params=_header_params,
@@ -3676,6 +4766,7 @@ class CoreApi:
 
         # authentication setting
         _auth_settings: List[str] = [
+            'browserSession', 
             'bearerAuth'
         ]
 
@@ -3966,6 +5057,7 @@ class CoreApi:
 
         # authentication setting
         _auth_settings: List[str] = [
+            'browserSession', 
             'bearerAuth'
         ]
 
@@ -4286,12 +5378,287 @@ class CoreApi:
 
         # authentication setting
         _auth_settings: List[str] = [
+            'browserSession', 
             'bearerAuth'
         ]
 
         return self.api_client.param_serialize(
             method='PUT',
             resource_path='/api/v1/devices/{deviceId}/output',
+            path_params=_path_params,
+            query_params=_query_params,
+            header_params=_header_params,
+            body=_body_params,
+            post_params=_form_params,
+            files=_files,
+            auth_settings=_auth_settings,
+            collection_formats=_collection_formats,
+            _host=_host,
+            _request_auth=_request_auth
+        )
+
+
+
+
+    @validate_call
+    def setup_ui_password(
+        self,
+        ui_password_setup: Annotated[UiPasswordSetup, Field(description="Closed typed request. Passwords are secrets; never put them in shared logs or command history.")],
+        _request_timeout: Union[
+            None,
+            Annotated[StrictFloat, Field(gt=0)],
+            Tuple[
+                Annotated[StrictFloat, Field(gt=0)],
+                Annotated[StrictFloat, Field(gt=0)]
+            ]
+        ] = None,
+        _request_auth: Optional[Dict[StrictStr, Any]] = None,
+        _content_type: Optional[StrictStr] = None,
+        _headers: Optional[Dict[StrictStr, Any]] = None,
+        _host_index: Annotated[StrictInt, Field(ge=0, le=0)] = 0,
+    ) -> AuthStatus:
+        """Choose the first UI password
+
+        Only through the setup AP or trusted USB while no password exists. HTTP requires same-origin JSON. Confirm both password entries. Concurrent setup cannot overwrite an existing password. Does not automatically log in.
+
+        :param ui_password_setup: Closed typed request. Passwords are secrets; never put them in shared logs or command history. (required)
+        :type ui_password_setup: UiPasswordSetup
+        :param _request_timeout: timeout setting for this request. If one
+                                 number provided, it will be total request
+                                 timeout. It can also be a pair (tuple) of
+                                 (connection, read) timeouts.
+        :type _request_timeout: int, tuple(int, int), optional
+        :param _request_auth: set to override the auth_settings for an a single
+                              request; this effectively ignores the
+                              authentication in the spec for a single request.
+        :type _request_auth: dict, optional
+        :param _content_type: force content-type for the request.
+        :type _content_type: str, Optional
+        :param _headers: set to override the headers for a single
+                         request; this effectively ignores the headers
+                         in the spec for a single request.
+        :type _headers: dict, optional
+        :param _host_index: set to override the host_index for a single
+                            request; this effectively ignores the host_index
+                            in the spec for a single request.
+        :type _host_index: int, optional
+        :return: Returns the result object.
+        """ # noqa: E501
+
+        _param = self._setup_ui_password_serialize(
+            ui_password_setup=ui_password_setup,
+            _request_auth=_request_auth,
+            _content_type=_content_type,
+            _headers=_headers,
+            _host_index=_host_index
+        )
+
+        _response_types_map: Dict[str, Optional[str]] = {
+            '200': "AuthStatus",
+        }
+        response_data = self.api_client.call_api(
+            *_param,
+            _request_timeout=_request_timeout
+        )
+        response_data.read()
+        return self.api_client.response_deserialize(
+            response_data=response_data,
+            response_types_map=_response_types_map,
+        ).data
+
+
+    @validate_call
+    def setup_ui_password_with_http_info(
+        self,
+        ui_password_setup: Annotated[UiPasswordSetup, Field(description="Closed typed request. Passwords are secrets; never put them in shared logs or command history.")],
+        _request_timeout: Union[
+            None,
+            Annotated[StrictFloat, Field(gt=0)],
+            Tuple[
+                Annotated[StrictFloat, Field(gt=0)],
+                Annotated[StrictFloat, Field(gt=0)]
+            ]
+        ] = None,
+        _request_auth: Optional[Dict[StrictStr, Any]] = None,
+        _content_type: Optional[StrictStr] = None,
+        _headers: Optional[Dict[StrictStr, Any]] = None,
+        _host_index: Annotated[StrictInt, Field(ge=0, le=0)] = 0,
+    ) -> ApiResponse[AuthStatus]:
+        """Choose the first UI password
+
+        Only through the setup AP or trusted USB while no password exists. HTTP requires same-origin JSON. Confirm both password entries. Concurrent setup cannot overwrite an existing password. Does not automatically log in.
+
+        :param ui_password_setup: Closed typed request. Passwords are secrets; never put them in shared logs or command history. (required)
+        :type ui_password_setup: UiPasswordSetup
+        :param _request_timeout: timeout setting for this request. If one
+                                 number provided, it will be total request
+                                 timeout. It can also be a pair (tuple) of
+                                 (connection, read) timeouts.
+        :type _request_timeout: int, tuple(int, int), optional
+        :param _request_auth: set to override the auth_settings for an a single
+                              request; this effectively ignores the
+                              authentication in the spec for a single request.
+        :type _request_auth: dict, optional
+        :param _content_type: force content-type for the request.
+        :type _content_type: str, Optional
+        :param _headers: set to override the headers for a single
+                         request; this effectively ignores the headers
+                         in the spec for a single request.
+        :type _headers: dict, optional
+        :param _host_index: set to override the host_index for a single
+                            request; this effectively ignores the host_index
+                            in the spec for a single request.
+        :type _host_index: int, optional
+        :return: Returns the result object.
+        """ # noqa: E501
+
+        _param = self._setup_ui_password_serialize(
+            ui_password_setup=ui_password_setup,
+            _request_auth=_request_auth,
+            _content_type=_content_type,
+            _headers=_headers,
+            _host_index=_host_index
+        )
+
+        _response_types_map: Dict[str, Optional[str]] = {
+            '200': "AuthStatus",
+        }
+        response_data = self.api_client.call_api(
+            *_param,
+            _request_timeout=_request_timeout
+        )
+        response_data.read()
+        return self.api_client.response_deserialize(
+            response_data=response_data,
+            response_types_map=_response_types_map,
+        )
+
+
+    @validate_call
+    def setup_ui_password_without_preload_content(
+        self,
+        ui_password_setup: Annotated[UiPasswordSetup, Field(description="Closed typed request. Passwords are secrets; never put them in shared logs or command history.")],
+        _request_timeout: Union[
+            None,
+            Annotated[StrictFloat, Field(gt=0)],
+            Tuple[
+                Annotated[StrictFloat, Field(gt=0)],
+                Annotated[StrictFloat, Field(gt=0)]
+            ]
+        ] = None,
+        _request_auth: Optional[Dict[StrictStr, Any]] = None,
+        _content_type: Optional[StrictStr] = None,
+        _headers: Optional[Dict[StrictStr, Any]] = None,
+        _host_index: Annotated[StrictInt, Field(ge=0, le=0)] = 0,
+    ) -> RESTResponseType:
+        """Choose the first UI password
+
+        Only through the setup AP or trusted USB while no password exists. HTTP requires same-origin JSON. Confirm both password entries. Concurrent setup cannot overwrite an existing password. Does not automatically log in.
+
+        :param ui_password_setup: Closed typed request. Passwords are secrets; never put them in shared logs or command history. (required)
+        :type ui_password_setup: UiPasswordSetup
+        :param _request_timeout: timeout setting for this request. If one
+                                 number provided, it will be total request
+                                 timeout. It can also be a pair (tuple) of
+                                 (connection, read) timeouts.
+        :type _request_timeout: int, tuple(int, int), optional
+        :param _request_auth: set to override the auth_settings for an a single
+                              request; this effectively ignores the
+                              authentication in the spec for a single request.
+        :type _request_auth: dict, optional
+        :param _content_type: force content-type for the request.
+        :type _content_type: str, Optional
+        :param _headers: set to override the headers for a single
+                         request; this effectively ignores the headers
+                         in the spec for a single request.
+        :type _headers: dict, optional
+        :param _host_index: set to override the host_index for a single
+                            request; this effectively ignores the host_index
+                            in the spec for a single request.
+        :type _host_index: int, optional
+        :return: Returns the result object.
+        """ # noqa: E501
+
+        _param = self._setup_ui_password_serialize(
+            ui_password_setup=ui_password_setup,
+            _request_auth=_request_auth,
+            _content_type=_content_type,
+            _headers=_headers,
+            _host_index=_host_index
+        )
+
+        _response_types_map: Dict[str, Optional[str]] = {
+            '200': "AuthStatus",
+        }
+        response_data = self.api_client.call_api(
+            *_param,
+            _request_timeout=_request_timeout
+        )
+        return response_data.response
+
+
+    def _setup_ui_password_serialize(
+        self,
+        ui_password_setup,
+        _request_auth,
+        _content_type,
+        _headers,
+        _host_index,
+    ) -> RequestSerialized:
+
+        _host = None
+
+        _collection_formats: Dict[str, str] = {
+        }
+
+        _path_params: Dict[str, str] = {}
+        _query_params: List[Tuple[str, str]] = []
+        _header_params: Dict[str, Optional[str]] = _headers or {}
+        _form_params: List[Tuple[str, str]] = []
+        _files: Dict[
+            str, Union[str, bytes, List[str], List[bytes], List[Tuple[str, bytes]]]
+        ] = {}
+        _body_params: Optional[bytes] = None
+
+        # process the path parameters
+        # process the query parameters
+        # process the header parameters
+        # process the form parameters
+        # process the body parameter
+        if ui_password_setup is not None:
+            _body_params = ui_password_setup
+
+
+        # set the HTTP header `Accept`
+        if 'Accept' not in _header_params:
+            _header_params['Accept'] = self.api_client.select_header_accept(
+                [
+                    'application/json', 
+                    'application/problem+json'
+                ]
+            )
+
+        # set the HTTP header `Content-Type`
+        if _content_type:
+            _header_params['Content-Type'] = _content_type
+        else:
+            _default_content_type = (
+                self.api_client.select_header_content_type(
+                    [
+                        'application/json'
+                    ]
+                )
+            )
+            if _default_content_type is not None:
+                _header_params['Content-Type'] = _default_content_type
+
+        # authentication setting
+        _auth_settings: List[str] = [
+        ]
+
+        return self.api_client.param_serialize(
+            method='POST',
+            resource_path='/api/v1/auth/setup',
             path_params=_path_params,
             query_params=_query_params,
             header_params=_header_params,
@@ -4591,6 +5958,7 @@ class CoreApi:
 
         # authentication setting
         _auth_settings: List[str] = [
+            'browserSession', 
             'bearerAuth'
         ]
 
@@ -4881,6 +6249,7 @@ class CoreApi:
 
         # authentication setting
         _auth_settings: List[str] = [
+            'browserSession', 
             'bearerAuth'
         ]
 

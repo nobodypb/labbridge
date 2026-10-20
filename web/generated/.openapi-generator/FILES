@@ -14,6 +14,7 @@ src/index.ts
 src/models/AccessPointRequest.ts
 src/models/ActuatorSettings.ts
 src/models/ActuatorState.ts
+src/models/AuthStatus.ts
 src/models/CellTemperatureGuard.ts
 src/models/Component.ts
 src/models/ComponentList.ts
@@ -53,6 +54,9 @@ src/models/StopRequest.ts
 src/models/SwitchPathRequest.ts
 src/models/TemperatureChannel.ts
 src/models/TemperatureChannels.ts
+src/models/UiLogin.ts
+src/models/UiPasswordChange.ts
+src/models/UiPasswordSetup.ts
 src/models/VoltageRequest.ts
 src/models/WifiNetwork.ts
 src/models/WifiRequest.ts

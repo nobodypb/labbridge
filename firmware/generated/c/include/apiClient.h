@@ -29,12 +29,14 @@ typedef struct apiClient_t {
     void *progress_data;
     long response_code;
     char *accessToken;
+    list_t *apiKeys_browserSession;
 } apiClient_t;
 
 apiClient_t* apiClient_create();
 
 apiClient_t* apiClient_create_with_base_path(const char *basePath
 , sslConfig_t *sslConfig
+, list_t *apiKeys_browserSession
 );
 
 void apiClient_free(apiClient_t *apiClient);

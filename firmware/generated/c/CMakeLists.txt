@@ -51,6 +51,7 @@ set(SRCS
     model/access_point_request.c
     model/actuator_settings.c
     model/actuator_state.c
+    model/auth_status.c
     model/cell_temperature_guard.c
     model/component.c
     model/component_list.c
@@ -90,6 +91,9 @@ set(SRCS
     model/switch_path_request.c
     model/temperature_channel.c
     model/temperature_channels.c
+    model/ui_login.c
+    model/ui_password_change.c
+    model/ui_password_setup.c
     model/voltage_request.c
     model/wifi_network.c
     model/wifi_request.c
@@ -110,6 +114,7 @@ set(HDRS
     model/access_point_request.h
     model/actuator_settings.h
     model/actuator_state.h
+    model/auth_status.h
     model/cell_temperature_guard.h
     model/component.h
     model/component_list.h
@@ -149,6 +154,9 @@ set(HDRS
     model/switch_path_request.h
     model/temperature_channel.h
     model/temperature_channels.h
+    model/ui_login.h
+    model/ui_password_change.h
+    model/ui_password_setup.h
     model/voltage_request.h
     model/wifi_network.h
     model/wifi_request.h
