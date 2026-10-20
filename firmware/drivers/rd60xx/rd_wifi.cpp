@@ -41,6 +41,28 @@ Identity identify(const Bytes &frame) {
     throw std::invalid_argument("RD serial is zero");
   return {value.serial, uint16_t(model), r[0], r[3]};
 }
+bool IdentityHeartbeat::expired(uint64_t now) const {
+  return failed_ || (waiting_ && now >= deadline_);
+}
+Bytes IdentityHeartbeat::poll(uint64_t now) {
+  if (expired(now) || waiting_ || now < due_)
+    return {};
+  waiting_ = true;
+  deadline_ = now + 2000;
+  return read(1, 0, 20);
+}
+bool IdentityHeartbeat::accept(const Identity &identity, uint64_t now) {
+  if (!waiting_ || expired(now) ||
+      (identity_ && (identity_->serial != identity.serial ||
+                     identity_->model_id != identity.model_id))) {
+    failed_ = true;
+    return false;
+  }
+  identity_ = identity;
+  waiting_ = false;
+  due_ = now + 1000;
+  return true;
+}
 void IdentityBindings::configure(uint32_t serial, unsigned model) {
   profile(model);
   if (!serial || expected_.count(serial))
@@ -160,6 +182,80 @@ Bytes esptouch_frame(size_t payload_length, std::array<uint8_t, 6> bssid) {
   word(54, 7001);
   word(56, 8 + payload_length);
   return frame;
+}
+std::vector<uint16_t> pc_touch_data(bool server, const std::string &ssid,
+                                    const std::string &password,
+                                    std::array<uint8_t, 4> ip,
+                                    const std::string &profile) {
+  if (profile != "pc_v22" && profile != "pc_v22_target_ssid")
+    throw std::invalid_argument("Unknown PC provisioning profile");
+  std::string s = server && profile == "pc_v22" ? "RD6006" : ssid, p = password;
+  if (server) {
+    p.clear();
+    for (auto octet : ip) {
+      if (!p.empty())
+        p += '.';
+      p += std::to_string(octet);
+    }
+  }
+  auto ascii = [](const std::string &v) {
+    return std::all_of(v.begin(), v.end(),
+                       [](unsigned char c) { return c >= 32 && c <= 126; });
+  };
+  if (s.empty() || s.size() > 32 || p.size() > 64 || !ascii(s) || !ascii(p) ||
+      9 + s.size() + p.size() > 128)
+    throw std::invalid_argument("PC ESPTouch ASCII field length");
+  std::vector<uint8_t> bytes{uint8_t(9 + s.size() + p.size()),
+                             uint8_t(p.size()), touch_crc({s.begin(), s.end()}),
+                             199, 0};
+  bytes.insert(bytes.end(), ip.begin(), ip.end());
+  bytes.insert(bytes.end(), p.begin(), p.end());
+  bytes.insert(bytes.end(), s.begin(), s.end());
+  uint8_t checksum = 0;
+  for (auto value : bytes)
+    checksum ^= value;
+  bytes[4] = checksum;
+  std::vector<uint16_t> result;
+  for (size_t i = 0; i < bytes.size(); ++i) {
+    auto value = bytes[i], c = touch_crc({value, uint8_t(i)});
+    result.push_back(40 + (c & 0xf0) + (value >> 4));
+    result.push_back(296 + i);
+    result.push_back(40 + ((c & 15) << 4) + (value & 15));
+  }
+  return result;
+}
+void PcTouchSender::start(std::vector<uint16_t> data, uint64_t now, bool wifi) {
+  if (data.empty() || data.size() % 3)
+    throw std::invalid_argument("Invalid PC touch data");
+  data_ = std::move(data);
+  cursor_ = 0;
+  ready_ = now + (wifi ? 300 : 0);
+  deadline_ = ready_ + 60000;
+  active_ = true;
+}
+std::optional<TouchDatagram> PcTouchSender::peek(uint64_t now) const {
+  if (!active_ || now < ready_ || (now >= deadline_ && cursor_ == 0))
+    return std::nullopt;
+  bool next_group = cursor_ < 156 ? cursor_ % 4 == 0 : (cursor_ - 156) % 3 == 0;
+  return TouchDatagram{cursor_ < 156 ? uint16_t(515 - cursor_ % 4)
+                                     : data_[cursor_ - 156],
+                       next_group ? uint8_t(group_ % 100 + 1) : group_};
+}
+void PcTouchSender::sent(uint64_t now) {
+  if (!active_)
+    throw std::logic_error("PC touch sender stopped");
+  bool next_group = cursor_ < 156 ? cursor_ % 4 == 0 : (cursor_ - 156) % 3 == 0;
+  if (next_group)
+    group_ = group_ % 100 + 1;
+  if (++cursor_ == 156 + data_.size()) {
+    cursor_ = 0;
+    ready_ = now + 1000;
+  }
+}
+std::optional<std::array<uint8_t, 4>> pc_join_address(const Bytes &bytes) {
+  if (bytes.size() != 11 || bytes[7] == 0 || bytes[7] >= 224)
+    return std::nullopt;
+  return std::array<uint8_t, 4>{bytes[7], bytes[8], bytes[9], bytes[10]};
 }
 bool Provisioning::active() const {
   return state_ == "server_address" || state_ == "wifi" ||

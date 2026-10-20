@@ -1,0 +1,5 @@
+# Synthetic example only; substitute locally and keep installed rules private.
+# Obtain USB properties with: udevadm info --query=property --name=PORT
+# Install the adapted rules in /etc/udev/rules.d/ and reload udev.
+SUBSYSTEM=="tty", ENV{ID_VENDOR_ID}=="303a", ENV{ID_MODEL_ID}=="1001", ENV{ID_SERIAL_SHORT}=="REPLACE_DEVICE_A_USB_SERIAL", ENV{ID_USB_INTERFACE_NUM}=="00", SYMLINK+="example-node-a"
+SUBSYSTEM=="tty", ENV{ID_VENDOR_ID}=="303a", ENV{ID_MODEL_ID}=="1001", ENV{ID_SERIAL_SHORT}=="REPLACE_DEVICE_B_USB_SERIAL", ENV{ID_USB_INTERFACE_NUM}=="00", SYMLINK+="example-node-b"

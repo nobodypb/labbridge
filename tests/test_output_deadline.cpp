@@ -27,7 +27,7 @@ struct Link : Endpoint {
 };
 struct Rtu : Endpoint {
   Bytes rx;
-  std::array<uint16_t, 20> regs{};
+  std::array<uint16_t, 42> regs{};
   uint64_t gen = 1;
   unsigned enables = 0;
   Rtu() {
@@ -40,8 +40,11 @@ struct Rtu : Endpoint {
   uint64_t generation() const override { return gen; }
   bool send(const Bytes &b) override {
     if (b[1] == 3) {
-      rx = {1, 3, 40};
-      for (auto r : regs) {
+      unsigned first = (b[2] << 8) | b[3], count = (b[4] << 8) | b[5];
+      assert(first + count <= regs.size());
+      rx = {1, 3, uint8_t(count * 2)};
+      for (unsigned i = first; i < first + count; ++i) {
+        auto r = regs[i];
         rx.push_back(r >> 8);
         rx.push_back(r & 255);
       }

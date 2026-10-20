@@ -1,4 +1,5 @@
 #include "rd60xx.hpp"
+#include <algorithm>
 #include <cstddef>
 #include <stdexcept>
 namespace labbridge::rd60xx {
@@ -63,6 +64,24 @@ Measurement decode(const std::array<uint16_t, 20> &r, unsigned expected_model) {
                 r[16]};
   if (m.voltage > 65 || m.current > model.max_current + 2)
     throw std::invalid_argument("RD60xx values out of range");
+  return m;
+}
+Measurement decode(const std::array<uint16_t, telemetry_register_count> &r,
+                   unsigned expected_model) {
+  std::array<uint16_t, 20> identity{};
+  std::copy_n(r.begin(), identity.size(), identity.begin());
+  auto m = decode(identity, expected_model);
+  AuxiliaryMeasurement a{r[14] / 100.,
+                         r[33] / 100.,
+                         ((uint32_t(r[38]) << 16) | r[39]) / 1000.,
+                         ((uint32_t(r[40]) << 16) | r[41]) / 1000.,
+                         r[32] != 0,
+                         {}};
+  auto temperature = (r[34] ? -1. : 1.) * r[35];
+  // The PC application treats readings below -40 C as disconnected.
+  if (r[34] <= 1 && temperature >= -40 && temperature <= 100)
+    a.external_temperature = temperature;
+  m.auxiliary = a;
   return m;
 }
 } // namespace labbridge::rd60xx

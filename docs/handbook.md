@@ -19,6 +19,12 @@ No manufacturer firmware update is needed for the confirmed DL24M protocol.
 | ESP32-S3-USB-OTG | BLE, up to two AP TCP sources and up to two USB serial RD60xx endpoints | Powered USB hub for two instruments; separate UART console. Internal USB PHY cannot serve console and host simultaneously. |
 | Classic ESP32 devkit | BLE and UART | Bluetooth Classic hardware exists, but SPP is not enabled in this runtime. No native USB host. |
 
+The StickS3 build enables its 8 MB octal PSRAM, tests it at boot and makes it
+available to the application allocator. See the [manufacturer's board
+specification](https://docs.m5stack.com/en/core/StickS3). Do not disable PSRAM in
+that profile: API configuration and retained operation results also need heap.
+Other board profiles must be commissioned for their own memory budget.
+
 Resource profiles reject excess connections, duplicate instrument identities
 and shared pins before creating drivers. GPIO/1-Wire pins must be explicitly
 approved in a board profile; an empty pin allowlist is intentional. Do not infer
@@ -143,13 +149,41 @@ CRC low byte first. Validate address, function, payload length and CRC.
 | 8 / 9 | set voltage / current | /100 V, /100 A |
 | 10 / 11 | measured voltage / current | /100 V, /100 A |
 | 12–13 | measured power | combined 32-bit /100 W |
+| 14 | input supply voltage | /100 V |
 | 16 | protection | raw enum |
-| 17 | CC/CV | probable 0=CV, 1=CC; commissioning required |
+| 17 | CC/CV | 0=CV, 1=CC; sustained loaded CC acceptance remains open |
 | 18 | output | 0/1 |
+| 32 / 33 | battery detected / sensed battery voltage | nonzero / /100 V |
+| 34–35 | external NTC temperature | sign, magnitude °C |
+| 38–39 | native charge counter | combined 32-bit /1000 Ah |
+| 40–41 | native energy counter | combined 32-bit /1000 Wh |
 
 Before writing, re-read and match instrument serial/model. Require function-06
-byte-for-byte echo, then fresh register readback with the same identity. The
-external NTC channel is not mapped yet; internal temperature cannot substitute.
+byte-for-byte echo, then fresh register readback with the same identity. Reads
+cover registers 0–41 in one CRC-checked response, including identity, operating
+state and auxiliary measurements. Discovery uses the shorter 0–19 identity read.
+An external NTC reading below −40 °C (including the disconnected −89 °C sentinel),
+an invalid sign or a reading above 100 °C is unavailable, with no numeric value.
+Internal temperature cannot substitute for this external channel.
+
+The response deadline is one second; a successful reply advances immediately.
+There is no mandatory one-second pause between commands. Missing pre-activation
+reads can be retried within the ten-second operation budget. Once an ON write
+has been sent, uncertain echo or mismatched readback fails the operation and
+requests recovery OFF; ON is not repeated. OFF and setpoint recovery remain
+bounded. Confirmed ON describes the output-enable register, not settled terminal
+voltage. A workflow that requires a settled voltage must check fresh measurements.
+
+The source API exposes voltage/current setpoints, output, V/I/power, input and
+battery voltage, battery presence, native Ah/Wh counters, regulation mode,
+protection status and both temperature channels. Common sensor component IDs
+are `voltage`, `current`, `power`, `input-voltage`, `battery-voltage`,
+`battery-detected` (dimensionless 0/1), `charge` (Ah), `energy` (Wh),
+`temperature-internal` and `temperature-external`. All use the same reading and
+freshness contract. Native counters can reset with device actions; detect a
+decrease and start a new integration segment rather than inventing a delta.
+OVP/OCP settings, presets and front-panel settings are not yet exposed by this
+driver. Calibration is not an automation operation.
 
 The ordinary RD6018 and RD6024 profiles use 0.01 V/A setpoint steps. RD6018
 model ceilings are 60 V / 18 A / 1080 W; RD6024 ceilings are 60 V / 24 A /
@@ -187,11 +221,11 @@ requests OFF before allowing work; it never resumes ON.
 
 ### Pairing through LabBridge
 
-**Commissioning limitation:** W01 pairing is not commissioned. The current sender uses a general ESPTouch profile; the RIDEN PC profile below differs in its phase-one SSID, BSSID field, multicast destinations and burst schedule. Correct these differences before interpreting another radio trial. Both open and WPA2 AP-origin trials failed to deliver a displayed server address. WPA2 alone did not resolve pairing. See [compatibility notes](uncertainties.md).
+**Commissioning status:** The RIDEN PC profile below paired a W01 RD6018 successfully from the ESP AP using WPA2 and an associated phone, including the displayed server address, UDP join result and TCP identity. No-load setpoint writes/readback, output switching, independent STOP, local activation duration and lease-expiry shutdown are commissioned on ordinary RD6018 firmware 1.39. Loaded CC/CV, a second physical source, open-network compatibility, essential profile differences and the coexistence soak remain unvalidated. See [acceptance](acceptance.md) and [compatibility notes](uncertainties.md).
 
 The AP is open by default. `core.configure_access_point` (`PUT /api/v1/wifi/ap`) accepts only `{"psk":"..."}`: 8..63 printable ASCII characters enable WPA2-PSK/CCMP; an explicit empty string restores the open AP. This requires quiescent instruments and authenticated HTTP or trusted USB, including when called through the open AP. The change disconnects AP clients after the response; use USB or the station address to retain management access. Station credentials and the configured AP SSID are unchanged. Secrets are never returned. `getWifiState.ap_secured` reports current authentication; poll after the delayed change. Supply secrets through a private CLI args file or stdin, not shell command history.
 
-For protected provisioning, connect a phone/client to the AP and keep it associated during transmission. WPA2 uses normal UDP so that the WLAN driver encrypts packets; direct raw transmission is only the unencrypted diagnostic path. Radio-completion counters apply only to that diagnostic path and are not WPA2 transmission counters. PMF is not required, for compatibility with the original ESP8266 module.
+For protected provisioning, connect a phone/client to the AP and keep it associated during transmission. Both AP modes now use normal multicast UDP; on WPA2 the WLAN driver encrypts packets. Radio-completion counters belong to the older raw diagnostic path and remain zero for this sender. Complete-burst and join-ACK counters describe distinct stages; neither substitutes for TCP identity. PMF is not required, for compatibility with the original ESP8266 module.
 
 Keep the target PSU output OFF and configure one module at a time. On the PSU,
 select WiFi/address 1, reset the previous Wi-Fi setup and restart. In `/devices`,
@@ -204,11 +238,11 @@ are blocked while pairing; independent STOP remains available.
 1. In `server_address`, the ESP transmits its AP address using the RIDEN
    two-stage ESPTouch convention. When the PSU shows `192.168.4.1` /
    **Connecting WiFi**, acknowledge **ESP address shown / Connecting WiFi**.
-2. In `wifi`, the current ESP sender transmits the AP SSID/BSSID and configured
+2. In `wifi`, the ESP sender transmits the AP SSID and configured
    AP password (empty for an open AP). When
    the PSU shows **Connecting server**, acknowledge **Connecting server shown**.
 3. `waiting_connection` completes when a supported incoming identity has been
-   seen. Each phase has a 120-second deadline. Cancellation stops transmission;
+   seen. Each management phase has a 120-second deadline; the sender repeats bursts for at most 60 seconds, matching the PC. Cancellation stops transmission;
    settings already received by the PSU are not undone. Status includes AP client count/channel and separate radio submissions, successful transmission completions and failed completions. Successful broadcast transmission does not confirm PSU reception; use the display and eventual TCP identity. Old session IDs are
    rejected and repeated phase acknowledgements never skip a step.
 4. Check the displayed model/serial. Enter a device ID and explicit voltage,
@@ -218,6 +252,24 @@ are blocked while pairing; independent STOP remains available.
    Discovery/registration never enables an output.
 
 The same operations are generated for HTTP and USB CLI:
+
+For unattended phase handoff, use the host workflow after confirming physical
+OFF, entering the PSU's Wi-Fi setup and connecting a client to the ESP AP:
+
+```sh
+PYTHONPATH=host/src:host/generated python tools/rd_wifi_pair.py --endpoint "$BRIDGE_ENDPOINT" --confirm-outputs-off
+```
+
+`BRIDGE_ENDPOINT` accepts `serial:` or HTTP; HTTP reads its bearer token from
+`LABBRIDGE_TOKEN`. The helper uses the PC-compatible profile, sends the server
+address for its 60-second window and then sends stored AP credentials
+automatically. It never waits for a display confirmation or reads the PSK onto
+the host. It exits successfully only when the firmware confirms a new TCP
+instrument identity. Cancellation and a bounded overall timeout stop only the
+session it started. `labbridge.provisioning.pair_rd_wifi(node,
+confirm_outputs_off=True)` exposes the same workflow to scripts.
+
+Individual operations remain available for protocol diagnostics:
 
 ```sh
 labbridge --endpoint serial:/dev/ttyACM0 call rd60xx.get_rd_provisioning
@@ -230,13 +282,27 @@ labbridge --endpoint serial:/dev/ttyACM0 call rd60xx.cancel_rd_provisioning --ar
 See [single-node configuration](../examples/configuration/rd6018-ap-sticks3.json).
 Replace all synthetic identities and bench limits for the actual circuit.
 
+Provisioning defaults to `profile: "pc_v22"`. For a controlled commissioning
+comparison, trusted USB/CLI may explicitly select `pc_v22_target_ssid` in the
+start request. That variant changes only the phase-one SSID field to the AP
+SSID, with the resulting CRC/XOR/length changes; phase two, multicast and timing
+are identical. W01 trials received the server IP but have not established
+Wi-Fi/TCP pairing with this variant; retain the default `pc_v22` profile.
+Status returns the selected `profile`. Confirm the displayed server IP and
+advance within the 120-second management phase; the sender itself runs for
+up to 60 seconds. A stale candidate listing does not prove a new pairing: check
+for a new join result and TCP identity exchange. Start a new session for each comparison;
+never change profiles midway through a phase. Keep the known working baseline
+and re-pair the module with it after a failed comparison.
+
+
 ### RIDEN PC provisioning wire profile
 
 The original-module setup uses **two ESPTouch length-coded transmissions**.
-These are the wire rules implemented by RIDEN PC software 1.0.0.22; they are
-not yet a claim that LabBridge emits this profile or that W01 accepts it from
-an ESP acting as the AP. No initial TCP connection or IP address on the module
-is needed: it observes Wi-Fi frame lengths before joining the network.
+LabBridge's PC-profile sender implements the wire rules of RIDEN PC software
+1.0.0.22. A W01 RD6018 accepted this profile from the ESP AP with WPA2 and an
+associated phone. No initial TCP connection or IP address on the
+module is needed: it observes Wi-Fi frame lengths before joining the network.
 
 | Phase | SSID field `S` | Password field `P` | Transition |
 | --- | --- | --- | --- |
@@ -345,6 +411,34 @@ Protocol/provisioning references: [original-module bridge and pairing documentat
 [ordinary/P model scaling](https://github.com/morgendagen/riden-dongle/blob/main/src/riden_modbus/riden_modbus.cpp),
 [Espressif RF coexistence](https://docs.espressif.com/projects/esp-idf/en/v5.5.2/esp32s3/api-guides/coexist.html).
 No third-party implementation code is vendored for this transport/provisioner.
+The portable PC-profile codec/scheduler is separate from the general ESPTouch
+reference codec. It keeps the multicast counter across bursts/phases, commits a
+packet only after UDP submission, and waits only on transient queue backpressure
+(up to one second) rather than inserting a fixed packet delay. STOP/cancellation
+is checked between packets and during the quiet interval. An eleven-byte result
+is counted only during phase two, for a matching peer/embedded AP-subnet address;
+it stops credential transmission but does not advance management or enable output.
+
+Unregistered TCP discovery peers are monitored with read-only identity probes:
+one second after a valid reply, with a two-second reply deadline. A missed reply
+or identity change closes that stream and releases its serial claim. A second
+live stream with the same serial remains rejected. Configured devices use their
+existing driver polling/recovery. This does not confirm an output state.
+
+### Stable host USB names
+
+Use `/dev/serial/by-id/` paths or locally configured udev aliases instead of
+unstable `/dev/ttyACM0` numbering. The SDK resolves USB identity for native ESP
+CDC/JTAG line control while opening the selected stable path.
+
+The [example udev rules](../examples/host/99-labbridge-usb.rules.example) use
+synthetic aliases and serial placeholders. Adapt and install rules locally;
+never commit physical USB serials, installed host rules, node assignments or
+configured network identities. Recheck the physical device before flashing.
+
+```sh
+labbridge --endpoint serial:/dev/serial/by-id/REPLACE_WITH_DEVICE_ID call core.get_node
+```
 
 ## Public API and USB
 
