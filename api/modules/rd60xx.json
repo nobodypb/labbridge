@@ -11,7 +11,9 @@
       "output",
       "voltage.measure",
       "current.measure",
-      "power.measure"
+      "power.measure",
+      "energy.measure",
+      "charge.measure"
     ]
   },
   "paths": {

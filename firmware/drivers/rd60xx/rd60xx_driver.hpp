@@ -11,6 +11,8 @@ public:
                std::string transport = "usb", unsigned model = 6024);
   Json describe(uint64_t) override;
   Json measurements(uint64_t) override;
+  Json components(uint64_t) override;
+  Json component_reading(const std::string &, uint64_t) override;
   bool supports(const std::string &) const override;
   void tick(uint64_t) override;
   void stop(uint64_t) override;
@@ -35,7 +37,7 @@ private:
   bool have_ = false, need_stop_ = true, user_ = false, stopping_ = false;
   bool activation_sent_ = false;
   Phase phase_ = Phase::idle;
-  size_t drain_size_ = 45;
+  size_t drain_size_ = rd60xx::telemetry_frame_size;
   uint64_t generation_ = 0, received_ = 0, sequence_ = 0, due_ = 0,
            started_ = 0, enabled_at_ = 0;
   uint16_t reg_ = 18, value_ = 0;

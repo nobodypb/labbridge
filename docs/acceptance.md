@@ -175,8 +175,32 @@ Protection status remained zero. Sensor discovery/readings, actuator state,
 idempotent replay/conflict and invalid step/model-limit rejections passed.
 Original voltage/current targets were restored with fresh confirmed OFF.
 This establishes command/telemetry behavior; it does not calibrate the voltage
-or current measurements or validate CC under load, hardware OVP/OCP, external
-NTC, presets, counters, battery wiring or a battery workflow.
+or current measurements or validate CC under load, hardware OVP/OCP, presets,
+battery wiring or a battery workflow. Additional telemetry is covered below.
+
+### Complete source telemetry
+
+The configured-source read covers registers 0–41 in one identity/CRC-checked
+response. API/codec tests cover the 32-bit native counters, 0.01 V input/battery
+scales, /1000 Ah/Wh scales, a valid zero-temperature reading and unavailable NTC
+sentinels. Runtime responses, component discovery and readings are validated
+against OpenAPI. Discovery retains the shorter identity read.
+
+Physical RD6018 firmware 1.39 returned all ten common sensor components:
+output V/I/W, input voltage, battery voltage/presence, charge, energy and
+internal/external temperatures. Both temperature probes produced valid readings.
+Thirty consecutive coherent snapshots supplied 300 valid sensor readings across
+21 distinct samples, with unchanged boot identity. Generated USB CLI and HTTP
+returned the complete telemetry, including the native counters.
+
+The extended-read firmware repeated all fourteen checked setting/output requests
+with one write each (median 472 ms, maximum 704 ms), plus independent STOP,
+activation-duration and lease-expiry shutdown. Five additional setting/output
+requests and STOP passed over authenticated HTTP. Original targets were restored
+with fresh confirmed OFF and protection status zero. This commissions the
+requested source controls and telemetry transport. Native counter accuracy under
+load, sensor calibration, sustained loaded CC/CV, a second physical source and
+coexistence remain separate acceptance work.
 
 Regression tests reproduce missing background reads before ON, lost ON echo,
 ON readback mismatch and 600 ms device replies. They require bounded recovery

@@ -12,7 +12,7 @@ checks pass and its hardware claims match the evidence.
 | LB-004 | As a driver author, I use isolated transport endpoints and add a module without core changes. | LB-003 | Done |
 | LB-005 | As a DL24M user, I retain the confirmed codec, readback and persistent shutdown behavior. | LB-004 | Done |
 | LB-006 | As an automation author, I receive confirmed results after bounded on-node recovery. | LB-005 | Done |
-| LB-007 | As an operator, I use multiple RD60xx sources with independent identities and CC/CV telemetry. | LB-004 | Hardware acceptance open |
+| LB-007 | As an operator, I use multiple RD60xx sources with independent identities and CC/CV telemetry. | LB-004 | RD6018 no-load control/telemetry validated; multiple-source and loaded acceptance open |
 | LB-008 | As a battery tester, I select interchangeable interlocks and cell-temperature channels. | LB-004 | Hardware acceptance open |
 | LB-009 | As an operator, I retain local limits and safe shutdown when host or network fails. | LB-005, LB-007, LB-008 | Done |
 | LB-010 | As a script author, I address devices across named nodes over HTTP or USB using the SDK/CLI. | LB-002, LB-009 | Done |
@@ -61,6 +61,8 @@ no claim of a production-ready battery test system or of tested optional PSU BT.
 ## New acceptance criteria
 
 - **LB-019:** host commissioning sends both stages without an intermediate operator callback. After the bounded PC server-address window, send stored AP credentials automatically; a fresh session-scoped TCP identity confirms completion. A cached candidate or UDP ACK alone cannot confirm success. Timeout/cancellation/session changes must not advance or cancel another session. The initial physical OFF/setup prerequisites remain required.
+
+- **LB-007:** read the complete operating/measurement block (0–41): output V/I/W, input supply and battery voltage/presence, internal/external temperature, native Ah/Wh counters, setpoints and protection/regulation state. Preserve 32-bit word order and PC software scales; expose sensor components with units/freshness, and absent NTC as unavailable without a substituted zero. Verify the extended read and V/I/output writes on actual RD hardware, restore settings and leave confirmed OFF.
 
 - **LB-010:** stable udev/by-id aliases identify a physical ESP despite tty renumbering; native USB/JTAG line control uses the resolved USB identity while opening the selected durable path. Separate bench roles never rely on ttyACM enumeration.
 - **LB-010:** native USB responses remain complete through reserve/release/STOP cycles as well as read-only discovery. Use buffered interrupt-driven console I/O; exercise the actual connected board, not only host framing fixtures.
