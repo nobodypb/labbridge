@@ -53,7 +53,7 @@ public:
 struct Connection {
   int fd = -1;
   uint32_t serial = 0;
-  uint64_t deadline = 0;
+  rd60xx::IdentityHeartbeat discovery;
   rd60xx::RtuStream parser;
   std::shared_ptr<TcpLink> link;
   Bytes pending;
@@ -182,8 +182,7 @@ void worker(void *) {
         int yes = 1;
         setsockopt(peer, IPPROTO_TCP, TCP_NODELAY, &yes, sizeof(yes));
         slot->fd = peer;
-        slot->deadline = now + 2000;
-        slot->pending = rd60xx::read(1, 0, 20);
+        slot->pending = slot->discovery.poll(now);
         std::lock_guard<std::mutex> lock(management);
         ++accepted;
       }
@@ -191,6 +190,16 @@ void worker(void *) {
     for (auto &c : connections) {
       if (c.fd < 0)
         continue;
+      if (!c.link) {
+        if (c.discovery.expired(now)) {
+          close_connection(c);
+          continue;
+        }
+        if (c.pending.empty()) {
+          c.pending = c.discovery.poll(now);
+          c.offset = 0;
+        }
+      }
       if (c.link && c.link->reset) {
         close_connection(c);
         continue;
@@ -236,11 +245,17 @@ void worker(void *) {
             c.link->reset = true;
           else
             c.link->rx.insert(c.link->rx.end(), bytes, bytes + n);
-        } else if (!c.serial) {
+        } else {
           bool identity_rejected = false;
           for (auto &frame : c.parser.feed(Bytes(bytes, bytes + n))) {
             try {
               auto identity = rd60xx::identify(frame);
+              if (!c.discovery.accept(identity, now)) {
+                identity_rejected = true;
+                break;
+              }
+              if (c.serial)
+                break; // Liveness reply; retain the existing serial claim.
               std::lock_guard<std::mutex> lock(management);
               auto claim = bindings.claim(identity, c.fd);
               if (claim == rd60xx::IdentityBindings::Claim::rejected) {
@@ -272,8 +287,6 @@ void worker(void *) {
           }
         }
       }
-      if (!c.serial && now >= c.deadline)
-        close_connection(c);
     }
     sleep_ms(5);
   }

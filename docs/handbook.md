@@ -367,6 +367,12 @@ is checked between packets and during the quiet interval. An eleven-byte result
 is counted only during phase two, for a matching peer/embedded AP-subnet address;
 it stops credential transmission but does not advance management or enable output.
 
+Unregistered TCP discovery peers are monitored with read-only identity probes:
+one second after a valid reply, with a two-second reply deadline. A missed reply
+or identity change closes that stream and releases its serial claim. A second
+live stream with the same serial remains rejected. Configured devices use their
+existing driver polling/recovery. This does not confirm an output state.
+
 ### Stable host USB names
 
 Use `/dev/serial/by-id/` paths or locally configured udev aliases instead of

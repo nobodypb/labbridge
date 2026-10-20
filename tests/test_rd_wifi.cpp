@@ -26,6 +26,41 @@ static Bytes reply(uint32_t serial, uint16_t model = 60181) {
   b.push_back(c >> 8);
   return b;
 }
+// A silent power loss must not pin an unconfigured serial forever. Exercise
+// actual read-only request/response handling and the duplicate-identity guard.
+static void discovery_recovery_acceptance() {
+  IdentityHeartbeat old;
+  IdentityBindings bindings;
+  const auto id = identify(reply(123));
+  assert(old.poll(100) == read(1, 0, 20));
+  assert(old.accept(id, 150));
+  assert(bindings.claim(id, 10) == IdentityBindings::Claim::discovered);
+  assert(bindings.claim(id, 11) == IdentityBindings::Claim::rejected);
+  assert(old.poll(1149).empty());
+  assert(old.poll(1150) == read(1, 0, 20));
+  assert(old.poll(1151).empty()); // No overlapping request.
+  assert(!old.expired(3149));
+  assert(old.expired(3150));
+  assert(!old.accept(id, 3150)); // A late response cannot revive the old claim.
+  bindings.release(10); // Transport closes the expired connection.
+  IdentityHeartbeat replacement;
+  assert(replacement.poll(3150) == read(1, 0, 20));
+  assert(replacement.accept(id, 3160));
+  assert(bindings.claim(id, 11) == IdentityBindings::Claim::discovered);
+  assert(bindings.claim(id, 12) == IdentityBindings::Claim::rejected);
+  assert(replacement.poll(4160) == read(1, 0, 20));
+  assert(replacement.accept(id, 4170));
+  assert(!replacement.expired(10000)); // No request pending, no timeout.
+  assert(replacement.poll(10000) == read(1, 0, 20));
+  assert(!replacement.accept(identify(reply(456)), 10001));
+  assert(replacement.expired(10001)); // An identity change closes the stream.
+  IdentityHeartbeat initial_timeout;
+  assert(!initial_timeout.accept(id, 0)); // Unsolicited data is not liveness.
+  assert(initial_timeout.expired(0));
+  IdentityHeartbeat silent;
+  silent.poll(50);
+  assert(silent.expired(2050));
+}
 // Reference bytes were reconstructed from RIDEN PC v1.0.0.22, not from
 // this codec. Verify every logical byte, the absent BSSID suffix and wire
 // order.
@@ -153,6 +188,7 @@ static void pc_profile_acceptance() {
   assert(!pc_join_address(ack));
 }
 int main() {
+  discovery_recovery_acceptance();
   pc_profile_acceptance();
   std::array<uint16_t, 20> r{};
   r[0] = 60181;

@@ -140,3 +140,12 @@ A same-session target-SSID repeat likewise produced no new join/TCP evidence.
 The PC-compatible profile remains the supported default. Differing transition
 delays prevent claiming a universal receiver requirement.
 
+A subsequent full-PC control restored WLAN setup and fresh identity replies,
+but exposed a stale discovery socket retaining its serial claim. The listener
+rejected new connections as duplicates. This is separate from WLAN reception.
+
+Discovery-recovery acceptance covers read-only identity probes, a bounded
+missing-response deadline, rejection of late/changed identities, serial
+release/reclaim and live-duplicate rejection. Required checks and generation
+drift checks pass; configured-device driver recovery is preserved.
+

@@ -17,6 +17,18 @@ struct Identity {
   uint16_t model, model_id, firmware;
 };
 Identity identify(const Bytes &);
+// Read-only discovery liveness. Configured instruments use their own driver
+// polling/recovery; unregistered sockets must not pin serial claims forever.
+class IdentityHeartbeat {
+  std::optional<Identity> identity_;
+  uint64_t due_ = 0, deadline_ = 0;
+  bool waiting_ = false, failed_ = false;
+
+public:
+  Bytes poll(uint64_t now);
+  bool accept(const Identity &, uint64_t now);
+  bool expired(uint64_t now) const;
+};
 class IdentityBindings {
   struct Seen {
     Identity identity;

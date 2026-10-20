@@ -158,3 +158,8 @@ Target-SSID trials displayed the server IP but did not establish new join/TCP
 evidence. A late transition affected one trial; a same-session repeat had the
 same outcome. Different transition delays and receiver-state uncertainty
 prevent a universal conclusion about the SSID field. Retain the full-PC default.
+
+Discovery-only sockets previously remained idle after one identity request.
+A silent peer restart could leave a stale serial claim and block replacements.
+Read-only identity probes with a bounded reply deadline address that lifetime
+while preserving live-duplicate rejection and configured-device recovery.

@@ -41,6 +41,28 @@ Identity identify(const Bytes &frame) {
     throw std::invalid_argument("RD serial is zero");
   return {value.serial, uint16_t(model), r[0], r[3]};
 }
+bool IdentityHeartbeat::expired(uint64_t now) const {
+  return failed_ || (waiting_ && now >= deadline_);
+}
+Bytes IdentityHeartbeat::poll(uint64_t now) {
+  if (expired(now) || waiting_ || now < due_)
+    return {};
+  waiting_ = true;
+  deadline_ = now + 2000;
+  return read(1, 0, 20);
+}
+bool IdentityHeartbeat::accept(const Identity &identity, uint64_t now) {
+  if (!waiting_ || expired(now) ||
+      (identity_ && (identity_->serial != identity.serial ||
+                     identity_->model_id != identity.model_id))) {
+    failed_ = true;
+    return false;
+  }
+  identity_ = identity;
+  waiting_ = false;
+  due_ = now + 1000;
+  return true;
+}
 void IdentityBindings::configure(uint32_t serial, unsigned model) {
   profile(model);
   if (!serial || expected_.count(serial))
