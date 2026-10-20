@@ -41,3 +41,9 @@ Workflow state belongs on the host, safeguards on the node. A reference switch
 provider implements the `isolated/charge/discharge` capability; a future Wi-Fi
 relay provider must offer the same confirmation and fail-open semantics. It
 must not silently weaken the battery workflow's feedback requirement.
+
+Startup configuration failure inhibits leases and instrument mutations while
+keeping read/management and priority STOP available. Already-created drivers
+continue ticking their shutdown/restore obligations. Guard dependencies and
+ordered temperature limits are validated before any factory allocation; a
+partially initialized module set must never become an unguarded control surface.

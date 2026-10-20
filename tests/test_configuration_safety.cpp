@@ -25,4 +25,12 @@ int main() {
   Dl24mDriver legacy("load", "missing", w, {25, .2, 5, 3000, 0}, save,
                      Json::parse(R"({"stop_pending":true})"));
   assert(!legacy.safe_to_reconfigure(0));
+  node.inhibit("Incomplete startup configuration", 0);
+  auto denied = node.request(
+      "POST", "/api/v1/leases",
+      Json::parse(R"({"device_ids":["load"],"ttl_ms":1000})"), {}, 0);
+  assert(denied.status == 409);
+  auto stop = node.request("POST", "/api/v1/devices/load/stop", Json(),
+                           {{"Idempotency-Key", "emergency"}}, 0);
+  assert(stop.status == 202);
 }

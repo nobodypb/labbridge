@@ -47,8 +47,7 @@ a story done using a narrower test than its acceptance criteria.
 ## Delivery evidence
 
 The runtime and board adapters are delivered in PR #15. CLI, complete simulated
-battery workflows, profiles and consolidated documentation follow in the workflow
-PR. [Acceptance](acceptance.md) separates actual DL24M bench evidence from portable
+battery workflows, profiles and consolidated documentation are delivered in PR #16. [Acceptance](acceptance.md) separates actual DL24M bench evidence from portable
 and browser tests. LB-007/008 have software implementations; their physical
 commissioning, and the complete battery circuit in LB-014, remain open. There is
 no claim of a production-ready battery test system or of tested optional PSU BT.

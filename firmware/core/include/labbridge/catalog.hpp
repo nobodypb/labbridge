@@ -1,6 +1,7 @@
 #pragma once
 #include "node.hpp"
 #include "resources.hpp"
+#include <cmath>
 #include <set>
 namespace labbridge {
 class Catalog {
@@ -42,6 +43,12 @@ public:
         auto sensor = configs.find(g.text("sensor_device_id"));
         if (sensor == configs.end() || g.text("channel_id").empty())
           throw ConfigurationError("Unknown cell sensor/channel");
+        auto minimum = g.number("minimum_c"), maximum = g.number("maximum_c");
+        auto age = g.number("max_age_ms", 3000);
+        if (!std::isfinite(minimum) || !std::isfinite(maximum) ||
+            minimum >= maximum || !std::isfinite(age) || age < 100 ||
+            age > 3000 || std::floor(age) != age)
+          throw ConfigurationError("Invalid cell guard limits");
       }
     return registry;
   }

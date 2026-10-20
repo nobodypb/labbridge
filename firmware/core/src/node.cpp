@@ -163,6 +163,15 @@ void Node::release(Lease &l, uint64_t now) {
     devices_.at(d)->stop(now);
   }
 }
+void Node::inhibit(std::string reason, uint64_t now) {
+  inhibition_ = reason.empty() ? "Configuration fault" : std::move(reason);
+  for (auto &lease : leases_)
+    release(lease.second, now);
+  for (auto &device : devices_) {
+    cancel_active(device.first, "configuration_fault");
+    device.second->stop(now);
+  }
+}
 void Node::cell_guard(const std::string &device, CellGuard guard) {
   if (!devices_.count(device) || !devices_.count(guard.sensor) ||
       guard.channel.empty() || guard.max_age_ms < 100 ||
@@ -353,6 +362,8 @@ Response Node::request(const std::string &method, const std::string &path,
     return {200, value};
   }
   if (op == "createLease") {
+    if (!inhibition_.empty())
+      return problem(409, inhibition_);
     std::vector<std::string> selected;
     auto a = body.at("device_ids");
     for (auto p = a->child; p; p = p->next) {
@@ -431,6 +442,8 @@ Response Node::request(const std::string &method, const std::string &path,
     bool stop = op == "stopDevice" ||
                 (op == "setSwitchPath" && body.text("path") == "isolated") ||
                 (op == "setOutput" && !body.boolean("enabled"));
+    if (!stop && !inhibition_.empty())
+      return problem(409, inhibition_);
     if (keys_.size() >= 128) {
       if (!stop)
         return problem(503, "Operation cache full; stop remains available");

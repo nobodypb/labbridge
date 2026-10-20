@@ -218,6 +218,7 @@ static void initialise() {
     catalog.instantiate(*node, configuration, board);
   } catch (const std::exception &e) {
     printf("Configuration rejected: %s\n", e.what());
+    node->inhibit(std::string("Configuration rejected: ") + e.what(), now_ms());
   }
   node->bind("getConfiguration", [](const Json &, const Headers &, uint64_t) {
     return Response{

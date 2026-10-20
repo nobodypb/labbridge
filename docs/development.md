@@ -4,8 +4,8 @@ Use Python 3.13, CMake 3.30.2, Java 21, Node 20 and ESP-IDF 5.5.2.
 
 ```sh
 uv venv --python /usr/bin/python3.13 .venv
-uv pip install --python .venv/bin/python -r tools/requirements.txt
-uv pip install --python .venv/bin/python --no-deps -e host/generated -e host
+uv pip install --python .venv/bin/python --require-hashes -r tools/requirements.lock
+uv pip install --python .venv/bin/python --no-build-isolation --no-deps -e host/generated -e host
 export PATH="$PWD/.venv/bin:$PATH"
 tools/generate.sh
 tools/check.sh
