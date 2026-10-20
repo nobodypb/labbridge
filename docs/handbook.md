@@ -187,7 +187,7 @@ requests OFF before allowing work; it never resumes ON.
 
 ### Pairing through LabBridge
 
-**Commissioning limitation:** W01 pairing is not commissioned. The sender now uses the RIDEN PC profile below, including phase-one SSID, fixed header field, multicast destinations and burst schedule. Portable reference tests pass; RF acceptance is still required. Both open and WPA2 AP-origin trials failed to deliver a displayed server address. WPA2 alone did not resolve pairing. See [compatibility notes](uncertainties.md).
+**Commissioning status:** The RIDEN PC profile below paired a W01 RD6018 successfully from the ESP AP using WPA2 and an associated phone, including the displayed server address, UDP join result and TCP identity. Earlier general-profile open/WPA2 attempts failed. Open-network compatibility, which profile changes are essential, source control and the coexistence soak remain unvalidated. See [compatibility notes](uncertainties.md).
 
 The AP is open by default. `core.configure_access_point` (`PUT /api/v1/wifi/ap`) accepts only `{"psk":"..."}`: 8..63 printable ASCII characters enable WPA2-PSK/CCMP; an explicit empty string restores the open AP. This requires quiescent instruments and authenticated HTTP or trusted USB, including when called through the open AP. The change disconnects AP clients after the response; use USB or the station address to retain management access. Station credentials and the configured AP SSID are unchanged. Secrets are never returned. `getWifiState.ap_secured` reports current authentication; poll after the delayed change. Supply secrets through a private CLI args file or stdin, not shell command history.
 
@@ -234,8 +234,8 @@ Replace all synthetic identities and bench limits for the actual circuit.
 
 The original-module setup uses **two ESPTouch length-coded transmissions**.
 LabBridge's PC-profile sender implements the wire rules of RIDEN PC software
-1.0.0.22. Whether W01 accepts this profile from an ESP acting as the AP still
-requires hardware acceptance. No initial TCP connection or IP address on the
+1.0.0.22. A W01 RD6018 accepted this profile from the ESP AP with WPA2 and an
+associated phone. No initial TCP connection or IP address on the
 module is needed: it observes Wi-Fi frame lengths before joining the network.
 
 | Phase | SSID field `S` | Password field `P` | Transition |

@@ -118,3 +118,9 @@ and synthetic phase-one/phase-two payloads, including per-triple CRC and total
 XOR. Vendor binaries/decompiled sources are excluded. These checks establish
 encoder consistency, not RF delivery.
 
+Physical W01/RD6018 pairing with the PC-compatible profile was verified:
+displayed server address, a new UDP join result, TCP model/firmware identity and
+completed setup. The first incoming socket can time out before identity; a
+subsequent connection succeeded. This is provisioning evidence, not source
+output/readback, configured-source STOP or full coexistence acceptance.
+

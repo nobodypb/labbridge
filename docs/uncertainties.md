@@ -68,9 +68,10 @@ Espressif documents that SmartConfig does not support open networks
 ([FAQ](https://docs.espressif.com/projects/esp-faq/en/latest/software-framework/wifi.html#connect-what-are-the-specifications-of-wi-fi-parameters-when-using-smartconfig)).
 That limitation alone does not explain the failed protected trial or establish
 what RIDEN's special server-address phase requires. The PC-profile
-mismatches below have now been corrected in software; hardware evidence from
-the corrected sender is still required before attributing failure to AP-origin
-transmission. No evidence currently proves that a second ESP is required for
+mismatches below have now been corrected and one protected AP-origin pairing
+succeeded, including the displayed address, UDP result and TCP identity. This
+disproves AP-origin impossibility for this W01 setup, but does not isolate which
+profile differences were essential. No evidence currently proves that a second ESP is required for
 pairing. A conventional station-origin comparison remains useful if the exact
 profile still fails.
 
