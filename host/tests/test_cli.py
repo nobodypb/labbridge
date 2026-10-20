@@ -5,6 +5,28 @@ from labbridge.cli import nodes_from
 
 
 class CliTests(unittest.TestCase):
+    def test_ui_password_recovers_over_usb_without_echoing_secret(self):
+        from unittest.mock import MagicMock
+        from labbridge.cli import main
+
+        node = MagicMock()
+        node.client.configuration.host = "http://usb"
+        from labbridge.transport import SerialTransport
+
+        node.client.rest_client = MagicMock(spec=SerialTransport)
+        with patch("labbridge.cli.Node", return_value=node), patch(
+            "labbridge.cli.getpass", side_effect=[" synthetic password "] * 2
+        ), patch("labbridge.cli.emit") as emit:
+            self.assertEqual(
+                main(["--endpoint", "serial:/synthetic", "ui-password"]), 0
+            )
+        request = node.core.change_ui_password.call_args.kwargs["ui_password_change"]
+        self.assertEqual(request.password.get_secret_value(), " synthetic password ")
+        self.assertEqual(
+            request.confirm_password.get_secret_value(), " synthetic password "
+        )
+        self.assertNotIn("synthetic password", str(emit.call_args))
+
     def test_only_selected_node_connections_are_opened(self):
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "nodes.json"

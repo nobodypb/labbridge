@@ -24,10 +24,12 @@ checks pass and its hardware claims match the evidence.
 | LB-016 | As a cell tester, I optionally use direct source/load switching and independent meters/additional temperature channels. | LB-012, LB-015 | Done |
 | LB-017 | As an operator, I configure INA228 I²C and Yocto-Watt-V2-C measurement providers. | LB-015 | Implemented; hardware acceptance open |
 | LB-018 | As an API consumer, I understand operations, units, prerequisites and failure handling directly from OpenAPI and generated clients. | LB-002, LB-015 | Done |
-| LB-021 | As a DL24M operator, I use verified modes, native telemetry and passive diagnostics over one authenticated WebSocket connection. | LB-020 | Implemented; bounded StickS3 bench passed; BLE timing follow-up open |
-| LB-020 | As a DL24M operator, I use the complete Bench interface on the ESP with confirmed backend control and retained future features. | LB-005, LB-011 | Implemented; OFF-only hardware acceptance passed |
-
 | LB-019 | As an operator, I provision and automate RD6018 sources on the ESP AP alongside DL24M BLE, with bounded recovery and measured coexistence acceptance. | LB-007, LB-011 | Provisioning and no-load source control validated; loaded/two-source/coexistence acceptance open |
+| LB-020 | As an operator, I sign in to the UI with a password and configure LAN Wi-Fi after login. | LB-002, LB-010, LB-011 | Implemented; <3 s UI login hardware-verified; remaining commissioning open |
+| LB-021 | As an operator or API client, I optionally authenticate with a client certificate over HTTPS. | LB-020 | Planned |
+| LB-022 | As a DL24M operator, I use the complete Bench interface on the ESP with confirmed backend control and retained future features. | LB-005, LB-011, LB-020 | Implemented; password UI hardware-verified without instruments; loaded commissioning open |
+| LB-023 | As a DL24M operator, I use all realizable Bench features over one authenticated stream, with unattended tests completed and remaining physical tests tracked. | LB-022 | Accepted; implementation and full-function audit in progress |
+
 
 ## Acceptance criteria
 
@@ -83,7 +85,10 @@ Component routes, optional routing and measurement providers are delivered in PR
 LB-017 software is implemented; actual INA228/Yocto hardware commissioning remains
 open in issue #19. The native ESP Yocto USB transport is not part of this delivery.
 
-## LB-020 — DL24M Bench page (implemented; OFF-only hardware acceptance passed)
+The Bench story was called LB-020 in PR #26; it is numbered LB-022 here to
+retain LB-020 for password login and LB-021 for HTTPS/mTLS.
+
+## LB-022 — DL24M Bench page (implemented; OFF-only hardware acceptance passed)
 
 As a DL24M operator, I use the complete DL24 Bench interface at `/dl24` on the
 ESP with LabBridge HTTP control. Preserve every upstream function area: unsupported
@@ -101,13 +106,20 @@ boot and gap handling. Bound chart/log memory. Serve all assets locally under th
 existing CSP. Browser/portable/generation checks and all board builds pass;
 physical bench acceptance is recorded separately with original settings restored.
 
-Follow-ups recorded at LB-020 delivery (LB-021 below updates their status):
-active CV/CR/CP commissioning, calibration/zero/factory-reset APIs,
+Password integration with LB-020: `/dl24` uses the shared password form and cookie
+session, including sessions established on `/wifi` or `/devices`. Cookie writes,
+heartbeats and STOP carry CSRF. Login resumes read-only discovery only; expired
+sessions cancel queued commands and require a new explicit reservation. Sign out
+attempts confirmed STOP and release before revoking the session, reports an
+unconfirmed shutdown accurately, and cancels queued ON commands. Password work
+must not occupy the Bench request queue and block independent STOP/heartbeats.
+
+Follow-ups: active CV/CR/CP commissioning, calibration/zero/factory-reset APIs,
 HID-frame/snapshot diagnostics, fan RPM and verified native counter scales,
 external probe telemetry, other device themes and persistent recording. Their
 absence is not permission to expose raw commands or claim hardware support.
 
-LB-020 evidence: 11 Web unit tests and 21 browser scenarios pass, alongside
+LB-022 evidence: 11 Web unit tests and 21 browser scenarios pass, alongside
 portable/generation checks and all three board builds. The embedded StickS3 page
 passed authentication, reservation, brightness change/restoration, STOP and
 release on 2026-10-20; all 14 settings, the original current target and confirmed
@@ -116,7 +128,30 @@ queue with priority STOP/heartbeat and cancellation of queued commands. Loaded
 operation through the new page and battery testing were not performed (0 V input);
 the existing physical limitations in LB-014 remain open.
 
-## LB-021 — DL24M capabilities and one-connection Bench (implemented)
+- **LB-020:** first password via setup AP or trusted USB; password login and reload-persistent twelve-hour boot-local sessions; eight-session cap; LAN scan resumes after login; AP Wi-Fi setup stays public; no automatic actuator replay; session CSRF/origin checks; salted PBKDF2-HMAC-SHA256 (6,000 iterations, usability-first basic protection); bounded nonblocking hash worker and login throttling; USB password recovery; existing API bearer/USB/lease/STOP contracts preserved. Direct access-policy tests, browser scenarios and generated contracts pass. Physical scan/latency/STOP evidence is recorded separately.
+  StickS3 tests establish LAN login/browser scan, an actual wireless AP scan via
+  an additional ESP32, and HTTP/USB STOP during real password hashing. The
+  dual-stack socket classification bug is fixed with a failing-then-passing
+  transport regression test. Operator acceptance now requires the complete
+  password login response within **3 seconds**, including password verification,
+  on the target StickS3 while STOP remains responsive. The original 114–116 s
+  version-one implementation failed that requirement. The operator-approved
+  policy prioritizes usability over maximum offline resistance: version-two
+  verifiers use 6,000 iterations while retaining random salts, password length
+  rules, five-failure/minute throttling, CSRF and session limits. Experimental
+  600,000-round records require trusted USB recovery and are never silently
+  reinterpreted or verified slowly. All five published entry URLs now pass real
+  browser login/reload/logout on an isolated bridge: maximum 1.020 s. A single
+  WLAN-page login also survives navigation to both Bench URLs and devices.
+  Seventeen API logins stay below 0.956 s, including the maximum-length Unicode
+  password; eight sessions survive HTTP connection reclamation. The original full test
+  image was restored and device-verified. No laboratory devices were connected.
+  AP first-password setup and broader device/coexistence commissioning remain
+  open; further hardware work uses only the dedicated test bridge without
+  laboratory connections until the operator resumes them. See acceptance.md.
+- **LB-021:** HTTPS with optional mTLS as an alternative login for both browser and API clients; valid client certificates authenticate directly. Password and bearer alternatives remain available. Define trust-anchor provisioning, certificate renewal/revocation and Secure cookies; no certificate requirement is introduced by LB-020.
+
+## LB-023 — DL24M capabilities and one-connection Bench (implemented)
 
 Provide a factual supported/unverified/unavailable status for every retained
 Bench feature. Extend the typed API, DL24M driver and UI for confirmed modes,
@@ -139,7 +174,7 @@ mode pulses use a manually limited <=25 V / <=0.15 A source, no battery. No exte
 reference is available, so absolute accuracy/calibration are not commissioned.
 
 
-LB-021 capability evidence and restrictions: [protocol/stream matrix](dl24m-bench-extension.md).
+LB-023 capability evidence and restrictions: [protocol/stream matrix](dl24m-bench-extension.md).
 Remaining physical limits are explicit: external probe mapping and fan RPM;
 calibration 46/4F reference, full data backup
 and restore; no-load zero effects; full factory-reset restoration. No destructive
@@ -151,7 +186,7 @@ confirmed all original settings, targets and OFF. BLE transaction timing, recove
 soak and memory headroom under prolonged concurrent traffic remain follow-ups;
 the bounded successful mode pulses do not establish long-term reliability.
 
-LB-021 evidence: [bounded hardware and automated acceptance](acceptance.md#dl24m-native-capabilities-and-websocket-lb-021).
+LB-023 evidence: [bounded hardware and automated acceptance](acceptance.md#dl24m-native-capabilities-and-websocket-lb-023).
 Calibration/zero/reset commissioning needs an external reference and proven full
 backup/restore; external-temperature and fan-RPM work needs an audited native
 register mapping. Those controls remain visible and locked.

@@ -1,3 +1,5 @@
+#include "../../http_access.hpp"
+#include "auth_platform.hpp"
 #include "esp_event.h"
 #include "esp_http_server.h"
 #include "esp_netif.h"
@@ -29,7 +31,6 @@ extern const char bench_source_start[] asm("_binary_dl24_source_tar_gz_start");
 extern const char bench_source_end[] asm("_binary_dl24_source_tar_gz_end");
 static esp_netif_t *sta, *ap;
 static std::atomic<bool> connected{false};
-static bool setup_enabled = true;
 static uint64_t apply_wifi_at = 0;
 static uint64_t apply_ap_at = 0;
 static void apply_ap_security() {
@@ -127,6 +128,8 @@ bool wifi_network_busy() {
 }
 Response dispatch(const std::string &method, const std::string &path,
                   const Json &body, const Headers &headers, bool local) {
+  if (local && Auth::route(path))
+    return local_auth(method, path, body, headers);
   std::lock_guard<std::recursive_mutex> l(mutex);
   if (local && method == "GET" && path == "/management/token") {
     Json j;
@@ -145,19 +148,20 @@ Response dispatch(const std::string &method, const std::string &path,
   return node->request(method, path, body, headers, now_ms());
 }
 static bool via_ap(httpd_req_t *r) {
-  sockaddr_in address = {};
+  sockaddr_storage address{};
   socklen_t n = sizeof(address);
   if (getsockname(httpd_req_to_sockfd(r),
                   reinterpret_cast<sockaddr *>(&address), &n) != 0)
     return false;
-  return address.sin_addr.s_addr == inet_addr("192.168.4.1");
+  return http::context(address, n, "", "").access_point;
 }
-static Headers headers(httpd_req_t *r) {
+Headers http_headers(httpd_req_t *r) {
   Headers h;
   for (auto name :
-       {"Authorization", "X-Lab-Lease", "Idempotency-Key", "If-Match"}) {
+       {"Authorization", "X-Lab-Lease", "Idempotency-Key", "If-Match", "Cookie",
+        "Origin", "Host", "Content-Type", "X-Lab-CSRF"}) {
     size_t n = httpd_req_get_hdr_value_len(r, name);
-    if (n && n < 256) {
+    if (n && n < (std::string(name) == "Cookie" ? 768u : 256u)) {
       std::string s(n + 1, '\0');
       if (httpd_req_get_hdr_value_str(r, name, s.data(), s.size()) == ESP_OK) {
         s.resize(n);
@@ -167,7 +171,7 @@ static Headers headers(httpd_req_t *r) {
   }
   return h;
 }
-static esp_err_t respond(httpd_req_t *r, Response response) {
+esp_err_t http_respond(httpd_req_t *r, Response response) {
   std::string code = std::to_string(response.status) + " ";
   code += response.status < 300 ? "OK" : "Error";
   httpd_resp_set_status(r, code.c_str());
@@ -178,6 +182,21 @@ static esp_err_t respond(httpd_req_t *r, Response response) {
     httpd_resp_set_hdr(r, p.first.c_str(), p.second.c_str());
   auto text = response.body.dump();
   return httpd_resp_send(r, text.data(), text.size());
+}
+AuthContext http_auth_context(httpd_req_t *r, const Headers &h) {
+  sockaddr_storage address{};
+  socklen_t n = sizeof(address);
+  if (getsockname(httpd_req_to_sockfd(r),
+                  reinterpret_cast<sockaddr *>(&address), &n) != 0)
+    return {};
+  auto host_it = h.find("Host");
+  auto host = host_it == h.end() ? "" : host_it->second;
+  std::string hostname;
+  {
+    std::lock_guard<std::recursive_mutex> lock(mutex);
+    hostname = configuration.text("node_id") + ".local";
+  }
+  return http::context(address, n, host, hostname);
 }
 static esp_err_t route(httpd_req_t *r) {
   std::string path = r->uri;
@@ -193,32 +212,25 @@ static esp_err_t route(httpd_req_t *r) {
       {"/wifi", "text/html; charset=utf-8", page_start, page_end, false},
       {"/devices", "text/html; charset=utf-8", page_start, page_end, false},
       {"/app.js", "text/javascript", js_start, js_end, false},
-      {"/dl24", "text/html; charset=utf-8", bench_html_start, bench_html_end,
-       false},
-      {"/dl24/", "text/html; charset=utf-8", bench_html_start, bench_html_end,
-       false},
+      {"/dl24", "text/html; charset=utf-8", bench_html_start, bench_html_end, false},
+      {"/dl24/", "text/html; charset=utf-8", bench_html_start, bench_html_end, false},
       {"/dl24.css", "text/css", bench_css_start, bench_css_end, false},
       {"/dl24.js", "text/javascript", bench_js_start, bench_js_end, false},
-      {"/dl24-license.txt", "text/plain; charset=utf-8", bench_license_start,
-       bench_license_end, false},
-      {"/dl24-source.tar.gz", "application/gzip", bench_source_start,
-       bench_source_end, true}};
+      {"/dl24-license.txt", "text/plain; charset=utf-8", bench_license_start, bench_license_end, false},
+      {"/dl24-source.tar.gz", "application/gzip", bench_source_start, bench_source_end, true}};
   if (r->method == HTTP_GET) {
     for (const auto &asset : assets) {
       if (path != asset.path)
         continue;
       httpd_resp_set_hdr(r, "Cache-Control", "no-store");
       httpd_resp_set_hdr(r, "X-Frame-Options", "DENY");
-      httpd_resp_set_hdr(
-          r, "Content-Security-Policy",
-          "default-src 'self'; style-src 'self' 'unsafe-inline'; "
-          "script-src 'self'; frame-ancestors 'none'");
+      httpd_resp_set_hdr(r, "Content-Security-Policy",
+                         "default-src 'self'; style-src 'self' 'unsafe-inline'; "
+                         "script-src 'self'; frame-ancestors 'none'");
       if (asset.binary)
-        httpd_resp_set_hdr(r, "Content-Disposition",
-                           "attachment; filename=dl24-source.tar.gz");
+        httpd_resp_set_hdr(r, "Content-Disposition", "attachment; filename=dl24-source.tar.gz");
       httpd_resp_set_type(r, asset.type);
-      return httpd_resp_send(r, asset.begin,
-                             asset.end - asset.begin - (asset.binary ? 0 : 1));
+      return httpd_resp_send(r, asset.begin, asset.end - asset.begin - (asset.binary ? 0 : 1));
     }
   }
   if (path.rfind("/api/", 0) != 0 && path != "/management/token" && via_ap(r)) {
@@ -226,18 +238,17 @@ static esp_err_t route(httpd_req_t *r) {
     httpd_resp_set_hdr(r, "Location", "http://192.168.4.1/wifi");
     return httpd_resp_send(r, nullptr, 0);
   }
-  bool provisioning = setup_enabled && via_ap(r) &&
-                      (path == "/api/v1/wifi" || path == "/api/v1/wifi/scan");
-  auto h = headers(r);
-  if (!provisioning &&
-      h["Authorization"] != "Bearer " + read_nvs("auth").text("token"))
-    return respond(
-        r,
-        problem(401, "Bearer token required; retrieve it over physical USB"));
-  if (path == "/management/token")
-    return respond(r, problem(403, "Token retrieval is USB-only"));
+  auto h = http_headers(r);
+  auto context = http_auth_context(r, h);
+  std::string method = r->method == HTTP_GET    ? "GET"
+                       : r->method == HTTP_POST ? "POST"
+                       : r->method == HTTP_PUT  ? "PUT"
+                                                : "DELETE";
+  auto access = authentication().authorize(method, path, h, context);
+  if (access.status != 200)
+    return http_respond(r, std::move(access));
   if (r->content_len > 16384)
-    return respond(r, problem(413, "Request too large"));
+    return http_respond(r, problem(413, "Request too large"));
   try {
     Json body;
     if (r->content_len) {
@@ -251,13 +262,11 @@ static esp_err_t route(httpd_req_t *r) {
       }
       body = Json::parse(input);
     }
-    std::string method = r->method == HTTP_GET    ? "GET"
-                         : r->method == HTTP_POST ? "POST"
-                         : r->method == HTTP_PUT  ? "PUT"
-                                                  : "DELETE";
-    return respond(r, dispatch(method, path, body, h));
+    if (Auth::route(path))
+      return http_auth(r, method, path, body, h, context);
+    return http_respond(r, dispatch(method, path, body, h));
   } catch (const std::exception &e) {
-    return respond(r, problem(400, e.what()));
+    return http_respond(r, problem(400, e.what()));
   }
 }
 static esp_err_t captive(httpd_req_t *r, httpd_err_code_t) {
@@ -320,6 +329,7 @@ void start_network() {
   ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_APSTA));
   apply_ap_security();
   ESP_ERROR_CHECK(esp_wifi_start());
+  start_auth();
   esp_netif_dhcps_stop(ap);
   esp_netif_dns_info_t info = {};
   info.ip.type = ESP_IPADDR_TYPE_V4;
@@ -390,8 +400,12 @@ void start_network() {
   hc.uri_match_fn = httpd_uri_match_wildcard;
   hc.max_uri_handlers = 8;
   hc.stack_size = 12288;
+  // Cookie sessions outlive TCP connections. Reclaim idle HTTP connections
+  // before the shared socket budget is exhausted; keep active requests bounded.
   hc.send_wait_timeout = 1;
   hc.recv_wait_timeout = 1;
+  hc.max_open_sockets = 4;
+  hc.lru_purge_enable = true;
   httpd_handle_t server;
   ESP_ERROR_CHECK(httpd_start(&server, &hc));
   start_stream(server);

@@ -33,6 +33,18 @@ labbridge --endpoint serial:/dev/ttyACM0 operations
 labbridge --endpoint serial:/dev/ttyACM0 stop load
 ```
 
+The browser UI uses a shared device password. Choose the first password on the
+setup AP at `http://192.168.4.1`, or set/recover it through trusted USB:
+
+```sh
+labbridge --endpoint serial:/dev/ttyACM0 ui-password
+```
+
+Sign in on `/wifi`, `/devices` or `/dl24` (Bench). LAN Wi-Fi scans resume after
+login; AP Wi-Fi setup stays available without login. Sessions survive reloads for up to twelve
+hours and end on logout, password replacement or node reboot. HTTP remains
+unencrypted and requires a trusted network; HTTPS with optional mTLS is planned.
+
 USB uses the same typed operations as HTTP. `pair` returns the bearer token over
 physical USB; keep it private and supply it through an environment variable for
 HTTP. `call module.generated_method --args-file arguments.json` invokes generated

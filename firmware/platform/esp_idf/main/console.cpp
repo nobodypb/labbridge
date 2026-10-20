@@ -1,3 +1,4 @@
+#include "auth_platform.hpp"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "platform.hpp"
@@ -7,6 +8,21 @@
 #include "driver/usb_serial_jtag_vfs.h"
 #endif
 namespace labbridge::esp {
+namespace {
+constexpr size_t maximum_request_bytes = 16384;
+}
+void console_respond(const std::string &id, Response response) {
+  Json reply, headers;
+  for (const auto &p : response.headers)
+    headers.set(p.first, p.second);
+  reply.set("id", id)
+      .set("status", double(response.status))
+      .set("body", std::move(response.body))
+      .set("headers", headers);
+  // One stdio call preserves complete LABJSON lines from console and worker.
+  printf("LABJSON %s\n", reply.dump().c_str());
+  fflush(stdout);
+}
 static void console(void *) {
   setvbuf(stdin, nullptr, _IONBF, 0);
   std::string line;
@@ -20,34 +36,30 @@ static void console(void *) {
     }
     if (c == '\n') {
       if (!overflow && !line.empty()) {
-        Json reply;
+        std::string id;
         try {
           auto request = Json::parse(line);
-          reply.set("id", request.text("id"));
+          id = request.text("id");
           Headers headers;
           auto h = request.at("headers");
           if (cJSON_IsObject(h))
             for (auto p = h->child; p; p = p->next)
               if (cJSON_IsString(p))
                 headers[p->string] = p->valuestring;
-          auto response = dispatch(request.text("method"), request.text("path"),
-                                   request.item("body"), headers, true);
-          Json rh;
-          for (auto &p : response.headers)
-            rh.set(p.first, p.second);
-          reply.set("status", double(response.status))
-              .set("body", std::move(response.body))
-              .set("headers", rh);
+          auto method = request.text("method"), path = request.text("path");
+          if (Auth::route(path) && (method == "POST" || method == "PUT"))
+            usb_auth(method, path, request.item("body"), headers, id);
+          else
+            console_respond(id, dispatch(method, path, request.item("body"),
+                                         headers, true));
         } catch (const std::exception &e) {
-          reply.set("status", 400.).set("body", problem(400, e.what()).body);
+          console_respond(id, problem(400, e.what()));
         }
-        printf("LABJSON %s\n", reply.dump().c_str());
-        fflush(stdout);
       }
       line.clear();
       overflow = false;
     } else if (c != '\r' && !overflow) {
-      if (line.size() >= 16384) {
+      if (line.size() >= maximum_request_bytes) {
         line.clear();
         overflow = true;
       } else
@@ -62,7 +74,10 @@ void start_console() {
   // stalls.
   usb_serial_jtag_driver_config_t config = {};
   config.tx_buffer_size = 4096;
-  config.rx_buffer_size = 2048;
+  // A JSON-escaped 128-character Unicode password and its confirmation exceed
+  // 2 KiB. Keep an entire allowed frame plus its delimiter while the console
+  // task is descheduled; the ISR otherwise discards bytes from a full buffer.
+  config.rx_buffer_size = maximum_request_bytes + 64;
   ESP_ERROR_CHECK(usb_serial_jtag_driver_install(&config));
   usb_serial_jtag_vfs_use_driver();
 #endif

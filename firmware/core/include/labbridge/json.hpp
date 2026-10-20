@@ -108,6 +108,14 @@ public:
   static Json parse(const std::string &s) {
     if (s.find('\0') != std::string::npos)
       throw std::invalid_argument("Embedded NUL in JSON text");
+    // cJSON strings are NUL-terminated. Reject decoded NUL rather than silently
+    // discarding a credential suffix. Escaped literal backslashes remain valid.
+    for (size_t i = 0; i < s.size(); ++i)
+      if (s[i] == '\\') {
+        if (s.compare(i, 6, "\\u0000") == 0)
+          throw std::invalid_argument("Decoded NUL in JSON string");
+        ++i;
+      }
     return Json(cJSON_ParseWithOpts(s.c_str(), nullptr, true));
   }
   static Json array() { return Json(allocated(cJSON_CreateArray())); }
