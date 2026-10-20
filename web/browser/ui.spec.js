@@ -15,6 +15,8 @@ async function mock(page,devices=[device('load-2','dl24m',['output','load.cc','d
    const item=operations.get(path.split('/').at(-1));if(++item.polls>=2)item.operation.status='succeeded';return fulfill(item.operation);
   }
   if(path.endsWith('/temperature/channels'))return fulfill({channels:[{id:'cell',kind:'cell',quality:'valid',value_c:25,received_ms:0,age_ms:0}]});
+  if(method==='GET'&&path.includes('/components/')&&path.endsWith('/state')){const d=devices.find(d=>path.includes('/'+d.id+'/'));return fulfill({device_id:d.id,component_id:path.split('/').at(-2),state:d.state,output:d.output,settings:{}});}
+  if(method==='GET'&&path.endsWith('/readings'))return fulfill({device_id:path.split('/')[4],boot_id:'test-boot',readings:[{device_id:path.split('/')[4],component_id:'current',boot_id:'test-boot',sequence:1,received_ms:0,age_ms:0,quality:'valid',quantity:'current',unit:'A',value:-.1}]});
   if(method==='GET'&&path.endsWith('/measurements'))return fulfill({device_id:path.split('/')[4],sequence:1,received_ms:0,age_ms:0,quality:'valid',temperature_channels:[],voltage_v:24,current_a:0,power_w:0});
   if(method==='GET'&&path.endsWith('/dl24m/settings'))return fulfill({mode:0,cutoff_voltage_v:.7,time_limit_s:0});
   if(method==='PUT'||method==='POST'){
@@ -39,7 +41,7 @@ test('load module uses selected instance, lease, idempotency and asynchronous re
  const writes=await mock(page);await page.goto('/devices');await authenticate(page);await expect(page.getByRole('heading',{name:'load-2 · dl24m'})).toBeVisible();
  await expect(page.getByRole('button',{name:'Output ON'})).toBeDisabled();await page.getByRole('button',{name:'Reserve instruments'}).click();await expect(page.getByRole('button',{name:'Release and stop'})).toBeVisible();
  await page.getByLabel('Load current (A)').fill('.15');await page.getByRole('button',{name:'Set load current'}).click();await expect(page.locator('#status')).toContainText('succeeded');
- const write=writes.find(w=>w.path.endsWith('/load/current'));expect(write.path).toBe('/api/v1/devices/load-2/load/current');expect(write.body).toEqual({current_a:.15});expect(write.headers['x-lab-lease']).toBe('lease-1');expect(write.headers['idempotency-key']).toHaveLength(32);
+ const write=writes.find(w=>w.path.endsWith('/components/sink/current'));expect(write.path).toBe('/api/v1/devices/load-2/components/sink/current');expect(write.body).toEqual({current_a:.15});expect(write.headers['x-lab-lease']).toBe('lease-1');expect(write.headers['idempotency-key']).toHaveLength(32);
  await page.getByRole('button',{name:'Output ON'}).click();await expect(page.locator('#status')).toContainText('"finalOutput": "on"');await expect(page.getByRole('button',{name:'Output ON'})).toBeDisabled();
 });
 test('unknown output retains an independent STOP without a lease',async({page})=>{
@@ -49,5 +51,22 @@ test('unknown output retains an independent STOP without a lease',async({page})=
 });
 test('mixed module panels render without core device-name branches',async({page})=>{
  await mock(page,[device('psu-a','rd60xx',['output','source.cc_cv']),device('paths','gpio_interlock',['output','switch.path','switch.feedback']),device('probe','ds18b20',['temperature.external'])]);await page.goto('/devices');await authenticate(page);
- await expect(page.getByLabel('Source voltage (V)')).toBeVisible();await expect(page.getByRole('button',{name:'Path: isolated'})).toBeEnabled();await page.getByRole('button',{name:'Read temperature channels'}).click();await expect(page.getByText('"kind": "cell"',{exact:false})).toBeVisible();
+ await expect(page.getByLabel('Source voltage (V)')).toBeVisible();await expect(page.getByRole('button',{name:'Path: isolated'})).toBeEnabled();await page.getByRole('button',{name:'Read temperature channels'}).click();await expect(page.getByText('"unit": "A"',{exact:false})).toBeVisible();
+});
+test('a composite device and an independent meter use common component routes',async({page})=>{
+ const combo=device('combined','unfamiliar-source',['output','components']);
+ combo.components=[{id:'channel-a',kind:'source',actions:['current','voltage','output']},{id:'channel-b',kind:'source',actions:['current','voltage','output']}];
+ const meter=device('inline','ina228',['components']);delete meter.limits;
+ meter.components=[{id:'current',kind:'sensor',actions:[],quantity:'current',unit:'A'},{id:'temperature-die',kind:'sensor',actions:[],quantity:'temperature',unit:'degC',temperature_kind:'internal'}];
+ const writes=await mock(page,[combo,meter]);await page.goto('/devices');await authenticate(page);
+ await expect(page.getByLabel('channel-b current (A)')).toBeVisible();
+ await page.getByRole('button',{name:'Reserve instruments'}).click();
+ await page.getByLabel('channel-b current (A)').fill('.12');await page.getByRole('button',{name:'channel-b: set current'}).click();
+ await expect(page.locator('#status')).toContainText('succeeded');
+ expect(writes.find(w=>w.path.endsWith('/components/channel-b/current')).body).toEqual({current_a:.12});
+ await page.getByRole('button',{name:'channel-b: ON',exact:true}).click();await expect(page.locator('#status')).toContainText('"finalOutput": "on"');
+ await expect(page.getByRole('button',{name:'channel-b: ON',exact:true})).toBeDisabled();
+ await page.getByRole('button',{name:'channel-b: STOP',exact:true}).click();await expect(page.locator('#status')).toContainText('"finalOutput": "off"');
+ expect(writes.find(w=>w.path.endsWith('/components/channel-b/stop')).headers['x-lab-lease']).toBeUndefined();
+ await page.getByRole('button',{name:'Read sensors: inline'}).click();await expect(page.getByText('"unit": "A"',{exact:false})).toBeVisible();
 });

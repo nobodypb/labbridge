@@ -3,10 +3,13 @@
 A modular ESP32/ESP32-S3 Wi-Fi and USB bridge for laboratory instruments.
 One firmware source supports a configured set of devices on each board. External
 scripts coordinate named nodes; nodes own transport access, readback, local limits
-and shutdown. The first workflow profiles **1S Li-ion and LiFePO4** cells.
+and shutdown. The first workflow profiles **1S Li-ion and LiFePO4** cells. Sources, sinks and
+sensors share a typed component API; physical devices may expose several of each.
+A feedback interlock and independent meters are optional workflow bindings.
 
 The DL24M Ver 2.0 integration is bench-tested on a StickS3. RD6024, reference GPIO
-interlocks and DS18B20 have implementation and automated coverage, but await
+interlocks, DS18B20, INA228 and Yocto-Watt-V2-C have implementation and automated
+coverage, but await
 physical commissioning. No complete battery run has been validated on hardware.
 See [acceptance](docs/acceptance.md) for the exact boundary.
 
@@ -75,3 +78,23 @@ revision checking and board resource validation.
 
 MIT licensed. `reference/` preserves the earlier implementation for regression
 checks. No manufacturer binaries, private captures or credentials are published.
+
+
+## Optional measurement providers
+
+INA228 connects to explicitly approved ESP I²C pins with a configured address,
+shunt resistance and current range. Several addresses can share one bus. Native
+Yocto-Watt USB on the PC uses the official optional library:
+
+```sh
+uv pip install --python .venv/bin/python --no-build-isolation -e 'host[yocto]'
+labbridge --endpoint yocto+usb://YWATMK2C-123456 devices
+labbridge --endpoint yocto+usb://YWATMK2C-123456 call components.get_sensor_readings \
+  --args '{"device_id":"meter"}'
+```
+
+The ESP can also read Yocto-Watt through VirtualHub/YoctoHub HTTP; native Yocto USB
+on the ESP is not implemented. Both provider paths use the common sensor API.
+See [the handbook](docs/handbook.md#device-components-the-common-integration-api)
+and the direct INA228/Yocto binding examples for orientation, optional extra
+sensors and the distinction between OFF and electrical isolation.

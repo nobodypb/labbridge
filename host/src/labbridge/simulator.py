@@ -33,9 +33,17 @@ class Cell:
 
     def advance(self, dt):
         for d in self.devices:
-            if d["output"] and d["role"] == "source" and self.path == "charge":
+            if (
+                d["output"]
+                and d["role"] == "source"
+                and self.path in ("charge", "direct")
+            ):
                 self.voltage = min(d["voltage"], self.voltage + dt * 0.2)
-            if d["output"] and d["role"] == "load" and self.path == "discharge":
+            if (
+                d["output"]
+                and d["role"] == "load"
+                and self.path in ("discharge", "direct")
+            ):
                 self.voltage = max(
                     self.profile.discharge_cutoff_v, self.voltage - dt * 0.15
                 )
@@ -106,6 +114,12 @@ class Simulator:
             "load": ["load.cc", "output", "dl24m.settings"],
             "interlock": ["switch.path", "switch.feedback", "output"],
             "probe": ["temperature.external"],
+            "meter": [
+                "components",
+                "voltage.measure",
+                "current.measure",
+                "power.measure",
+            ],
         }[role]
         return dict(
             id=identifier,
@@ -114,6 +128,7 @@ class Simulator:
                 "load": "dl24m",
                 "interlock": "gpio_interlock",
                 "probe": "ds18b20",
+                "meter": "ina228",
             }[role],
             identity=f"sim-{self.name}-{identifier}",
             transport="sim",
@@ -138,6 +153,112 @@ class Simulator:
             )
             devices.append(entry)
         return dict(revision=1, node_id=self.name, board="sim", devices=devices)
+
+    def component_list(self, identifier):
+        role = self.devices[identifier]["role"]
+        result = []
+        if role in ("source", "load"):
+            result.append(
+                dict(
+                    id="source" if role == "source" else "sink",
+                    kind="source" if role == "source" else "sink",
+                    actions=["current", "output"]
+                    + (["voltage"] if role == "source" else ["cutoff", "duration"]),
+                )
+            )
+        if role in ("source", "load", "meter"):
+            for q, u in [("voltage", "V"), ("current", "A"), ("power", "W")]:
+                result.append(dict(id=q, kind="sensor", quantity=q, unit=u, actions=[]))
+        result.append(
+            dict(
+                id="temperature-die" if role == "meter" else "temperature-cell",
+                kind="sensor",
+                quantity="temperature",
+                unit="degC",
+                actions=[],
+                temperature_kind="internal" if role == "meter" else "cell",
+            )
+        )
+        return result
+
+    def measure(self, identifier, now):
+        self.sequence += 1
+        d = self.devices[identifier]
+        current = 0.0
+        if d["output"]:
+            current = (
+                d["current"]
+                if d["role"] == "load"
+                else 0.01 if self.cell.voltage >= d["voltage"] - 0.001 else d["current"]
+            )
+        if d["role"] == "meter":
+            for device in self.cell.devices:
+                if (
+                    device.get("output")
+                    and device["role"] == "source"
+                    and self.cell.path in ("charge", "direct")
+                ):
+                    current = (
+                        0.01
+                        if self.cell.voltage >= device["voltage"] - 0.001
+                        else device["current"]
+                    )
+                if (
+                    device.get("output")
+                    and device["role"] == "load"
+                    and self.cell.path in ("discharge", "direct")
+                ):
+                    current = -device["current"]
+        return dict(
+            device_id=identifier,
+            boot_id=self.boot_id,
+            sequence=self.sequence,
+            received_ms=now,
+            age_ms=4000 if self.stale else 0,
+            quality="stale" if self.stale else "valid",
+            voltage_v=self.cell.voltage,
+            current_a=current,
+            power_w=self.cell.voltage * abs(current),
+            set_voltage_v=d.get("voltage"),
+            set_current_a=d.get("current"),
+            regulation_mode="cc",
+            temperature_channels=[
+                dict(
+                    id="cell",
+                    kind="cell",
+                    quality="valid",
+                    value_c=self.cell.temperature,
+                    received_ms=now,
+                    age_ms=0,
+                )
+            ],
+        )
+
+    def component_reading(self, identifier, component, now, frame=None):
+        frame = frame or self.measure(identifier, now)
+        c = next(c for c in self.component_list(identifier) if c["id"] == component)
+        value = (
+            self.cell.temperature
+            if c["quantity"] == "temperature"
+            else frame[
+                {"voltage": "voltage_v", "current": "current_a", "power": "power_w"}[
+                    component
+                ]
+            ]
+        )
+        return dict(
+            device_id=identifier,
+            component_id=component,
+            boot_id=self.boot_id,
+            epoch="1",
+            quantity=c["quantity"],
+            unit=c["unit"],
+            value=value,
+            sequence=frame["sequence"],
+            received_ms=now,
+            age_ms=frame["age_ms"],
+            quality=frame["quality"],
+        )
 
     def request(self, method, url, headers=None, body=None, **kwargs):
         path = urlsplit(url).path
@@ -203,43 +324,73 @@ class Simulator:
             if tail == ["dl24m", "settings"]:
                 return self.reply(d["settings"])
             if tail == ["measurements"]:
-                self.sequence += 1
-                current = 0.0
-                if d["output"]:
-                    if d["role"] == "load":
-                        current = d["current"]
-                    elif d["role"] == "source":
-                        current = (
-                            0.01
-                            if self.cell.voltage >= d["voltage"] - 0.001
-                            else d["current"]
-                        )
+                return self.reply(self.measure(identifier, now))
+            if tail == ["components"]:
+                return self.reply(dict(components=self.component_list(identifier)))
+            if tail == ["readings"]:
+                frame = self.measure(identifier, now)
                 return self.reply(
                     dict(
                         device_id=identifier,
                         boot_id=self.boot_id,
-                        sequence=self.sequence,
-                        received_ms=now,
-                        age_ms=4000 if self.stale else 0,
-                        quality="stale" if self.stale else "valid",
-                        voltage_v=self.cell.voltage,
-                        current_a=current,
-                        power_w=self.cell.voltage * current,
-                        set_voltage_v=d.get("voltage"),
-                        set_current_a=d.get("current"),
-                        regulation_mode="cc",
-                        temperature_channels=[
-                            dict(
-                                id="cell",
-                                kind="cell",
-                                quality="valid",
-                                value_c=self.cell.temperature,
-                                received_ms=now,
-                                age_ms=0,
-                            )
+                        readings=[
+                            self.component_reading(identifier, c["id"], now, frame)
+                            for c in self.component_list(identifier)
+                            if c["kind"] == "sensor"
                         ],
                     )
                 )
+            if len(tail) == 3 and tail[0] == "components":
+                component = tail[1]
+                if tail[2] == "measurement":
+                    return self.reply(
+                        self.component_reading(identifier, component, now)
+                    )
+                if tail[2] == "state":
+                    settings = dict(current_a=d["current"], regulation_mode="cc")
+                    if d["role"] == "source":
+                        settings["voltage_v"] = d["voltage"]
+                    if d["role"] == "load":
+                        settings.update(
+                            {k: v for k, v in d["settings"].items() if k != "mode"}
+                        )
+                    return self.reply(
+                        dict(
+                            device_id=identifier,
+                            component_id=component,
+                            state="ready",
+                            output="on" if d["output"] else "off",
+                            settings=settings,
+                        )
+                    )
+        if len(tail) == 3 and tail[0] == "components":
+            actor = next(
+                (c for c in self.component_list(identifier) if c["id"] == tail[1]), None
+            )
+            if (
+                actor is None
+                or actor["kind"] == "sensor"
+                or tail[2] not in actor["actions"]
+            ):
+                return self.reply(
+                    dict(
+                        type="about:blank",
+                        title="Unavailable",
+                        status=422,
+                        detail="Component action unavailable",
+                    ),
+                    422,
+                )
+            action = tail[2]
+            tail = (
+                ["output"]
+                if action == "output"
+                else (
+                    ["source" if actor["kind"] == "source" else "load", action]
+                    if action in ("current", "voltage")
+                    else ["dl24m", "settings"]
+                )
+            )
         key = headers.get("Idempotency-Key", "")
         signature = json.dumps([method, path, body], sort_keys=True)
         if key in self.keys:
@@ -329,12 +480,18 @@ def simulated_cluster(bindings, profile):
     cell = Cell(clock, profile)
     roles = {}
     for role, ref in bindings.items():
-        if role == "cell_probe":
+        if role not in ("source", "load", "interlock"):
             continue
         roles.setdefault(ref["node"], {})[role] = ref["device"]
     roles.setdefault(bindings["cell_probe"]["node"], {})["probe"] = bindings[
         "cell_probe"
     ]["device"]
+    if "interlock" not in bindings:
+        cell.path = "direct"
+    for ref in list(bindings.get("meters", {}).values()) + bindings.get("sensors", []):
+        mapping = roles.setdefault(ref["node"], {})
+        if ref["device"] not in mapping.values():
+            mapping["meter"] = ref["device"]
     transports = {
         name: Simulator(name, devices, clock, cell, profile)
         for name, devices in roles.items()

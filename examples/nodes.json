@@ -14,6 +14,13 @@
     "switch-node": {
       "endpoint": "http://switch-node.local",
       "token_env": "SWITCH_NODE_TOKEN"
+    },
+    "battery-node": {
+      "endpoint": "http://battery-node.local",
+      "token_env": "BATTERY_NODE_TOKEN"
+    },
+    "yocto-meter": {
+      "endpoint": "yocto+usb://YWATMK2C-123456"
     }
   }
 }

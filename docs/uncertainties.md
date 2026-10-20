@@ -32,3 +32,13 @@ mappings. This file records the remaining decisions, not a complete chronology.
 Manufacturer downloads and private captures are deliberately excluded from this
 public repository. They retain their original licensing and may contain private
 addresses. Sanitized synthetic wire fixtures are sufficient for regression tests.
+
+
+The new INA228 and Yocto-Watt providers have portable/SDK-contract coverage but
+no actual sensor hardware evidence. INA228 sampling is not simultaneous with
+instrument telemetry; cross-device timestamps do not imply hardware triggering.
+The native Yocto SDK handles its USB/calibration protocol; the ESP HTTP adapter
+supports uncalibrated/default user-calibration parameters only. Native Yocto USB
+on an ESP USB-host port is a separate, unimplemented transport. Direct-output
+routing relies on the commissioned off-state/reverse-current behavior of the
+selected source and load. It is not a claim of galvanic isolation.

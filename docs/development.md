@@ -68,3 +68,14 @@ configures closed Pydantic models to reject unknown request fields. Firmware
 validation constraints are generated from request-reachable schemas. Do not
 hand-edit any generated route/model. `tests/vendor/cjson` is a separately licensed
 MIT test dependency for the preserved controller; see its license.
+
+
+Component contracts live in `api/modules/components.json`; meter configuration
+schemas and manifests live with their individual module fragments. A driver can
+inherit the standard component adapter or override discovery, readings, actor
+state/command and component-stop behavior. Legacy routes are optional; a new
+source, sink or sensor can serve the standard routes without adding core paths.
+Root and ESP builds include portable meter codecs; ESP worker tasks own bounded
+I²C/HTTP calls. Do not publish manufactured sensor data as hardware evidence.
+The optional native Yocto package is version-pinned in the development lock and
+host extra; fake SDK/transport fixtures keep CI independent of attached USB.

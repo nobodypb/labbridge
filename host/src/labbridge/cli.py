@@ -42,7 +42,7 @@ def main(argv=None):
     parser.add_argument(
         "--endpoint",
         default="http://labbridge.local",
-        help="http://host or serial:/dev/ttyACM0",
+        help="http://host, serial:/dev/ttyACM0 or yocto+usb://hardware-serial",
     )
     parser.add_argument("--nodes", help="Named-node configuration JSON")
     parser.add_argument("--node", help="Node name from --nodes")
@@ -68,7 +68,7 @@ def main(argv=None):
     args = parser.parse_args(argv)
     try:
         if args.command == "battery":
-            from .battery import Profile, Runner
+            from .battery import Profile, Runner, binding_nodes
 
             profile = Profile(**json.loads(Path(args.profile).read_text()))
             profile.validate()
@@ -89,9 +89,7 @@ def main(argv=None):
                 if not args.nodes:
                     parser.error("Physical battery runs require --nodes")
                 result = Runner(
-                    Cluster(
-                        nodes_from(args.nodes, {v["node"] for v in bindings.values()})
-                    ),
+                    Cluster(nodes_from(args.nodes, binding_nodes(bindings))),
                     bindings,
                     profile,
                     args.output,
