@@ -4,7 +4,7 @@ This is a development baseline, not a fully commissioned battery-test system.
 
 ## Automated acceptance
 
-- 20 portable C++ behavior executables cover framing, queued transactions,
+- 23 portable C++ behavior executables cover framing, queued transactions,
   connection changes, resource validation, driver identity, leases, idempotency,
   local guards, per-activation deadlines, interlock feedback and temperature.
 - Python tests validate actual runtime responses against OpenAPI, generated
@@ -245,7 +245,7 @@ of this check. This validates unregistered discovery recovery only; configured
 source STOP/fault tests, battery commissioning and the full coexistence soak
 remain open. All documented board builds and required CI checks passed.
 
-## DL24M Bench (LB-020)
+## DL24M Bench (LB-022)
 
 The missing recording module and `/dl24` route were observed failing before
 implementation. Further regression tests caught and fixed out-of-order sample
@@ -275,3 +275,191 @@ Python/reference suites), deterministic generation/drift, TypeScript/Webbuild,
 11 Web unit tests, 21 browser scenarios, formatting and public-tree checks.
 ESP-IDF 5.5.2 builds succeeded for StickS3, USB-OTG and ESP32; each app fits its
 configured partition. Physical acceptance above covers StickS3/DL24M only.
+
+
+### Bench password integration (2026-10-21)
+
+The initial Bench password scenario failed because `/dl24` had no password form.
+It now uses the same `UiAuth` forms and cookie session as `/devices` and `/wifi`.
+The Bench backend fixture accepts only the session cookie and rejects mutations
+without the session CSRF header. Its original fourteen control/scheduling
+scenarios now use password login, and ten additional scenarios cover cookie-only
+commands/heartbeat/STOP, reload/navigation, expired sessions without ON replay or
+automatic reservation, successful and failed STOP before logout, cancelling a
+queued ON during logout, STOP/heartbeat during a held password change, AP/LAN
+bootstrap guidance, and expiry during initial discovery. The last regression
+first reproduced a false `Connected` message after expiry; discovery now checks
+its connection generation before reporting success. Late reservation responses
+also cannot restore ownership after the session changes.
+
+Password requests use a separate client from the serialized instrument queue;
+only the latter has a four-second request timeout. Session loss clears pending
+commands, polling and lease heartbeat. A new login resumes read-only discovery.
+The logout path waits for confirmed device STOP and lease release before ending
+the cookie session; a failed shutdown still ends login and reports uncertainty.
+The unchanged upstream snapshot and corresponding-source delivery remain intact.
+
+Software acceptance: `tools/check.sh` passes (23 portable C++ executables,
+three contract tests, 31 host tests and the reference suites), as do 11 Web unit
+tests, TypeScript/Webbuild and all 45 browser scenarios (24 for Bench). Black,
+public-tree checks and generation drift pass. ESP-IDF 5.5.2 builds pass for
+StickS3, USB-OTG and classic ESP32 with the updated embedded frontend.
+
+These are browser and portable software checks. The earlier Bench hardware
+acceptance used bearer login; the new Bench password workflow has not been
+flashed or exercised with laboratory devices. Hardware connections remain paused
+at the operator's request. The version-one 114–116 s password cost failed the new three-second requirement.
+Version-two performance evidence is recorded separately below.
+
+## UI password sessions (LB-020; initial version-one commissioning)
+
+The initial acceptance tests failed on missing authentication services and USB
+password recovery; the browser LAN-scan scenario failed because no password
+login existed. Portable tests now exercise the same access policy used by the
+firmware: AP/LAN isolation, USB-only token retrieval, password bootstrap and
+recovery, Unicode/space preservation, invalid JSON NUL rejection, CSRF/origin
+checks, session capacity/expiry/logout/reboot/password replacement, failed
+storage and login throttling. A deliberately blocked password derivation leaves
+authorization, portable node lease heartbeats and STOP dispatch usable.
+
+Browser tests cover LAN scan after login, public AP scan, initial-password
+guidance/confirmation, reload/navigation, wrong credentials, password changes,
+logout after a failed lease STOP and no actuator replay after session loss.
+Generated Python password models redact credentials while transport serialization
+preserves the exact value. Password computation is queued separately from HTTP
+and the USB console; USB replies retain their original LABJSON request ID.
+
+Hardware commissioning on 2026-10-20 found that ESP-IDF's IPv6 dual-stack HTTP
+socket was decoded as `sockaddr_in`. This rejected valid LAN login origins and
+failed to recognize the AP. A regression test first reproduced the failure;
+the shared transport helper now decodes IPv4, IPv4-mapped IPv6 and IPv6 from
+`sockaddr_storage`. Tests include actual dual-stack socket acceptance and the
+firmware's AP/LAN authorization path. Captive-portal classification uses the
+same helper.
+
+Before stacking on PR #26, the corrected application was flashed on the DL24M StickS3 (application SHA-256
+prefix `97d2eb7e09370640`). A private full-flash backup was verified against the
+device, with the original NVS retained separately. Before the authenticated
+tests, configuration, all 14 DL24M settings, current target and bearer token
+matched the baseline; output was confirmed OFF with valid fresh telemetry.
+
+| Actual StickS3 check | Result |
+| --- | --- |
+| LAN scan without credentials / LAN first-password setup | `401` / `403` |
+| USB first password | 114.772 s |
+| LAN password login | 115.365 s; HttpOnly, SameSite=Strict, 43,200 s cookie |
+| Cookie-authenticated LAN scan | Four networks; scanning → complete in 5.326 s |
+| Real LAN browser | Login resumes scan; reload/navigation retain login; reserved lease STOP accepted before logout |
+| Browser login plus automatic scan | 119.432 s in the instrumented successful run |
+| Missing CSRF / foreign Origin on cookie mutations | Both `403` |
+| Logout / simultaneous second login while hashing | Scan returns `401` / second login returns `429` |
+| Existing bearer / USB password recovery | Both work; recovery 116.151 s |
+| AP Wi-Fi status and scan without UI credentials | `200`; four networks through an additional ESP32 WLAN client |
+
+During a real HTTP password verification, HTTP STOP was accepted in 99 ms and
+USB STOP in 57 ms. Both reached confirmed OFF before login completed; operation
+durations were 179 ms and 116 ms respectively. During USB password recovery,
+USB STOP was accepted in 56 ms and confirmed OFF in a 116 ms operation before
+the password response. The boot ID remained unchanged. These were STOP tests
+with the load already OFF; no ON command or battery operation was performed.
+
+The AP client associated with the original protected AP, received an AP-subnet
+address and verified the target bridge's boot ID. This establishes a real
+wireless AP scan. The temporary client application was subsequently removed:
+the additional ESP32's original overwritten flash region, including its NVS,
+was restored and hash-verified through the dedicated test bridge connection.
+
+The original DL24M-stick NVS was restored and hash-verified, removing the
+temporary UI password and restoring its existing Wi-Fi/AP/token configuration.
+The operator then restricted further hardware access to the test-stick alias
+and requested no laboratory connections while other tests run. The final live
+device recheck and AP first-password setup were consequently left open. One
+earlier real-browser scan wait timed out without sufficient diagnostics; the
+instrumented repeat above passed. Repeated/soak behavior remains open.
+
+`tools/check.sh` passes (23 C++ executables, three contract tests, 31 host tests
+and 13 reference tests); all 45 browser scenarios pass on an isolated local
+test server. ESP-IDF 5.5.2 builds for StickS3, classic ESP32 and USB-OTG pass.
+The 282 generated files still match the deterministic regeneration snapshot.
+The roughly two-minute version-one calculation was rejected for usability and
+superseded by the version-two policy below.
+HTTP remains unencrypted; optional HTTPS/mTLS login is LB-021.
+
+### Usability-first version-two verifier
+
+The accepted requirement is a complete login below three seconds on the target
+ESP, with basic protection preferred over maximum offline resistance. New
+verifiers use PBKDF2-HMAC-SHA256 with 6,000 iterations, random salts and an
+explicit version-two record. Length rules, throttling, session limits, cookie
+flags, CSRF/origin checks, USB-only token reading and nonblocking worker behavior
+are retained. A new failing test first rejected the old 600,000-round policy.
+Tests also require prompt rejection of legacy experimental records, no slow
+legacy derivation or silent hash reinterpretation, and successful USB recovery.
+
+Every published user entry point (`/`, `/wifi`, `/devices`, `/dl24`, `/dl24/`)
+is covered by password-form, cookie reload and no-automatic-mutation browser
+acceptance. Physical timing uses a fully backed-up isolated bridge with zero
+configured laboratory devices; no device connection or actuation is part of
+this commissioning. Deployment-specific connection details, credentials, raw
+logs and backups remain in ignored local notes.
+
+The real eight-client regression initially exhausted the default shared socket
+pool after three accepted logins. The platform now reserves 16 sockets and
+bounds HTTP to four connections with idle connection reclamation. All eight
+sessions then logged in, the ninth was rejected, and an older cookie still
+worked after its TCP connection was reclaimed. Session state is never evicted
+by TCP cleanup. A real-browser submission initially stalled; two controlled
+regressions reproduced a delayed pre-login scan clearing password-manager input
+or a newly established login. Request/session tracking and disposal of obsolete
+scan views fix both cases; the final real-browser run succeeds without delays
+inserted to hide the race.
+
+Integration with the current main branch exposed a separate USB regression:
+resetting a 128-code-point Unicode password timed out when its JSON-escaped
+password and confirmation exceeded the new 2 KiB receive buffer. The request
+was sent as one ordinary USB JSON frame; HTTP remained responsive. The console
+receive buffer now accommodates the complete permitted 16 KiB request plus its
+delimiter, so descheduling the reader cannot truncate that frame in the ISR.
+The same unchunked recovery request then passed on hardware.
+
+Final version-two commissioning was repeated after integrating current main's
+console, automatic provisioning, telemetry and StickS3 PSRAM changes. It used
+the actual embedded assets from source `de6856d` (application SHA-256 prefix
+`52223e798ee032ce`), with zero configured instruments throughout:
+
+| Check | Observed result |
+| --- | --- |
+| Browser login on `/` | 0.975 s; cookie reload and CSRF logout pass |
+| Browser login on `/wifi` | 0.960 s; cookie reload and CSRF logout pass |
+| Browser login on `/devices` | 0.933 s; cookie reload and CSRF logout pass |
+| Browser login on `/dl24` | 0.999 s; cookie reload and CSRF logout pass |
+| Browser login on `/dl24/` | 1.020 s; cookie reload and CSRF logout pass |
+| Shared session across pages | One `/wifi` login, then `/dl24`, `/devices` and `/dl24/` without another login; reload and logout pass |
+| 17 correct API logins | 0.841–0.955 s; all below 3 s |
+| Incorrect passwords and throttling | Six `401` responses across separate runs, maximum 0.920 s; after five consecutive failures the next attempt receives `429` |
+| 128 Unicode code points / 512 UTF-8 bytes | Correct password succeeds; altered final character rejected |
+| Password change with current password | 1.696 s; previous sessions invalidated |
+| Session cap and recovery | Eight valid sessions, ninth rejected, existing cookie retained; USB recovery revokes sessions |
+| STOP route during an active password job | HTTP 27.7 ms / USB 21.9 ms |
+| ESP reboot | Old session rejected; persisted password logs in again in 0.885 s |
+
+The STOP probes deliberately address an unconfigured synthetic ID and receive
+`404`; they establish route/authorization/dispatch responsiveness, **not** a new
+physical shutdown result. Portable actor tests exercise actual STOP dispatch;
+the earlier version-one physical OFF-only STOP evidence remains separately
+recorded above. No instrument was configured, connected, reserved or actuated
+during version-two hardware commissioning. Bearer access, USB-only token
+retrieval, LAN bootstrap denial, CSRF and foreign-origin denial also pass on the
+isolated bridge.
+
+The original complete 8 MiB test image, including all NVS and firmware, was
+restored and checked against the device's full-flash digest. Its original
+firmware did not provide a correlated USB JSON status response before or after
+testing; restoration evidence is the complete image comparison, not an invented
+post-restore API readback. Credentials, deployment identity, backups and raw
+logs remain private. The final software checks pass: 23 C++ executables, three
+contract tests, 37 host tests, the reference suites, 11 Web unit tests and 45
+browser scenarios. Generation drift, Black and public-tree checks pass, and
+ESP-IDF 5.5.2 builds fit StickS3, USB-OTG and ESP32 with the final frontend and
+socket policy. Remaining AP-first-setup and laboratory commissioning limits are
+still explicit; the three-second user-login requirement is now satisfied.

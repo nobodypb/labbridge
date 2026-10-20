@@ -3,7 +3,7 @@
 """
     LabBridge API
 
-    Configure and automate laboratory instruments through one ESP32 bridge. Physical devices expose discoverable source, sink and scalar sensor components; prefer their common routes for portable scripts. Driver-specific routes remain available for specialized settings and compatibility.  ## Typical automation sequence 1. Read node identity/boot_id and discover devices, components, actions and limits. 2. Reserve all actor devices on this node with createLease and heartbeat at least once per second. Ownership is per physical device, not per component. 3. Send a setting/output mutation with X-Lab-Lease and a new Idempotency-Key. A 202 response is only acceptance: poll Location until a terminal Operation, checking final_output and restore_pending. 4. Use valid, fresh sensor readings; preserve sign and units. Integrate only across consecutive samples with unchanged boot_id/epoch and bounded gaps. 5. Request independent STOP when finished or uncertain, verify OFF, then release the lease. Output OFF is not electrical isolation.  ## Failure and retry contract The bridge performs bounded device retries, write/readback verification and recovery. Never infer hardware success from an ATT acknowledgement, an HTTP 202 or a saved setpoint. A terminal failure can still have changed hardware. Device/component STOP requires no lease. Reconnect/reboot never resumes ON. Leases, operation IDs and idempotency keys are boot-local; do not replay an uncertain mutation after a reboot. Monotonic timestamps are not Unix time and cannot be compared across nodes/boots.  ## Access and provisioning LAN HTTP uses Authorization: Bearer <token> on a trusted network. Obtain the secret using getManagementToken over physically trusted USB. The open LabBridge-Setup AP at 192.168.4.1 allows Wi-Fi setup/scan without bearer credentials; it does not grant laboratory control. The separate UI pages are /wifi, /devices and /dl24 (DL24M Bench). The Bench page uses these same authenticated APIs; unsupported original controls remain visible but disabled. USB uses the same methods/paths with JSON-line requests {id, method, path, headers, body} and replies prefixed LABJSON; ignore other boot/log lines and correlate IDs. Target Wi-Fi PSKs are never returned.  ## Local safeguards and hardware scope Configured limits, lease expiry, measurement freshness, activation deadlines and optional external cell-temperature guards operate on the node. They supplement instrument protections and an explicit external battery test profile/wiring arrangement. Read-only sensors may omit actuator limits. Supported endpoint/pin combinations depend on the board. DL24M BLE behavior is commissioned on display Ver: 2.0; RD6018/RD6024, INA228 and Yocto physical commissioning is tracked separately. RD6018 original Wi-Fi modules connect to the ESP AP using RTU-over-TCP; use the module provisioning operations to configure them. Native Yocto USB on ESP is not implemented (use native PC USB or HTTP VirtualHub/YoctoHub).
+    Configure and automate laboratory instruments through one ESP32 bridge. Physical devices expose discoverable source, sink and scalar sensor components; prefer their common routes for portable scripts. Driver-specific routes remain available for specialized settings and compatibility.  ## Typical automation sequence 1. Read node identity/boot_id and discover devices, components, actions and limits. 2. Reserve all actor devices on this node with createLease and heartbeat at least once per second. Ownership is per physical device, not per component. 3. Send a setting/output mutation with X-Lab-Lease and a new Idempotency-Key. A 202 response is only acceptance: poll Location until a terminal Operation, checking final_output and restore_pending. 4. Use valid, fresh sensor readings; preserve sign and units. Integrate only across consecutive samples with unchanged boot_id/epoch and bounded gaps. 5. Request independent STOP when finished or uncertain, verify OFF, then release the lease. Output OFF is not electrical isolation.  ## Failure and retry contract The bridge performs bounded device retries, write/readback verification and recovery. Never infer hardware success from an ATT acknowledgement, an HTTP 202 or a saved setpoint. A terminal failure can still have changed hardware. Device/component STOP requires no lease. Reconnect/reboot never resumes ON. Leases, operation IDs and idempotency keys are boot-local; do not replay an uncertain mutation after a reboot. Monotonic timestamps are not Unix time and cannot be compared across nodes/boots.  ## Access and provisioning LAN HTTP accepts Authorization: Bearer <token> for scripts or a UI password session on a trusted network. The UI redirects unauthenticated access to password login and resumes read-only discovery, never an uncertain mutation. UI passwords use salted version-two PBKDF2-HMAC-SHA256 verifiers with 6,000 iterations, deliberately tuned for basic protection and a login below three seconds on the ESP. Experimental 600,000-round verifiers require trusted USB password recovery; their hashes are never reinterpreted with fewer rounds. Choose the first password via the setup AP or trusted USB. HTTP is unencrypted; HTTPS with optional mTLS authentication is a separate planned feature. Obtain the API bearer secret using getManagementToken over physically trusted USB. The open LabBridge-Setup AP at 192.168.4.1 allows Wi-Fi setup/scan without bearer credentials; it does not grant laboratory control. The separate UI pages are /wifi, /devices and /dl24 (DL24M Bench). The Bench page shares the UI password session and CSRF protection and uses the same laboratory APIs; unsupported original controls remain visible but disabled. USB uses the same methods/paths with JSON-line requests {id, method, path, headers, body} and replies prefixed LABJSON; ignore other boot/log lines and correlate IDs. Target Wi-Fi PSKs are never returned.  ## Local safeguards and hardware scope Configured limits, lease expiry, measurement freshness, activation deadlines and optional external cell-temperature guards operate on the node. They supplement instrument protections and an explicit external battery test profile/wiring arrangement. Read-only sensors may omit actuator limits. Supported endpoint/pin combinations depend on the board. DL24M BLE behavior is commissioned on display Ver: 2.0; RD6018/RD6024, INA228 and Yocto physical commissioning is tracked separately. RD6018 original Wi-Fi modules connect to the ESP AP using RTU-over-TCP; use the module provisioning operations to configure them. Native Yocto USB on ESP is not implemented (use native PC USB or HTTP VirtualHub/YoctoHub).
 
     The version of the OpenAPI document: 0.1.0
     Generated by OpenAPI Generator (https://openapi-generator.tech)
@@ -47,7 +47,7 @@ class Rd60xxApi:
     @validate_call
     def advance_rd_provisioning(
         self,
-        rd_provision_advance: Annotated[RdProvisionAdvance, Field(description="Typed provisioning request; unknown fields are rejected. Requires LAN bearer authentication or trusted USB, including when accessed through the open AP.")],
+        rd_provision_advance: Annotated[RdProvisionAdvance, Field(description="Typed provisioning request; unknown fields are rejected. Requires a LAN bearer token, a UI session with X-Lab-CSRF, or trusted USB, including when accessed through the open AP.")],
         _request_timeout: Union[
             None,
             Annotated[StrictFloat, Field(gt=0)],
@@ -65,7 +65,7 @@ class Rd60xxApi:
 
         Advance only the named session and expected phase. Confirm server_address once the PSU displays the ESP address / Connecting WiFi, then confirm wifi once Connecting server appears. Each phase has a 120-second deadline. Repeated acknowledgements cannot skip steps. Wrong sessions/phases return 409.
 
-        :param rd_provision_advance: Typed provisioning request; unknown fields are rejected. Requires LAN bearer authentication or trusted USB, including when accessed through the open AP. (required)
+        :param rd_provision_advance: Typed provisioning request; unknown fields are rejected. Requires a LAN bearer token, a UI session with X-Lab-CSRF, or trusted USB, including when accessed through the open AP. (required)
         :type rd_provision_advance: RdProvisionAdvance
         :param _request_timeout: timeout setting for this request. If one
                                  number provided, it will be total request
@@ -114,7 +114,7 @@ class Rd60xxApi:
     @validate_call
     def advance_rd_provisioning_with_http_info(
         self,
-        rd_provision_advance: Annotated[RdProvisionAdvance, Field(description="Typed provisioning request; unknown fields are rejected. Requires LAN bearer authentication or trusted USB, including when accessed through the open AP.")],
+        rd_provision_advance: Annotated[RdProvisionAdvance, Field(description="Typed provisioning request; unknown fields are rejected. Requires a LAN bearer token, a UI session with X-Lab-CSRF, or trusted USB, including when accessed through the open AP.")],
         _request_timeout: Union[
             None,
             Annotated[StrictFloat, Field(gt=0)],
@@ -132,7 +132,7 @@ class Rd60xxApi:
 
         Advance only the named session and expected phase. Confirm server_address once the PSU displays the ESP address / Connecting WiFi, then confirm wifi once Connecting server appears. Each phase has a 120-second deadline. Repeated acknowledgements cannot skip steps. Wrong sessions/phases return 409.
 
-        :param rd_provision_advance: Typed provisioning request; unknown fields are rejected. Requires LAN bearer authentication or trusted USB, including when accessed through the open AP. (required)
+        :param rd_provision_advance: Typed provisioning request; unknown fields are rejected. Requires a LAN bearer token, a UI session with X-Lab-CSRF, or trusted USB, including when accessed through the open AP. (required)
         :type rd_provision_advance: RdProvisionAdvance
         :param _request_timeout: timeout setting for this request. If one
                                  number provided, it will be total request
@@ -181,7 +181,7 @@ class Rd60xxApi:
     @validate_call
     def advance_rd_provisioning_without_preload_content(
         self,
-        rd_provision_advance: Annotated[RdProvisionAdvance, Field(description="Typed provisioning request; unknown fields are rejected. Requires LAN bearer authentication or trusted USB, including when accessed through the open AP.")],
+        rd_provision_advance: Annotated[RdProvisionAdvance, Field(description="Typed provisioning request; unknown fields are rejected. Requires a LAN bearer token, a UI session with X-Lab-CSRF, or trusted USB, including when accessed through the open AP.")],
         _request_timeout: Union[
             None,
             Annotated[StrictFloat, Field(gt=0)],
@@ -199,7 +199,7 @@ class Rd60xxApi:
 
         Advance only the named session and expected phase. Confirm server_address once the PSU displays the ESP address / Connecting WiFi, then confirm wifi once Connecting server appears. Each phase has a 120-second deadline. Repeated acknowledgements cannot skip steps. Wrong sessions/phases return 409.
 
-        :param rd_provision_advance: Typed provisioning request; unknown fields are rejected. Requires LAN bearer authentication or trusted USB, including when accessed through the open AP. (required)
+        :param rd_provision_advance: Typed provisioning request; unknown fields are rejected. Requires a LAN bearer token, a UI session with X-Lab-CSRF, or trusted USB, including when accessed through the open AP. (required)
         :type rd_provision_advance: RdProvisionAdvance
         :param _request_timeout: timeout setting for this request. If one
                                  number provided, it will be total request
@@ -298,6 +298,7 @@ class Rd60xxApi:
 
         # authentication setting
         _auth_settings: List[str] = [
+            'browserSession', 
             'bearerAuth'
         ]
 
@@ -322,7 +323,7 @@ class Rd60xxApi:
     @validate_call
     def cancel_rd_provisioning(
         self,
-        rd_provision_cancel: Annotated[RdProvisionCancel, Field(description="Typed provisioning request; unknown fields are rejected. Requires LAN bearer authentication or trusted USB, including when accessed through the open AP.")],
+        rd_provision_cancel: Annotated[RdProvisionCancel, Field(description="Typed provisioning request; unknown fields are rejected. Requires a LAN bearer token, a UI session with X-Lab-CSRF, or trusted USB, including when accessed through the open AP.")],
         _request_timeout: Union[
             None,
             Annotated[StrictFloat, Field(gt=0)],
@@ -340,7 +341,7 @@ class Rd60xxApi:
 
         Stop the active session/transmission. Network settings already received by the PSU are not restored; cancellation sends no actuator commands. Wrong session IDs return 409. Independent instrument STOP remains available throughout provisioning.
 
-        :param rd_provision_cancel: Typed provisioning request; unknown fields are rejected. Requires LAN bearer authentication or trusted USB, including when accessed through the open AP. (required)
+        :param rd_provision_cancel: Typed provisioning request; unknown fields are rejected. Requires a LAN bearer token, a UI session with X-Lab-CSRF, or trusted USB, including when accessed through the open AP. (required)
         :type rd_provision_cancel: RdProvisionCancel
         :param _request_timeout: timeout setting for this request. If one
                                  number provided, it will be total request
@@ -389,7 +390,7 @@ class Rd60xxApi:
     @validate_call
     def cancel_rd_provisioning_with_http_info(
         self,
-        rd_provision_cancel: Annotated[RdProvisionCancel, Field(description="Typed provisioning request; unknown fields are rejected. Requires LAN bearer authentication or trusted USB, including when accessed through the open AP.")],
+        rd_provision_cancel: Annotated[RdProvisionCancel, Field(description="Typed provisioning request; unknown fields are rejected. Requires a LAN bearer token, a UI session with X-Lab-CSRF, or trusted USB, including when accessed through the open AP.")],
         _request_timeout: Union[
             None,
             Annotated[StrictFloat, Field(gt=0)],
@@ -407,7 +408,7 @@ class Rd60xxApi:
 
         Stop the active session/transmission. Network settings already received by the PSU are not restored; cancellation sends no actuator commands. Wrong session IDs return 409. Independent instrument STOP remains available throughout provisioning.
 
-        :param rd_provision_cancel: Typed provisioning request; unknown fields are rejected. Requires LAN bearer authentication or trusted USB, including when accessed through the open AP. (required)
+        :param rd_provision_cancel: Typed provisioning request; unknown fields are rejected. Requires a LAN bearer token, a UI session with X-Lab-CSRF, or trusted USB, including when accessed through the open AP. (required)
         :type rd_provision_cancel: RdProvisionCancel
         :param _request_timeout: timeout setting for this request. If one
                                  number provided, it will be total request
@@ -456,7 +457,7 @@ class Rd60xxApi:
     @validate_call
     def cancel_rd_provisioning_without_preload_content(
         self,
-        rd_provision_cancel: Annotated[RdProvisionCancel, Field(description="Typed provisioning request; unknown fields are rejected. Requires LAN bearer authentication or trusted USB, including when accessed through the open AP.")],
+        rd_provision_cancel: Annotated[RdProvisionCancel, Field(description="Typed provisioning request; unknown fields are rejected. Requires a LAN bearer token, a UI session with X-Lab-CSRF, or trusted USB, including when accessed through the open AP.")],
         _request_timeout: Union[
             None,
             Annotated[StrictFloat, Field(gt=0)],
@@ -474,7 +475,7 @@ class Rd60xxApi:
 
         Stop the active session/transmission. Network settings already received by the PSU are not restored; cancellation sends no actuator commands. Wrong session IDs return 409. Independent instrument STOP remains available throughout provisioning.
 
-        :param rd_provision_cancel: Typed provisioning request; unknown fields are rejected. Requires LAN bearer authentication or trusted USB, including when accessed through the open AP. (required)
+        :param rd_provision_cancel: Typed provisioning request; unknown fields are rejected. Requires a LAN bearer token, a UI session with X-Lab-CSRF, or trusted USB, including when accessed through the open AP. (required)
         :type rd_provision_cancel: RdProvisionCancel
         :param _request_timeout: timeout setting for this request. If one
                                  number provided, it will be total request
@@ -573,6 +574,7 @@ class Rd60xxApi:
 
         # authentication setting
         _auth_settings: List[str] = [
+            'browserSession', 
             'bearerAuth'
         ]
 
@@ -820,6 +822,7 @@ class Rd60xxApi:
 
         # authentication setting
         _auth_settings: List[str] = [
+            'browserSession', 
             'bearerAuth'
         ]
 
@@ -1140,6 +1143,7 @@ class Rd60xxApi:
 
         # authentication setting
         _auth_settings: List[str] = [
+            'browserSession', 
             'bearerAuth'
         ]
 
@@ -1460,6 +1464,7 @@ class Rd60xxApi:
 
         # authentication setting
         _auth_settings: List[str] = [
+            'browserSession', 
             'bearerAuth'
         ]
 
@@ -1484,7 +1489,7 @@ class Rd60xxApi:
     @validate_call
     def start_rd_provisioning(
         self,
-        rd_provision_start: Annotated[RdProvisionStart, Field(description="Typed provisioning request; unknown fields are rejected. Requires LAN bearer authentication or trusted USB, including when accessed through the open AP.")],
+        rd_provision_start: Annotated[RdProvisionStart, Field(description="Typed provisioning request; unknown fields are rejected. Requires a LAN bearer token, a UI session with X-Lab-CSRF, or trusted USB, including when accessed through the open AP.")],
         _request_timeout: Union[
             None,
             Annotated[StrictFloat, Field(gt=0)],
@@ -1502,7 +1507,7 @@ class Rd60xxApi:
 
         Begin the two-stage original RIDEN pairing process. First reset/select WiFi on the target PSU with output OFF. The ESP sends its AP address as the server target; after checking the PSU display call advanceRdProvisioning. Stop/release existing devices and finish Wi-Fi scans/changes first (409 otherwise). Only one session is active. Does not save a device configuration or enable an output.
 
-        :param rd_provision_start: Typed provisioning request; unknown fields are rejected. Requires LAN bearer authentication or trusted USB, including when accessed through the open AP. (required)
+        :param rd_provision_start: Typed provisioning request; unknown fields are rejected. Requires a LAN bearer token, a UI session with X-Lab-CSRF, or trusted USB, including when accessed through the open AP. (required)
         :type rd_provision_start: RdProvisionStart
         :param _request_timeout: timeout setting for this request. If one
                                  number provided, it will be total request
@@ -1551,7 +1556,7 @@ class Rd60xxApi:
     @validate_call
     def start_rd_provisioning_with_http_info(
         self,
-        rd_provision_start: Annotated[RdProvisionStart, Field(description="Typed provisioning request; unknown fields are rejected. Requires LAN bearer authentication or trusted USB, including when accessed through the open AP.")],
+        rd_provision_start: Annotated[RdProvisionStart, Field(description="Typed provisioning request; unknown fields are rejected. Requires a LAN bearer token, a UI session with X-Lab-CSRF, or trusted USB, including when accessed through the open AP.")],
         _request_timeout: Union[
             None,
             Annotated[StrictFloat, Field(gt=0)],
@@ -1569,7 +1574,7 @@ class Rd60xxApi:
 
         Begin the two-stage original RIDEN pairing process. First reset/select WiFi on the target PSU with output OFF. The ESP sends its AP address as the server target; after checking the PSU display call advanceRdProvisioning. Stop/release existing devices and finish Wi-Fi scans/changes first (409 otherwise). Only one session is active. Does not save a device configuration or enable an output.
 
-        :param rd_provision_start: Typed provisioning request; unknown fields are rejected. Requires LAN bearer authentication or trusted USB, including when accessed through the open AP. (required)
+        :param rd_provision_start: Typed provisioning request; unknown fields are rejected. Requires a LAN bearer token, a UI session with X-Lab-CSRF, or trusted USB, including when accessed through the open AP. (required)
         :type rd_provision_start: RdProvisionStart
         :param _request_timeout: timeout setting for this request. If one
                                  number provided, it will be total request
@@ -1618,7 +1623,7 @@ class Rd60xxApi:
     @validate_call
     def start_rd_provisioning_without_preload_content(
         self,
-        rd_provision_start: Annotated[RdProvisionStart, Field(description="Typed provisioning request; unknown fields are rejected. Requires LAN bearer authentication or trusted USB, including when accessed through the open AP.")],
+        rd_provision_start: Annotated[RdProvisionStart, Field(description="Typed provisioning request; unknown fields are rejected. Requires a LAN bearer token, a UI session with X-Lab-CSRF, or trusted USB, including when accessed through the open AP.")],
         _request_timeout: Union[
             None,
             Annotated[StrictFloat, Field(gt=0)],
@@ -1636,7 +1641,7 @@ class Rd60xxApi:
 
         Begin the two-stage original RIDEN pairing process. First reset/select WiFi on the target PSU with output OFF. The ESP sends its AP address as the server target; after checking the PSU display call advanceRdProvisioning. Stop/release existing devices and finish Wi-Fi scans/changes first (409 otherwise). Only one session is active. Does not save a device configuration or enable an output.
 
-        :param rd_provision_start: Typed provisioning request; unknown fields are rejected. Requires LAN bearer authentication or trusted USB, including when accessed through the open AP. (required)
+        :param rd_provision_start: Typed provisioning request; unknown fields are rejected. Requires a LAN bearer token, a UI session with X-Lab-CSRF, or trusted USB, including when accessed through the open AP. (required)
         :type rd_provision_start: RdProvisionStart
         :param _request_timeout: timeout setting for this request. If one
                                  number provided, it will be total request
@@ -1735,6 +1740,7 @@ class Rd60xxApi:
 
         # authentication setting
         _auth_settings: List[str] = [
+            'browserSession', 
             'bearerAuth'
         ]
 

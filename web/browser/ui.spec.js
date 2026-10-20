@@ -1,3 +1,4 @@
+import {mockAuth,signIn} from './auth-helper.js';
 import {test,expect} from '@playwright/test';
 const device=(id,driver,capabilities)=>({id,driver,identity:'synthetic-'+id,transport:'test',capabilities,state:'ready',output:'off',limits:{voltage_v:25,current_a:.2,power_w:5,max_age_ms:3000}});
 async function mock(page,devices=[device('load-2','dl24m',['output','load.cc','dl24m.settings'])]){
@@ -7,7 +8,7 @@ async function mock(page,devices=[device('load-2','dl24m',['output','load.cc','d
   const fulfill=(value,status=200)=>route.fulfill({status,contentType:'application/json',body:JSON.stringify(value)});
   if(path==='/api/v1/wifi/scan')return fulfill({state:scans++?'complete':'scanning',networks:scans>1?[{ssid:'Lab <b>AP</b>',rssi_dbm:-40,secured:true}]:[]});
   if(path==='/api/v1/wifi'){writes.push({path,method,body,headers:r.headers()});return fulfill({state:'connecting',hostname:'test.local'});}
-  if(r.headers().authorization!=='Bearer test-token')return fulfill({type:'about:blank',title:'Unauthorized',status:401,detail:'Token required'},401);
+  if(!r.headers().cookie?.includes('LabBridgeSession=synthetic-session'))return fulfill({type:'about:blank',title:'Unauthorized',status:401,detail:'Token required'},401);
   if(method==='GET'&&path==='/api/v1/devices')return fulfill({devices});
   if(path==='/api/v1/leases'&&method==='POST')return fulfill({id:'lease-1',device_ids:body.device_ids,expires_at_ms:100000,state:'active'});
   if(path.startsWith('/api/v1/leases/'))return fulfill({id:'lease-1',device_ids:devices.map(d=>d.id),expires_at_ms:100000,state:path.endsWith('/stop')?'stopped':'active'});
@@ -27,9 +28,10 @@ async function mock(page,devices=[device('load-2','dl24m',['output','load.cc','d
   }
   return fulfill({type:'about:blank',title:'Not found',status:404,detail:'Unmocked route'},404);
  });
+ await mockAuth(page);
  return writes;
 }
-async function authenticate(page){await page.getByLabel('API bearer token').fill('test-token');await page.getByRole('button',{name:'Refresh',exact:true}).click();}
+async function authenticate(page){await signIn(page);}
 test('Wi-Fi scan, literal SSID selection and PSK save are separate from instruments',async({page})=>{
  const writes=await mock(page);await page.goto('/');await expect(page.getByRole('heading',{name:'Wi-Fi setup'})).toBeVisible();
  await expect(page.getByLabel('Network name (SSID)')).toHaveValue('Lab <b>AP</b>');await expect(page.locator('b')).toHaveCount(0);
@@ -43,6 +45,31 @@ test('load module uses selected instance, lease, idempotency and asynchronous re
  await page.getByLabel('Load current (A)').fill('.15');await page.getByRole('button',{name:'Set load current'}).click();await expect(page.locator('#status')).toContainText('succeeded');
  const write=writes.find(w=>w.path.endsWith('/components/sink/current'));expect(write.path).toBe('/api/v1/devices/load-2/components/sink/current');expect(write.body).toEqual({current_a:.15});expect(write.headers['x-lab-lease']).toBe('lease-1');expect(write.headers['idempotency-key']).toHaveLength(32);
  await page.getByRole('button',{name:'Output ON'}).click();await expect(page.locator('#status')).toContainText('"finalOutput": "on"');await expect(page.getByRole('button',{name:'Output ON'})).toBeDisabled();
+});
+test('an expired session shows login and never replays the failed actuator write',async({page})=>{
+ await mock(page);await page.goto('/devices');await authenticate(page);
+ await page.getByRole('button',{name:'Reserve instruments',exact:true}).click();
+ await expect(page.getByRole('button',{name:'Release and stop',exact:true})).toBeVisible();
+ let attempts=0;
+ await page.route('**/api/v1/devices/load-2/components/sink/current',route=>{
+  ++attempts;return route.fulfill({status:401,contentType:'application/problem+json',body:JSON.stringify({detail:'Session expired'})});
+ });
+ await page.getByLabel('Load current (A)').fill('.15');await page.getByRole('button',{name:'Set load current',exact:true}).click();
+ await expect(page.getByRole('heading',{name:'Sign in',exact:true})).toBeVisible();
+ await authenticate(page);await expect(page.getByRole('heading',{name:'load-2 · dl24m'})).toBeVisible();
+ expect(attempts).toBe(1);
+});
+test('sign out attempts lease STOP before revoking the session, including failed STOP',async({page})=>{
+ await mock(page);await page.goto('/devices');await authenticate(page);
+ await page.getByRole('button',{name:'Reserve instruments',exact:true}).click();
+ await expect(page.getByRole('button',{name:'Release and stop',exact:true})).toBeVisible();
+ const calls=[];page.on('request',request=>{if(request.url().endsWith('/stop')||request.url().endsWith('/auth/session'))calls.push(request);});
+ await page.route('**/api/v1/leases/lease-1/stop',route=>route.fulfill({status:503,contentType:'application/problem+json',body:JSON.stringify({detail:'Unavailable'})}));
+ await page.getByRole('button',{name:'Sign out',exact:true}).click();
+ await expect(page.getByRole('heading',{name:'Sign in',exact:true})).toBeVisible();
+ await expect(page.locator('#status')).toContainText('could not be confirmed');
+ expect(calls.map(r=>new URL(r.url()).pathname)).toEqual(['/api/v1/leases/lease-1/stop','/api/v1/auth/session']);
+ expect(calls[0].headers()['x-lab-csrf']).toBe('synthetic-csrf');
 });
 test('unknown output retains an independent STOP without a lease',async({page})=>{
  const d=device('unavailable-load','dl24m',['output','load.cc']);d.state='fault';d.output='unknown';const writes=await mock(page,[d]);await page.goto('/devices');await authenticate(page);

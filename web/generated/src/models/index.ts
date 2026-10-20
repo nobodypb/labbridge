@@ -3,6 +3,7 @@
 export * from './AccessPointRequest';
 export * from './ActuatorSettings';
 export * from './ActuatorState';
+export * from './AuthStatus';
 export * from './CellTemperatureGuard';
 export * from './Component';
 export * from './ComponentList';
@@ -42,6 +43,9 @@ export * from './StopRequest';
 export * from './SwitchPathRequest';
 export * from './TemperatureChannel';
 export * from './TemperatureChannels';
+export * from './UiLogin';
+export * from './UiPasswordChange';
+export * from './UiPasswordSetup';
 export * from './VoltageRequest';
 export * from './WifiNetwork';
 export * from './WifiRequest';

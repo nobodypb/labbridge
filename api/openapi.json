@@ -7,7 +7,7 @@
       "name": "MIT",
       "url": "https://opensource.org/licenses/MIT"
     },
-    "description": "Configure and automate laboratory instruments through one ESP32 bridge. Physical devices expose discoverable source, sink and scalar sensor components; prefer their common routes for portable scripts. Driver-specific routes remain available for specialized settings and compatibility.\n\n## Typical automation sequence\n1. Read node identity/boot_id and discover devices, components, actions and limits.\n2. Reserve all actor devices on this node with createLease and heartbeat at least once per second. Ownership is per physical device, not per component.\n3. Send a setting/output mutation with X-Lab-Lease and a new Idempotency-Key. A 202 response is only acceptance: poll Location until a terminal Operation, checking final_output and restore_pending.\n4. Use valid, fresh sensor readings; preserve sign and units. Integrate only across consecutive samples with unchanged boot_id/epoch and bounded gaps.\n5. Request independent STOP when finished or uncertain, verify OFF, then release the lease. Output OFF is not electrical isolation.\n\n## Failure and retry contract\nThe bridge performs bounded device retries, write/readback verification and recovery. Never infer hardware success from an ATT acknowledgement, an HTTP 202 or a saved setpoint. A terminal failure can still have changed hardware. Device/component STOP requires no lease. Reconnect/reboot never resumes ON. Leases, operation IDs and idempotency keys are boot-local; do not replay an uncertain mutation after a reboot. Monotonic timestamps are not Unix time and cannot be compared across nodes/boots.\n\n## Access and provisioning\nLAN HTTP uses Authorization: Bearer <token> on a trusted network. Obtain the secret using getManagementToken over physically trusted USB. The open LabBridge-Setup AP at 192.168.4.1 allows Wi-Fi setup/scan without bearer credentials; it does not grant laboratory control. The separate UI pages are /wifi, /devices and /dl24 (DL24M Bench). The Bench page uses these same authenticated APIs; unsupported original controls remain visible but disabled. USB uses the same methods/paths with JSON-line requests {id, method, path, headers, body} and replies prefixed LABJSON; ignore other boot/log lines and correlate IDs. Target Wi-Fi PSKs are never returned.\n\n## Local safeguards and hardware scope\nConfigured limits, lease expiry, measurement freshness, activation deadlines and optional external cell-temperature guards operate on the node. They supplement instrument protections and an explicit external battery test profile/wiring arrangement. Read-only sensors may omit actuator limits. Supported endpoint/pin combinations depend on the board. DL24M BLE behavior is commissioned on display Ver: 2.0; RD6018/RD6024, INA228 and Yocto physical commissioning is tracked separately. RD6018 original Wi-Fi modules connect to the ESP AP using RTU-over-TCP; use the module provisioning operations to configure them. Native Yocto USB on ESP is not implemented (use native PC USB or HTTP VirtualHub/YoctoHub)."
+    "description": "Configure and automate laboratory instruments through one ESP32 bridge. Physical devices expose discoverable source, sink and scalar sensor components; prefer their common routes for portable scripts. Driver-specific routes remain available for specialized settings and compatibility.\n\n## Typical automation sequence\n1. Read node identity/boot_id and discover devices, components, actions and limits.\n2. Reserve all actor devices on this node with createLease and heartbeat at least once per second. Ownership is per physical device, not per component.\n3. Send a setting/output mutation with X-Lab-Lease and a new Idempotency-Key. A 202 response is only acceptance: poll Location until a terminal Operation, checking final_output and restore_pending.\n4. Use valid, fresh sensor readings; preserve sign and units. Integrate only across consecutive samples with unchanged boot_id/epoch and bounded gaps.\n5. Request independent STOP when finished or uncertain, verify OFF, then release the lease. Output OFF is not electrical isolation.\n\n## Failure and retry contract\nThe bridge performs bounded device retries, write/readback verification and recovery. Never infer hardware success from an ATT acknowledgement, an HTTP 202 or a saved setpoint. A terminal failure can still have changed hardware. Device/component STOP requires no lease. Reconnect/reboot never resumes ON. Leases, operation IDs and idempotency keys are boot-local; do not replay an uncertain mutation after a reboot. Monotonic timestamps are not Unix time and cannot be compared across nodes/boots.\n\n## Access and provisioning\nLAN HTTP accepts Authorization: Bearer <token> for scripts or a UI password session on a trusted network. The UI redirects unauthenticated access to password login and resumes read-only discovery, never an uncertain mutation. UI passwords use salted version-two PBKDF2-HMAC-SHA256 verifiers with 6,000 iterations, deliberately tuned for basic protection and a login below three seconds on the ESP. Experimental 600,000-round verifiers require trusted USB password recovery; their hashes are never reinterpreted with fewer rounds. Choose the first password via the setup AP or trusted USB. HTTP is unencrypted; HTTPS with optional mTLS authentication is a separate planned feature. Obtain the API bearer secret using getManagementToken over physically trusted USB. The open LabBridge-Setup AP at 192.168.4.1 allows Wi-Fi setup/scan without bearer credentials; it does not grant laboratory control. The separate UI pages are /wifi, /devices and /dl24 (DL24M Bench). The Bench page shares the UI password session and CSRF protection and uses the same laboratory APIs; unsupported original controls remain visible but disabled. USB uses the same methods/paths with JSON-line requests {id, method, path, headers, body} and replies prefixed LABJSON; ignore other boot/log lines and correlate IDs. Target Wi-Fi PSKs are never returned.\n\n## Local safeguards and hardware scope\nConfigured limits, lease expiry, measurement freshness, activation deadlines and optional external cell-temperature guards operate on the node. They supplement instrument protections and an explicit external battery test profile/wiring arrangement. Read-only sensors may omit actuator limits. Supported endpoint/pin combinations depend on the board. DL24M BLE behavior is commissioned on display Ver: 2.0; RD6018/RD6024, INA228 and Yocto physical commissioning is tracked separately. RD6018 original Wi-Fi modules connect to the ESP AP using RTU-over-TCP; use the module provisioning operations to configure them. Native Yocto USB on ESP is not implemented (use native PC USB or HTTP VirtualHub/YoctoHub)."
   },
   "servers": [
     {
@@ -17,6 +17,9 @@
   "security": [
     {
       "bearerAuth": []
+    },
+    {
+      "browserSession": []
     }
   ],
   "paths": {
@@ -844,7 +847,235 @@
           "description": "JSON request with the fields documented by the referenced schema. Unknown properties are rejected; use {} for an empty StopRequest."
         },
         "summary": "Set access-point security independently",
-        "description": "Persist AP security and apply after the response (about 300 ms). Requires confirmed OFF/quiescent instruments, released leases and no pending Wi-Fi operation; returns 409 otherwise. AP clients disconnect and must reconnect with the new passphrase. Station credentials are unchanged. Use USB or the station address to retain management access. Requires bearer authentication on all HTTP interfaces, including the open AP. Independent instrument STOP remains available. Empty PSK explicitly restores the open default; no automatic fallback opens a secured AP."
+        "description": "Persist AP security and apply after the response (about 300 ms). Requires confirmed OFF/quiescent instruments, released leases and no pending Wi-Fi operation; returns 409 otherwise. AP clients disconnect and must reconnect with the new passphrase. Station credentials are unchanged. Use USB or the station address to retain management access. Requires a bearer token or UI session with X-Lab-CSRF on all HTTP interfaces, including the open AP. Independent instrument STOP remains available. Empty PSK explicitly restores the open default; no automatic fallback opens a secured AP."
+      }
+    },
+    "/api/v1/auth/status": {
+      "get": {
+        "operationId": "getAuthStatus",
+        "tags": [
+          "core"
+        ],
+        "summary": "Read browser authentication state",
+        "description": "Public status for UI bootstrap. Does not start a session, reveal a password or return the API bearer token. setup_allowed depends on the receiving interface, not on client-supplied headers.",
+        "security": [],
+        "responses": {
+          "200": {
+            "description": "Current browser authentication state. Login additionally sets a private HttpOnly, SameSite=Strict cookie with a twelve-hour absolute lifetime.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthStatus"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Request rejected: 400 invalid schema, 401 wrong password or missing/expired session, 403 forbidden transport/origin/CSRF, 409 password already configured, 422 password confirmation mismatch, 429 worker/session/rate limit, or 503 password storage/crypto unavailable. Secrets are never echoed.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/auth/setup": {
+      "post": {
+        "operationId": "setupUiPassword",
+        "tags": [
+          "core"
+        ],
+        "summary": "Choose the first UI password",
+        "description": "Only through the setup AP or trusted USB while no password exists. HTTP requires same-origin JSON. Confirm both password entries. Concurrent setup cannot overwrite an existing password. Does not automatically log in.",
+        "security": [],
+        "responses": {
+          "200": {
+            "description": "Current browser authentication state. Login additionally sets a private HttpOnly, SameSite=Strict cookie with a twelve-hour absolute lifetime.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthStatus"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Request rejected: 400 invalid schema, 401 wrong password or missing/expired session, 403 forbidden transport/origin/CSRF, 409 password already configured, 422 password confirmation mismatch, 429 worker/session/rate limit, or 503 password storage/crypto unavailable. Secrets are never echoed.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "description": "Closed typed request. Passwords are secrets; never put them in shared logs or command history.",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UiPasswordSetup"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/auth/login": {
+      "post": {
+        "operationId": "loginUi",
+        "tags": [
+          "core"
+        ],
+        "summary": "Sign in with the UI password",
+        "description": "Same-origin JSON password login. Creates an opaque cookie session, not a bearer token. Eight concurrent sessions maximum. After five failed verifications in a rolling minute, return 429 with Retry-After; a busy password worker also returns 429. Hashing must not block laboratory STOP.",
+        "security": [],
+        "responses": {
+          "200": {
+            "description": "Current browser authentication state. Login additionally sets a private HttpOnly, SameSite=Strict cookie with a twelve-hour absolute lifetime.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthStatus"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Request rejected: 400 invalid schema, 401 wrong password or missing/expired session, 403 forbidden transport/origin/CSRF, 409 password already configured, 422 password confirmation mismatch, 429 worker/session/rate limit, or 503 password storage/crypto unavailable. Secrets are never echoed.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "description": "Closed typed request. Passwords are secrets; never put them in shared logs or command history.",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UiLogin"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/auth/session": {
+      "delete": {
+        "operationId": "logoutUi",
+        "tags": [
+          "core"
+        ],
+        "summary": "End this browser session",
+        "description": "Requires a current browser session and X-Lab-CSRF. Invalidates this session and clears its cookie. The UI first attempts lease STOP/release; logout itself does not confirm physical OFF.",
+        "security": [
+          {
+            "browserSession": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Current browser authentication state. Login additionally sets a private HttpOnly, SameSite=Strict cookie with a twelve-hour absolute lifetime.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthStatus"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Request rejected: 400 invalid schema, 401 wrong password or missing/expired session, 403 forbidden transport/origin/CSRF, 409 password already configured, 422 password confirmation mismatch, 429 worker/session/rate limit, or 503 password storage/crypto unavailable. Secrets are never echoed.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "X-Lab-CSRF",
+            "in": "header",
+            "required": false,
+            "description": "Session-bound anti-CSRF secret for browser mutations. Required over HTTP; trusted USB bypasses browser authentication.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ]
+      }
+    },
+    "/api/v1/auth/password": {
+      "put": {
+        "operationId": "changeUiPassword",
+        "tags": [
+          "core"
+        ],
+        "summary": "Change or recover the UI password",
+        "description": "Network access requires a valid browser session, X-Lab-CSRF and current_password. Trusted USB permits recovery without an old password. A successful replacement invalidates all browser sessions, clears failed-login state and leaves existing API bearer tokens intact.",
+        "security": [
+          {
+            "browserSession": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Current browser authentication state. Login additionally sets a private HttpOnly, SameSite=Strict cookie with a twelve-hour absolute lifetime.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthStatus"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Request rejected: 400 invalid schema, 401 wrong password or missing/expired session, 403 forbidden transport/origin/CSRF, 409 password already configured, 422 password confirmation mismatch, 429 worker/session/rate limit, or 503 password storage/crypto unavailable. Secrets are never echoed.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "description": "Closed typed request. Passwords are secrets; never put them in shared logs or command history.",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UiPasswordChange"
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "X-Lab-CSRF",
+            "in": "header",
+            "required": false,
+            "description": "Session-bound anti-CSRF secret for browser mutations. Required over HTTP; trusted USB bypasses browser authentication.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ]
       }
     },
     "/api/v1/devices/{deviceId}/components": {
@@ -2448,7 +2679,7 @@
         },
         "requestBody": {
           "required": true,
-          "description": "Typed provisioning request; unknown fields are rejected. Requires LAN bearer authentication or trusted USB, including when accessed through the open AP.",
+          "description": "Typed provisioning request; unknown fields are rejected. Requires a LAN bearer token, a UI session with X-Lab-CSRF, or trusted USB, including when accessed through the open AP.",
           "content": {
             "application/json": {
               "schema": {
@@ -2491,7 +2722,7 @@
         },
         "requestBody": {
           "required": true,
-          "description": "Typed provisioning request; unknown fields are rejected. Requires LAN bearer authentication or trusted USB, including when accessed through the open AP.",
+          "description": "Typed provisioning request; unknown fields are rejected. Requires a LAN bearer token, a UI session with X-Lab-CSRF, or trusted USB, including when accessed through the open AP.",
           "content": {
             "application/json": {
               "schema": {
@@ -2534,7 +2765,7 @@
         },
         "requestBody": {
           "required": true,
-          "description": "Typed provisioning request; unknown fields are rejected. Requires LAN bearer authentication or trusted USB, including when accessed through the open AP.",
+          "description": "Typed provisioning request; unknown fields are rejected. Requires a LAN bearer token, a UI session with X-Lab-CSRF, or trusted USB, including when accessed through the open AP.",
           "content": {
             "application/json": {
               "schema": {
@@ -2551,7 +2782,13 @@
       "bearerAuth": {
         "type": "http",
         "scheme": "bearer",
-        "description": "Node bearer token for trusted-LAN HTTP, provisioned through physically trusted USB. USB local management is trusted without this header. Wi-Fi setup routes permit unauthenticated access only on the open setup AP; laboratory routes do not."
+        "description": "Node bearer token for trusted-LAN HTTP, provisioned through physically trusted USB. USB local management is trusted without this header. Wi-Fi setup routes permit unauthenticated access only on the setup AP (open by default); laboratory routes do not. Alternatively use a UI password session cookie; cookie mutations additionally require X-Lab-CSRF. Bearer clients remain supported without cookie/CSRF headers."
+      },
+      "browserSession": {
+        "type": "apiKey",
+        "in": "cookie",
+        "name": "LabBridgeSession",
+        "description": "Boot-local opaque UI session set by loginUi; twelve-hour absolute expiry. Cookie-authenticated HTTP mutations also require same-origin JSON (where a body is used) and X-Lab-CSRF. HTTP is for trusted LAN use; it is not encrypted."
       }
     },
     "schemas": {
@@ -3529,6 +3766,131 @@
             "description": "Empty to restore the open AP, otherwise 8..63 printable ASCII characters. Supply through stdin or a private args file, not a command-line argument recorded in shell history."
           }
         }
+      },
+      "UiLogin": {
+        "type": "object",
+        "description": "Password login on the current node. JSON and same-origin browser requests only.",
+        "additionalProperties": false,
+        "required": [
+          "password"
+        ],
+        "properties": {
+          "password": {
+            "type": "string",
+            "description": "UI password, 12..128 Unicode characters; preserve spaces and never log or return it.",
+            "format": "password",
+            "minLength": 12,
+            "maxLength": 128,
+            "writeOnly": true,
+            "x-labbridge-secret": true
+          }
+        },
+        "x-labbridge-secret-model": true
+      },
+      "UiPasswordSetup": {
+        "type": "object",
+        "description": "Choose and confirm the first password over the setup AP or trusted USB. No default password.",
+        "additionalProperties": false,
+        "required": [
+          "password",
+          "confirm_password"
+        ],
+        "properties": {
+          "password": {
+            "type": "string",
+            "description": "UI password, 12..128 Unicode characters; preserve spaces and never log or return it.",
+            "format": "password",
+            "minLength": 12,
+            "maxLength": 128,
+            "writeOnly": true,
+            "x-labbridge-secret": true
+          },
+          "confirm_password": {
+            "type": "string",
+            "description": "UI password, 12..128 Unicode characters; preserve spaces and never log or return it.",
+            "format": "password",
+            "minLength": 12,
+            "maxLength": 128,
+            "writeOnly": true,
+            "x-labbridge-secret": true
+          }
+        },
+        "x-labbridge-secret-model": true
+      },
+      "UiPasswordChange": {
+        "type": "object",
+        "description": "Replace the UI password and invalidate all browser sessions. Network requests require the current session, CSRF header and current_password; trusted USB may omit current_password for recovery. API bearer tokens are unchanged.",
+        "additionalProperties": false,
+        "required": [
+          "password",
+          "confirm_password"
+        ],
+        "properties": {
+          "password": {
+            "type": "string",
+            "description": "UI password, 12..128 Unicode characters; preserve spaces and never log or return it.",
+            "format": "password",
+            "minLength": 12,
+            "maxLength": 128,
+            "writeOnly": true,
+            "x-labbridge-secret": true
+          },
+          "confirm_password": {
+            "type": "string",
+            "description": "UI password, 12..128 Unicode characters; preserve spaces and never log or return it.",
+            "format": "password",
+            "minLength": 12,
+            "maxLength": 128,
+            "writeOnly": true,
+            "x-labbridge-secret": true
+          },
+          "current_password": {
+            "type": "string",
+            "description": "UI password, 12..128 Unicode characters; preserve spaces and never log or return it.",
+            "format": "password",
+            "minLength": 12,
+            "maxLength": 128,
+            "writeOnly": true,
+            "x-labbridge-secret": true
+          }
+        },
+        "x-labbridge-secret-model": true
+      },
+      "AuthStatus": {
+        "type": "object",
+        "description": "Authentication state for the current transport and browser cookie. Session secrets are private and must not be logged. Sessions last twelve hours, are boot-local and use the node monotonic clock.",
+        "additionalProperties": false,
+        "required": [
+          "password_configured",
+          "setup_allowed",
+          "authenticated"
+        ],
+        "properties": {
+          "password_configured": {
+            "type": "boolean",
+            "description": "Whether a UI password has been configured."
+          },
+          "setup_allowed": {
+            "type": "boolean",
+            "description": "Whether first-password setup is permitted on this connection: setup AP or trusted USB, with no existing password."
+          },
+          "authenticated": {
+            "type": "boolean",
+            "description": "Whether this request has a valid browser session. Bearer access and trusted USB do not themselves create a browser session."
+          },
+          "csrf_token": {
+            "type": "string",
+            "description": "Secret session-bound value for X-Lab-CSRF on cookie-authenticated mutations; only present for a current session.",
+            "format": "password",
+            "x-labbridge-secret": true
+          },
+          "expires_in_ms": {
+            "type": "integer",
+            "description": "Remaining absolute browser session lifetime in node-monotonic milliseconds.",
+            "minimum": 0
+          }
+        },
+        "x-labbridge-secret-model": true
       },
       "Component": {
         "type": "object",

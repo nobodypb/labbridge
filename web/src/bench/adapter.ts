@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (c) 2026 LabBridge contributors
 import {RequestQueue} from './request-queue.js';
+import {UiAuth} from '../auth';
 import {Configuration,CoreApi,ComponentsApi,Dl24mApi} from '../../generated/src/index';
 import type {Device,Measurements,Dl24mSettings,Operation,ActuatorState} from '../../generated/src/index';
 export async function message(error:unknown):Promise<string>{
@@ -13,19 +14,20 @@ export async function message(error:unknown):Promise<string>{
 const delay=(ms:number)=>new Promise(r=>setTimeout(r,ms));
 function key(){return Array.from(crypto.getRandomValues(new Uint8Array(16)),b=>b.toString(16).padStart(2,'0')).join('');}
 export class BenchAdapter {
- token='';devices:Device[]=[];device?:Device;boot='';lease='';connected=false;busy=false;uncertain=false;
+ readonly auth=new UiAuth();
+ devices:Device[]=[];device?:Device;boot='';lease='';connected=false;busy=false;uncertain=false;
  measurement?:Measurements;settings:Dl24mSettings={};actor?:ActuatorState;receivedAt=0;pollMs=1000;
  onChange=()=>{};onSample=(m:Measurements)=>{};onError=(m:string)=>{};
  private generation=0;private operationGeneration=0;private timer?:number;private heartbeat?:number;private heartbeatBusy=false;private settingsAt=0;
  private readonly requests=new RequestQueue();
- readonly config=new Configuration({basePath:location.origin,accessToken:()=>this.token,fetchApi:(input,init)=>{
+ readonly config=new Configuration({basePath:location.origin,fetchApi:(input,init)=>{
   const generation=this.generation,path=new URL(String(input),location.origin).pathname;
   const stop=path.endsWith('/stop'),priority=stop?0:path.endsWith('/heartbeat')?1:init?.method!=='GET'||path.includes('/operations/')?2:3;
   return this.requests.run(async()=>{
    if(generation!==this.generation&&!stop)throw Error('Connection changed before request was sent');
    const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),4000);
    try{
-    const response=await fetch(input,{...init,signal:controller.signal});
+    const response=await this.auth.fetch(input,{...init,signal:controller.signal});
     // Keep the slot until the response body has arrived, not just its headers.
     await response.clone().arrayBuffer();return response;
    }catch(error){
@@ -36,24 +38,39 @@ export class BenchAdapter {
   },priority);
  }});
  readonly core=new CoreApi(this.config);readonly components=new ComponentsApi(this.config);readonly dl=new Dl24mApi(this.config);
+ constructor(){
+  // Password work uses its own request: it must not hold the instrument queue,
+  // its four-second request timeout, or priority STOP and lease heartbeats.
+  this.auth.core=new CoreApi(new Configuration({basePath:location.origin,fetchApi:this.auth.fetch}));
+ }
  get sink(){return this.device?.components?.find(c=>c.kind==='sink')?.id;}
  get fresh(){return !!this.measurement&&this.measurement.quality==='valid'&&this.measurement.ageMs+performance.now()-this.receivedAt<=(this.device?.limits?.maxAgeMs??0);}
- get writable(){return this.connected&&!!this.lease&&!this.busy&&!this.uncertain&&this.fresh&&this.actor?.state==='ready'&&this.actor.output!=='unknown';}
+ get writable(){return this.auth.state.authenticated&&!this.auth.loggingOut&&this.connected&&!!this.lease&&!this.busy&&!this.uncertain&&this.fresh&&this.actor?.state==='ready'&&this.actor.output!=='unknown';}
  get off(){return this.writable&&this.actor?.output==='off';}
  get canOn(){return this.off&&this.settings.mode===0;}
  supports(action:string){return this.device?.components?.some(c=>c.id===this.sink&&c.actions.includes(action))??false;}
  private cancelPolling(){this.generation++;clearTimeout(this.timer);}
  private stopHeartbeat(){clearInterval(this.heartbeat);this.heartbeat=undefined;}
  private lose(text:string){this.cancelPolling();this.stopHeartbeat();this.connected=false;this.lease='';this.uncertain=true;this.actor=undefined;this.onError(text);this.onChange();}
- async connect(token:string){
+ endSession(){
+  this.requests.cancelPending(Error('Session ended; queued commands cancelled'));
+  this.operationGeneration++;this.busy=false;
+  this.lose('Bench control disconnected. Verify outputs OFF; unconfirmed reservations expire on the bridge.');
+ }
+ async connect(){
+  if(!this.auth.state.authenticated||this.auth.loggingOut)throw Error('Sign in before connecting');
   if(this.lease)await this.release();
-  this.cancelPolling();this.token=token;this.connected=false;this.uncertain=false;this.measurement=undefined;this.actor=undefined;this.onChange();
+  this.cancelPolling();const generation=this.generation;
+  this.connected=false;this.uncertain=false;this.measurement=undefined;this.actor=undefined;this.onChange();
   const node=await this.core.getNode(),list=await this.core.listDevices();
+  if(generation!==this.generation)throw Error('Session changed during discovery');
   this.devices=list.devices.filter(d=>d.driver==='dl24m');this.boot=node.bootId;
   if(!this.devices.length){this.device=undefined;this.onChange();throw Error('No DL24M device configured on this node');}
   this.device=this.devices.find(d=>d.id===this.device?.id)??this.devices[0];
   if(!this.sink)throw Error('DL24M sink component unavailable');
-  this.settingsAt=0;this.connected=true;await this.poll(this.generation);this.onChange();
+  this.settingsAt=0;this.connected=true;await this.poll(generation);
+  if(generation!==this.generation||!this.connected)throw Error('Connection changed during discovery');
+  this.onChange();
  }
  private async poll(generation:number){
   try{
@@ -74,6 +91,7 @@ export class BenchAdapter {
   if(generation===this.generation&&this.connected)this.timer=window.setTimeout(()=>void this.poll(generation),this.pollMs);
  }
  async select(id:string){
+  if(!this.auth.state.authenticated||this.auth.loggingOut)throw Error('Sign in before selecting a device');
   if(this.busy)throw Error('Wait for the pending operation before switching devices');
   if(this.lease)await this.release();
   const next=this.devices.find(d=>d.id===id);if(!next)throw Error('Unknown DL24M device');
@@ -81,9 +99,12 @@ export class BenchAdapter {
   this.onChange();if(this.connected)await this.poll(this.generation);
  }
  async reserve(){
+  if(!this.auth.state.authenticated||this.auth.loggingOut)throw Error('Sign in before reserving');
   if(!this.connected||!this.device||!this.fresh||this.uncertain)throw Error('Reconnect and wait for fresh measurements before reserving');
   if(this.lease)throw Error('Device already reserved by this page');
+  const generation=this.generation;
   const l=await this.core.createLease({leaseRequest:{deviceIds:[this.device.id],ttlMs:10000}});
+  if(generation!==this.generation||this.auth.loggingOut)throw Error('Session changed while reserving; verify outputs OFF and allow lease expiry');
   if(l.state!=='active')throw Error('Reservation is not active');
   this.lease=l.id;this.heartbeat=window.setInterval(()=>void this.beat(),1000);this.onChange();
  }

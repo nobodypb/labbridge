@@ -12,7 +12,7 @@ Configure and automate laboratory instruments through one ESP32 bridge. Physical
 The bridge performs bounded device retries, write/readback verification and recovery. Never infer hardware success from an ATT acknowledgement, an HTTP 202 or a saved setpoint. A terminal failure can still have changed hardware. Device/component STOP requires no lease. Reconnect/reboot never resumes ON. Leases, operation IDs and idempotency keys are boot-local; do not replay an uncertain mutation after a reboot. Monotonic timestamps are not Unix time and cannot be compared across nodes/boots.
 
 ## Access and provisioning
-LAN HTTP uses Authorization: Bearer <token> on a trusted network. Obtain the secret using getManagementToken over physically trusted USB. The open LabBridge-Setup AP at 192.168.4.1 allows Wi-Fi setup/scan without bearer credentials; it does not grant laboratory control. The separate UI pages are /wifi, /devices and /dl24 (DL24M Bench). The Bench page uses these same authenticated APIs; unsupported original controls remain visible but disabled. USB uses the same methods/paths with JSON-line requests {id, method, path, headers, body} and replies prefixed LABJSON; ignore other boot/log lines and correlate IDs. Target Wi-Fi PSKs are never returned.
+LAN HTTP accepts Authorization: Bearer <token> for scripts or a UI password session on a trusted network. The UI redirects unauthenticated access to password login and resumes read-only discovery, never an uncertain mutation. UI passwords use salted version-two PBKDF2-HMAC-SHA256 verifiers with 6,000 iterations, deliberately tuned for basic protection and a login below three seconds on the ESP. Experimental 600,000-round verifiers require trusted USB password recovery; their hashes are never reinterpreted with fewer rounds. Choose the first password via the setup AP or trusted USB. HTTP is unencrypted; HTTPS with optional mTLS authentication is a separate planned feature. Obtain the API bearer secret using getManagementToken over physically trusted USB. The open LabBridge-Setup AP at 192.168.4.1 allows Wi-Fi setup/scan without bearer credentials; it does not grant laboratory control. The separate UI pages are /wifi, /devices and /dl24 (DL24M Bench). The Bench page shares the UI password session and CSRF protection and uses the same laboratory APIs; unsupported original controls remain visible but disabled. USB uses the same methods/paths with JSON-line requests {id, method, path, headers, body} and replies prefixed LABJSON; ignore other boot/log lines and correlate IDs. Target Wi-Fi PSKs are never returned.
 
 ## Local safeguards and hardware scope
 Configured limits, lease expiry, measurement freshness, activation deadlines and optional external cell-temperature guards operate on the node. They supplement instrument protections and an explicit external battery test profile/wiring arrangement. Read-only sensors may omit actuator limits. Supported endpoint/pin combinations depend on the board. DL24M BLE behavior is commissioned on display Ver: 2.0; RD6018/RD6024, INA228 and Yocto physical commissioning is tracked separately. RD6018 original Wi-Fi modules connect to the ESP AP using RTU-over-TCP; use the module provisioning operations to configure them. Native Yocto USB on ESP is not implemented (use native PC USB or HTTP VirtualHub/YoctoHub).
@@ -82,6 +82,12 @@ configuration = labbridge_generated.Configuration(
 # Examples for each auth method are provided below, use the example that
 # satisfies your auth use case.
 
+# Configure API key authorization: browserSession
+configuration.api_key['browserSession'] = os.environ["API_KEY"]
+
+# Uncomment below to setup prefix (e.g. Bearer) for API key, if needed
+# configuration.api_key_prefix['browserSession'] = 'Bearer'
+
 # Configure Bearer authorization: bearerAuth
 configuration = labbridge_generated.Configuration(
     access_token = os.environ["BEARER_TOKEN"]
@@ -121,9 +127,11 @@ Class | Method | HTTP request | Description
 *ComponentsApi* | [**set_component_output**](docs/ComponentsApi.md#set_component_output) | **PUT** /api/v1/devices/{deviceId}/components/{componentId}/output | Enable or disable one actor
 *ComponentsApi* | [**set_component_voltage**](docs/ComponentsApi.md#set_component_voltage) | **PUT** /api/v1/devices/{deviceId}/components/{componentId}/voltage | Set a source voltage target
 *ComponentsApi* | [**stop_component**](docs/ComponentsApi.md#stop_component) | **POST** /api/v1/devices/{deviceId}/components/{componentId}/stop | Request priority STOP for an actor
+*CoreApi* | [**change_ui_password**](docs/CoreApi.md#change_ui_password) | **PUT** /api/v1/auth/password | Change or recover the UI password
 *CoreApi* | [**configure_access_point**](docs/CoreApi.md#configure_access_point) | **PUT** /api/v1/wifi/ap | Set access-point security independently
 *CoreApi* | [**configure_wifi**](docs/CoreApi.md#configure_wifi) | **PUT** /api/v1/wifi | Save Wi-Fi credentials and connect
 *CoreApi* | [**create_lease**](docs/CoreApi.md#create_lease) | **POST** /api/v1/leases | Reserve a group of physical devices
+*CoreApi* | [**get_auth_status**](docs/CoreApi.md#get_auth_status) | **GET** /api/v1/auth/status | Read browser authentication state
 *CoreApi* | [**get_configuration**](docs/CoreApi.md#get_configuration) | **GET** /api/v1/configuration | Read persistent node configuration
 *CoreApi* | [**get_device**](docs/CoreApi.md#get_device) | **GET** /api/v1/devices/{deviceId} | Inspect one physical device
 *CoreApi* | [**get_lease**](docs/CoreApi.md#get_lease) | **GET** /api/v1/leases/{leaseId} | Inspect lease ownership and deadline
@@ -134,9 +142,12 @@ Class | Method | HTTP request | Description
 *CoreApi* | [**get_wifi_state**](docs/CoreApi.md#get_wifi_state) | **GET** /api/v1/wifi | Read Wi-Fi provisioning state
 *CoreApi* | [**heartbeat_lease**](docs/CoreApi.md#heartbeat_lease) | **POST** /api/v1/leases/{leaseId}/heartbeat | Renew an active lease
 *CoreApi* | [**list_devices**](docs/CoreApi.md#list_devices) | **GET** /api/v1/devices | Discover configured instruments
+*CoreApi* | [**login_ui**](docs/CoreApi.md#login_ui) | **POST** /api/v1/auth/login | Sign in with the UI password
+*CoreApi* | [**logout_ui**](docs/CoreApi.md#logout_ui) | **DELETE** /api/v1/auth/session | End this browser session
 *CoreApi* | [**scan_wifi**](docs/CoreApi.md#scan_wifi) | **GET** /api/v1/wifi/scan | Scan nearby Wi-Fi networks
 *CoreApi* | [**set_configuration**](docs/CoreApi.md#set_configuration) | **PUT** /api/v1/configuration | Validate and persist a complete configuration
 *CoreApi* | [**set_output**](docs/CoreApi.md#set_output) | **PUT** /api/v1/devices/{deviceId}/output | Enable or disable a physical device output
+*CoreApi* | [**setup_ui_password**](docs/CoreApi.md#setup_ui_password) | **POST** /api/v1/auth/setup | Choose the first UI password
 *CoreApi* | [**stop_device**](docs/CoreApi.md#stop_device) | **POST** /api/v1/devices/{deviceId}/stop | Request independent priority STOP
 *CoreApi* | [**stop_lease**](docs/CoreApi.md#stop_lease) | **POST** /api/v1/leases/{leaseId}/stop | Release ownership and stop the lease group
 *Dl24mApi* | [**get_dl24m_registers**](docs/Dl24mApi.md#get_dl24m_registers) | **GET** /api/v1/devices/{deviceId}/dl24m/registers | Read audited raw DL24M register cache
@@ -161,6 +172,7 @@ Class | Method | HTTP request | Description
  - [AccessPointRequest](docs/AccessPointRequest.md)
  - [ActuatorSettings](docs/ActuatorSettings.md)
  - [ActuatorState](docs/ActuatorState.md)
+ - [AuthStatus](docs/AuthStatus.md)
  - [CellTemperatureGuard](docs/CellTemperatureGuard.md)
  - [Component](docs/Component.md)
  - [ComponentList](docs/ComponentList.md)
@@ -200,6 +212,9 @@ Class | Method | HTTP request | Description
  - [SwitchPathRequest](docs/SwitchPathRequest.md)
  - [TemperatureChannel](docs/TemperatureChannel.md)
  - [TemperatureChannels](docs/TemperatureChannels.md)
+ - [UiLogin](docs/UiLogin.md)
+ - [UiPasswordChange](docs/UiPasswordChange.md)
+ - [UiPasswordSetup](docs/UiPasswordSetup.md)
  - [VoltageRequest](docs/VoltageRequest.md)
  - [WifiNetwork](docs/WifiNetwork.md)
  - [WifiRequest](docs/WifiRequest.md)
@@ -217,6 +232,13 @@ Authentication schemes defined for the API:
 ### bearerAuth
 
 - **Type**: Bearer authentication
+
+<a id="browserSession"></a>
+### browserSession
+
+- **Type**: API key
+- **API key parameter name**: LabBridgeSession
+- **Location**: 
 
 
 ## Author

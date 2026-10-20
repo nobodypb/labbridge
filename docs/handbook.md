@@ -230,7 +230,7 @@ For protected provisioning, connect a phone/client to the AP and keep it associa
 Keep the target PSU output OFF and configure one module at a time. On the PSU,
 select WiFi/address 1, reset the previous Wi-Fi setup and restart. In `/devices`,
 enter the API token, open **RD60xx Wi-Fi setup**, confirm output OFF and start.
-These setup operations require bearer authentication even on the open AP; USB
+These setup operations require a bearer token or UI session with CSRF even on the open AP; USB
 management is trusted. Existing leases/operations must be released and shutdown
 obligations resolved. Wi-Fi scans/changes, configuration writes and new leases
 are blocked while pairing; independent STOP remains available.
@@ -471,10 +471,68 @@ an uncertain write after reboot. `POST /devices/{id}/stop` needs no lease.
 Errors use `application/problem+json`, including final output and restoration
 state when known. A failed operation can still have changed the instrument.
 
-HTTP uses bearer authentication on a trusted LAN. Provisioning on the open
-`LabBridge-Setup` AP exposes only Wi-Fi setup/scan, not authenticated laboratory
-controls. `/wifi` and `/devices` are separate linked pages. No AP password is
-required; a target network's PSK is entered on `/wifi` and never returned.
+HTTP accepts a node bearer token for scripts or a password session for the UI.
+Both grant the same laboratory access; leases, idempotency and output safety
+checks still apply. The shared device password has no username or default.
+
+Choose the first password through the setup AP at `http://192.168.4.1` or trusted
+USB. LAN access cannot claim an unconfigured password. An existing node retains
+its API token and receives no default UI password during upgrade. Set/recover
+its UI password with `labbridge --endpoint serial:/dev/ttyACM0 ui-password`;
+the CLI asks twice with hidden input and never emits the password. UI password
+changes require the current session, old password and matching new entries;
+USB recovery bypasses the old password. Passwords contain 12..128 Unicode code
+points, with spaces preserved. Only a salted PBKDF2-HMAC-SHA256 verifier
+(6,000 iterations, version-two parameters) is persisted separately from the API
+token and Wi-Fi credentials.
+
+The UI has password-manager-compatible forms on `/wifi` and `/devices`. LAN
+Wi-Fi discovery prompts for login and resumes automatically after success.
+Actuator mutations are never automatically repeated after authentication loss.
+At the setup AP, Wi-Fi status, scan and station SSID/PSK configuration remain
+public, including when the AP itself uses WPA2. AP security changes, RD
+provisioning and laboratory control still require authentication. Unknown AP
+secrets and saved station PSKs are never returned.
+
+Browser sessions use opaque `HttpOnly; SameSite=Strict` cookies, remain usable
+across page navigation/reload for an absolute twelve hours, and are limited to
+eight concurrent sessions. They are boot-local: a reboot or password replacement
+invalidates all of them; logout ends only the current session. IP and mDNS
+hostname visits use separate browser cookies. The UI first attempts STOP/release
+of its current lease on logout. A failed request does not prove OFF; existing
+lease expiry and on-node safety checks remain active. Password processing is
+limited to one low-priority worker and runs outside the node mutex and HTTP
+handler. Five failed password checks in a rolling minute cause `429` with
+`Retry-After`; a busy worker or full session table also returns `429`.
+The operator-approved policy prioritizes a login below three seconds on the
+ESP over maximum offline password resistance. The 6,000-round work factor is
+deliberately below server password-storage recommendations; random salts,
+12–128-character passwords and online throttling still provide basic protection.
+Experimental version-one/600,000-round records require `ui-password` recovery
+over trusted USB. Firmware rejects them promptly and never treats their hashes
+as lower-cost verifiers. Recovery preserves the API bearer token and other
+settings; it does not open LAN password setup.
+The isolated 160 MHz StickS3 measured 0.841–0.955 s for API login and at most
+1.020 s from browser submission to signed-in controls across all user pages.
+One WLAN-page login also remained valid when navigating to Bench and devices.
+Cookie sessions are independent of TCP connections: the HTTP server keeps at
+most four connections, reclaims idle ones and uses a 16-socket platform budget.
+This permits eight authenticated sessions without exhausting the shared sockets.
+
+
+`/api/v1/auth/status`, `/setup`, `/login`, `/session` and `/password` describe
+this lifecycle in OpenAPI. Cookie-authenticated mutations require the session's
+`X-Lab-CSRF`, a matching Origin and JSON content when a body is required. Login
+and initial setup also require same-origin JSON. The server accepts its local
+interface IP or configured `<node_id>.local` as UI hosts. Bearer clients need no
+cookie or CSRF header. `/management/token` remains strictly USB-only.
+
+The current server uses **unencrypted HTTP**, including passwords and session
+cookies, and is intended for a trusted network. HTTPS and optional client
+certificate authentication for both browsers and API clients are tracked in
+LB-021. A valid client certificate will be an alternative login, alongside
+password and bearer authentication; LB-020 adds no certificate requirement.
+
 USB is a physically trusted management interface and uses the same routes:
 
 ```json
@@ -788,15 +846,22 @@ licence and SHA-256 are recorded in `web/vendor/dl24-bench`; the device serves t
 licence and corresponding frontend source at `/dl24-license.txt` and
 `/dl24-source.tar.gz`. All runtime assets are local and use the existing CSP.
 
-Enter the USB-obtained API bearer token and connect, then choose one configured
-DL24M. Reading does not reserve devices. **Reserve device** acquires only the
-selected physical device, with a 10 s lease and 1 s heartbeat. Setpoints and output
+Sign in with the shared device password, then choose one configured DL24M.
+The same cookie session works across `/wifi`, `/devices` and `/dl24`, including
+reloads. Login resumes read-only discovery and never reserves or repeats a
+device command. Cookie mutations, heartbeats and independent STOP carry the
+session CSRF header. Reading does not reserve devices. **Reserve device**
+acquires only the selected physical device, with a 10 s lease and 1 s heartbeat. Setpoints and output
 changes wait for confirmed operations. **STOP** remains available independently
 of a lease. Device switching and release first request STOP and confirm OFF;
 a failed STOP prevents the switch. Closing the page attempts STOP, but delivery
 is not guaranteed: the existing node-side lease expiry remains the fallback.
 Loss of the connection, reservation or boot invalidates control; reconnect never
-replays an ON command. Settings and device-counter reset require confirmed OFF.
+replays an ON command. Session expiry cancels queued commands and requires a
+new explicit reservation after login. Sign out first attempts confirmed STOP
+and release, then ends the session even if shutdown could not be confirmed;
+the UI reports that uncertainty and relies on lease expiry as the fallback.
+Settings and device-counter reset require confirmed OFF.
 
 CC current, cutoff, minute-resolution timer, display settings and supported
 protection limits use the existing typed API. Device language is explicitly the
@@ -809,8 +874,9 @@ The default HTTP refresh is 1 s (selectable 500 ms/1 s/2 s); this reads cached
 backend samples and does not alter BLE polling. API requests share one in-flight connection so
 monitoring, heartbeat and command confirmation fit the ESP socket budget. STOP
 has priority and cancels queued commands; transport loss cancels queued requests
-without replay. Settings refresh every 5 s,
-subject to the driver's slower settings cache. Live records continuously; Load
+without replay. Password requests use a separate connection so password work
+does not occupy the instrument queue or hold up STOP and heartbeats. Settings
+refresh every 5 s, subject to the driver's slower settings cache. Live records continuously; Load
 records only during confirmed ON, while state monitoring and heartbeat continue.
 The graph retains 900 points. At 100,000 CSV rows, recording pauses visibly until
 export/clear; device control and monitoring continue. Recording lives only in

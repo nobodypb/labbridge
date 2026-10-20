@@ -17,12 +17,14 @@ apiClient_t *apiClient_create() {
     apiClient->progress_data = NULL;
     apiClient->response_code = 0;
     apiClient->accessToken = NULL;
+    apiClient->apiKeys_browserSession = NULL;
 
     return apiClient;
 }
 
 apiClient_t *apiClient_create_with_base_path(const char *basePath
 , sslConfig_t *sslConfig
+, list_t *apiKeys_browserSession
 ) {
     apiClient_t *apiClient = malloc(sizeof(apiClient_t));
     if(basePath){
@@ -44,6 +46,17 @@ apiClient_t *apiClient_create_with_base_path(const char *basePath
     apiClient->progress_data = NULL;
     apiClient->response_code = 0;
     apiClient->accessToken = NULL;
+    if(apiKeys_browserSession!= NULL) {
+        apiClient->apiKeys_browserSession = list_createList();
+        listEntry_t *listEntry = NULL;
+        list_ForEach(listEntry, apiKeys_browserSession) {
+            keyValuePair_t *pair = listEntry->data;
+            keyValuePair_t *pairDup = keyValuePair_create(strdup(pair->key), strdup(pair->value));
+            list_addElement(apiClient->apiKeys_browserSession, pairDup);
+        }
+    }else{
+        apiClient->apiKeys_browserSession = NULL;
+    }
 
     return apiClient;
 }
@@ -57,6 +70,20 @@ void apiClient_free(apiClient_t *apiClient) {
     apiClient->progress_data = NULL;
     if(apiClient->accessToken) {
         free(apiClient->accessToken);
+    }
+    if(apiClient->apiKeys_browserSession) {
+        listEntry_t *listEntry = NULL;
+        list_ForEach(listEntry, apiClient->apiKeys_browserSession) {
+            keyValuePair_t *pair = listEntry->data;
+            if(pair->key){
+                free(pair->key);
+            }
+            if(pair->value){
+                free(pair->value);
+            }
+            keyValuePair_free(pair);
+        }
+        list_freeList(apiClient->apiKeys_browserSession);
     }
     free(apiClient);
 }
@@ -376,6 +403,21 @@ void apiClient_invoke(apiClient_t    *apiClient,
             snprintf(authHeader, authHeaderSize, "Authorization: Bearer %s", apiClient->accessToken);
             headers = curl_slist_append(headers, authHeader);
             free(authHeader);
+        }
+        // this would only be generated for apiKey authentication
+        if (apiClient->apiKeys_browserSession != NULL)
+        {
+        list_ForEach(listEntry, apiClient->apiKeys_browserSession) {
+        keyValuePair_t *apiKey = listEntry->data;
+        if((apiKey->key != NULL) &&
+           (apiKey->value != NULL) )
+        {
+            char *headerValueToWrite = assembleHeaderField(
+                apiKey->key, apiKey->value);
+            curl_slist_append(headers, headerValueToWrite);
+            free(headerValueToWrite);
+        }
+        }
         }
 
         char *targetUrl =

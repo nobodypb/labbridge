@@ -68,6 +68,46 @@ bool validate(const cJSON *v, const cJSON *s, const cJSON *schemas,
   }
   if (t == "string") {
     size_t len = std::string(v->valuestring).size();
+    auto format = field(s, "format");
+    if (cJSON_IsString(format) &&
+        std::string(format->valuestring) == "password") {
+      // JSON Schema lengths count Unicode code points, not UTF-8 bytes.
+      const auto *text =
+          reinterpret_cast<const unsigned char *>(v->valuestring);
+      size_t bytes = len;
+      len = 0;
+      for (size_t i = 0; i < bytes; ++len) {
+        unsigned c = text[i++], n = 0, value = c, minimum = 0;
+        if (c >= 0xc2 && c <= 0xdf) {
+          n = 1;
+          value = c & 31;
+          minimum = 0x80;
+        } else if (c >= 0xe0 && c <= 0xef) {
+          n = 2;
+          value = c & 15;
+          minimum = 0x800;
+        } else if (c >= 0xf0 && c <= 0xf4) {
+          n = 3;
+          value = c & 7;
+          minimum = 0x10000;
+        } else if (c >= 0x80) {
+          reason = "Invalid password UTF-8";
+          return false;
+        }
+        for (unsigned j = 0; j < n; ++j) {
+          if (i >= bytes || (text[i] & 0xc0) != 0x80) {
+            reason = "Invalid password UTF-8";
+            return false;
+          }
+          value = (value << 6) | (text[i++] & 63);
+        }
+        if (value < minimum || value > 0x10ffff ||
+            (value >= 0xd800 && value <= 0xdfff)) {
+          reason = "Invalid password UTF-8";
+          return false;
+        }
+      }
+    }
     auto lo = field(s, "minLength"), hi = field(s, "maxLength");
     if ((lo && len < lo->valuedouble) || (hi && len > hi->valuedouble)) {
       reason = "String length outside range";

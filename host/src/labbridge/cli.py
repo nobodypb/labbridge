@@ -5,9 +5,11 @@ import dataclasses
 import json
 import os
 import sys
+from getpass import getpass
 from pathlib import Path
 from labbridge_generated.models.operation import Operation
 from .sdk import Node, Cluster
+from .transport import SerialTransport
 
 
 def encode(value):
@@ -51,6 +53,7 @@ def main(argv=None):
     sub.add_parser("devices")
     sub.add_parser("operations", help="List available generated operations")
     sub.add_parser("pair", help="Read management token over physical USB")
+    sub.add_parser("ui-password", help="Set/recover the UI password over physical USB")
     stop = sub.add_parser("stop")
     stop.add_argument("device")
     call = sub.add_parser(
@@ -103,7 +106,25 @@ def main(argv=None):
         )
         name = args.node or next(iter(nodes))
         node = nodes[name]
-        if args.command == "devices":
+        if args.command == "ui-password":
+            if not isinstance(node.client.rest_client, SerialTransport):
+                parser.error("UI password recovery is only available over serial:")
+            from labbridge_generated.models.ui_password_change import UiPasswordChange
+
+            password = getpass("New device password: ")
+            confirmation = getpass("Confirm device password: ")
+            if password != confirmation:
+                raise ValueError("Password entries must match")
+            if not 12 <= len(password) <= 128 or "\0" in password:
+                raise ValueError("Password must contain 12..128 characters without NUL")
+            node.core.change_ui_password(
+                ui_password_change=UiPasswordChange(
+                    password=password, confirm_password=confirmation
+                ),
+                _request_timeout=120.0,
+            )
+            result = {"password_configured": True, "browser_sessions_invalidated": True}
+        elif args.command == "devices":
             result = node.core.list_devices()
         elif args.command == "stop":
             result = node.stop(args.device)
