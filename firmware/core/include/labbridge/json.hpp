@@ -1,12 +1,36 @@
 #pragma once
 #include "cJSON.h"
+#include <algorithm>
 #include <cmath>
+#include <cstring>
 #include <stdexcept>
 #include <string>
 #include <utility>
+#include <vector>
 namespace labbridge {
 class Json {
   cJSON *value_;
+  static cJSON *ordered(const cJSON *value) {
+    if (cJSON_IsObject(value)) {
+      auto result = cJSON_CreateObject();
+      std::vector<const cJSON *> fields;
+      for (auto p = value->child; p; p = p->next)
+        fields.push_back(p);
+      std::sort(fields.begin(), fields.end(), [](auto a, auto b) {
+        return std::strcmp(a->string, b->string) < 0;
+      });
+      for (auto p : fields)
+        cJSON_AddItemToObject(result, p->string, ordered(p));
+      return result;
+    }
+    if (cJSON_IsArray(value)) {
+      auto result = cJSON_CreateArray();
+      for (auto p = value->child; p; p = p->next)
+        cJSON_AddItemToArray(result, ordered(p));
+      return result;
+    }
+    return cJSON_Duplicate(value, true);
+  }
 
 public:
   Json() : value_(cJSON_CreateObject()) {}
@@ -22,6 +46,8 @@ public:
     return *this;
   }
   static Json parse(const std::string &s) {
+    if (s.find('\0') != std::string::npos)
+      throw std::invalid_argument("Embedded NUL in JSON text");
     return Json(cJSON_ParseWithOpts(s.c_str(), nullptr, true));
   }
   static Json array() { return Json(cJSON_CreateArray()); }
@@ -75,6 +101,7 @@ public:
   void append(const std::string &v) {
     cJSON_AddItemToArray(value_, cJSON_CreateString(v.c_str()));
   }
+  std::string canonical_dump() const { return Json(ordered(value_)).dump(); }
   std::string dump() const {
     auto p = cJSON_PrintUnformatted(value_);
     if (!p)

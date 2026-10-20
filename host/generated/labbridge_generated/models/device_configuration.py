@@ -20,6 +20,8 @@ import json
 from pydantic import BaseModel, ConfigDict, Field, StrictStr, field_validator
 from typing import Any, ClassVar, Dict, List, Optional
 from typing_extensions import Annotated
+from labbridge_generated.models.cell_temperature_guard import CellTemperatureGuard
+from labbridge_generated.models.interlock_configuration import InterlockConfiguration
 from labbridge_generated.models.safety_limits import SafetyLimits
 from typing import Optional, Set
 from typing_extensions import Self
@@ -34,7 +36,9 @@ class DeviceConfiguration(BaseModel):
     endpoint: StrictStr
     pins: Optional[List[Annotated[int, Field(le=48, strict=True, ge=0)]]] = None
     limits: SafetyLimits
-    __properties: ClassVar[List[str]] = ["id", "driver", "transport", "endpoint", "pins", "limits"]
+    cell_temperature: Optional[CellTemperatureGuard] = None
+    interlock: Optional[InterlockConfiguration] = None
+    __properties: ClassVar[List[str]] = ["id", "driver", "transport", "endpoint", "pins", "limits", "cell_temperature", "interlock"]
 
     @field_validator('id')
     def id_validate_regular_expression(cls, value):
@@ -44,6 +48,7 @@ class DeviceConfiguration(BaseModel):
         return value
 
     model_config = ConfigDict(
+        extra='forbid',
         populate_by_name=True,
         validate_assignment=True,
         protected_namespaces=(),
@@ -85,6 +90,12 @@ class DeviceConfiguration(BaseModel):
         # override the default output from pydantic by calling `to_dict()` of limits
         if self.limits:
             _dict['limits'] = self.limits.to_dict()
+        # override the default output from pydantic by calling `to_dict()` of cell_temperature
+        if self.cell_temperature:
+            _dict['cell_temperature'] = self.cell_temperature.to_dict()
+        # override the default output from pydantic by calling `to_dict()` of interlock
+        if self.interlock:
+            _dict['interlock'] = self.interlock.to_dict()
         return _dict
 
     @classmethod
@@ -102,7 +113,9 @@ class DeviceConfiguration(BaseModel):
             "transport": obj.get("transport"),
             "endpoint": obj.get("endpoint"),
             "pins": obj.get("pins"),
-            "limits": SafetyLimits.from_dict(obj["limits"]) if obj.get("limits") is not None else None
+            "limits": SafetyLimits.from_dict(obj["limits"]) if obj.get("limits") is not None else None,
+            "cell_temperature": CellTemperatureGuard.from_dict(obj["cell_temperature"]) if obj.get("cell_temperature") is not None else None,
+            "interlock": InterlockConfiguration.from_dict(obj["interlock"]) if obj.get("interlock") is not None else None
         })
         return _obj
 

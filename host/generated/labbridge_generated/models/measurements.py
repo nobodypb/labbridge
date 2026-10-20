@@ -39,7 +39,12 @@ class Measurements(BaseModel):
     capacity_ah: Optional[Union[StrictFloat, StrictInt]] = None
     energy_wh: Optional[Union[StrictFloat, StrictInt]] = None
     temperature_channels: List[TemperatureChannel]
-    __properties: ClassVar[List[str]] = ["device_id", "sequence", "received_ms", "age_ms", "quality", "voltage_v", "current_a", "power_w", "capacity_ah", "energy_wh", "temperature_channels"]
+    set_voltage_v: Optional[Union[Annotated[float, Field(strict=True, ge=0)], Annotated[int, Field(strict=True, ge=0)]]] = None
+    set_current_a: Optional[Union[Annotated[float, Field(strict=True, ge=0)], Annotated[int, Field(strict=True, ge=0)]]] = None
+    regulation_mode: Optional[StrictStr] = None
+    protection_code: Optional[Annotated[int, Field(le=65535, strict=True, ge=0)]] = None
+    boot_id: Optional[StrictStr] = None
+    __properties: ClassVar[List[str]] = ["device_id", "sequence", "received_ms", "age_ms", "quality", "voltage_v", "current_a", "power_w", "capacity_ah", "energy_wh", "temperature_channels", "set_voltage_v", "set_current_a", "regulation_mode", "protection_code", "boot_id"]
 
     @field_validator('quality')
     def quality_validate_enum(cls, value):
@@ -48,7 +53,18 @@ class Measurements(BaseModel):
             raise ValueError("must be one of enum values ('valid', 'stale', 'unavailable')")
         return value
 
+    @field_validator('regulation_mode')
+    def regulation_mode_validate_enum(cls, value):
+        """Validates the enum"""
+        if value is None:
+            return value
+
+        if value not in set(['cc', 'cv', 'unknown']):
+            raise ValueError("must be one of enum values ('cc', 'cv', 'unknown')")
+        return value
+
     model_config = ConfigDict(
+        extra='forbid',
         populate_by_name=True,
         validate_assignment=True,
         protected_namespaces=(),
@@ -116,7 +132,12 @@ class Measurements(BaseModel):
             "power_w": obj.get("power_w"),
             "capacity_ah": obj.get("capacity_ah"),
             "energy_wh": obj.get("energy_wh"),
-            "temperature_channels": [TemperatureChannel.from_dict(_item) for _item in obj["temperature_channels"]] if obj.get("temperature_channels") is not None else None
+            "temperature_channels": [TemperatureChannel.from_dict(_item) for _item in obj["temperature_channels"]] if obj.get("temperature_channels") is not None else None,
+            "set_voltage_v": obj.get("set_voltage_v"),
+            "set_current_a": obj.get("set_current_a"),
+            "regulation_mode": obj.get("regulation_mode"),
+            "protection_code": obj.get("protection_code"),
+            "boot_id": obj.get("boot_id")
         })
         return _obj
 

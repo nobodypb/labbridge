@@ -98,6 +98,7 @@ Class | Method | HTTP request | Description
 *CoreApi* | [**get_configuration**](docs/CoreApi.md#get_configuration) | **GET** /api/v1/configuration | 
 *CoreApi* | [**get_device**](docs/CoreApi.md#get_device) | **GET** /api/v1/devices/{deviceId} | 
 *CoreApi* | [**get_lease**](docs/CoreApi.md#get_lease) | **GET** /api/v1/leases/{leaseId} | 
+*CoreApi* | [**get_management_token**](docs/CoreApi.md#get_management_token) | **GET** /management/token | 
 *CoreApi* | [**get_measurements**](docs/CoreApi.md#get_measurements) | **GET** /api/v1/devices/{deviceId}/measurements | 
 *CoreApi* | [**get_node**](docs/CoreApi.md#get_node) | **GET** /api/v1/node | 
 *CoreApi* | [**get_operation**](docs/CoreApi.md#get_operation) | **GET** /api/v1/operations/{operationId} | 
@@ -109,8 +110,11 @@ Class | Method | HTTP request | Description
 *CoreApi* | [**set_output**](docs/CoreApi.md#set_output) | **PUT** /api/v1/devices/{deviceId}/output | 
 *CoreApi* | [**stop_device**](docs/CoreApi.md#stop_device) | **POST** /api/v1/devices/{deviceId}/stop | 
 *CoreApi* | [**stop_lease**](docs/CoreApi.md#stop_lease) | **POST** /api/v1/leases/{leaseId}/stop | 
+*Dl24mApi* | [**get_dl24m_registers**](docs/Dl24mApi.md#get_dl24m_registers) | **GET** /api/v1/devices/{deviceId}/dl24m/registers | 
 *Dl24mApi* | [**get_dl24m_settings**](docs/Dl24mApi.md#get_dl24m_settings) | **GET** /api/v1/devices/{deviceId}/dl24m/settings | 
+*Dl24mApi* | [**read_dl24m_bank_target**](docs/Dl24mApi.md#read_dl24m_bank_target) | **POST** /api/v1/devices/{deviceId}/dl24m/banks/read | 
 *Dl24mApi* | [**reset_dl24m_counters**](docs/Dl24mApi.md#reset_dl24m_counters) | **POST** /api/v1/devices/{deviceId}/dl24m/counters/reset | 
+*Dl24mApi* | [**set_dl24m_bank_target**](docs/Dl24mApi.md#set_dl24m_bank_target) | **PUT** /api/v1/devices/{deviceId}/dl24m/bank-target | 
 *Dl24mApi* | [**set_dl24m_settings**](docs/Dl24mApi.md#set_dl24m_settings) | **PUT** /api/v1/devices/{deviceId}/dl24m/settings | 
 *Dl24mApi* | [**set_load_current**](docs/Dl24mApi.md#set_load_current) | **PUT** /api/v1/devices/{deviceId}/load/current | 
 *Ds18b20Api* | [**get_temperature_channels**](docs/Ds18b20Api.md#get_temperature_channels) | **GET** /api/v1/devices/{deviceId}/temperature/channels | 
@@ -121,13 +125,20 @@ Class | Method | HTTP request | Description
 
 ## Documentation For Models
 
+ - [CellTemperatureGuard](docs/CellTemperatureGuard.md)
  - [CurrentRequest](docs/CurrentRequest.md)
  - [Device](docs/Device.md)
  - [DeviceConfiguration](docs/DeviceConfiguration.md)
  - [DeviceList](docs/DeviceList.md)
+ - [Dl24mBankRequest](docs/Dl24mBankRequest.md)
+ - [Dl24mBankTargetRequest](docs/Dl24mBankTargetRequest.md)
+ - [Dl24mRegister](docs/Dl24mRegister.md)
+ - [Dl24mRegisters](docs/Dl24mRegisters.md)
  - [Dl24mSettings](docs/Dl24mSettings.md)
+ - [InterlockConfiguration](docs/InterlockConfiguration.md)
  - [Lease](docs/Lease.md)
  - [LeaseRequest](docs/LeaseRequest.md)
+ - [ManagementToken](docs/ManagementToken.md)
  - [Measurements](docs/Measurements.md)
  - [NodeConfiguration](docs/NodeConfiguration.md)
  - [NodeInfo](docs/NodeInfo.md)

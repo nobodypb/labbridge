@@ -1,5 +1,6 @@
 #pragma once
 #include "codec.hpp"
+#include <functional>
 #include <optional>
 #include <stdexcept>
 #include <string>
@@ -13,6 +14,7 @@ public:
   virtual bool connected() const = 0;
   virtual uint64_t generation() const = 0;
   virtual bool writable() const { return true; }
+  virtual void cancel_pending() {}
   virtual bool send(const Bytes &) = 0;
   virtual Bytes receive() = 0;
 };
@@ -30,10 +32,14 @@ struct Step {
   uint8_t read = 0;
   std::optional<uint32_t> expected;
   uint32_t before_ms = 0;
+  std::function<void(Step &)> prepare{};
 };
 class Transaction {
 public:
-  explicit Transaction(Endpoint &endpoint) : endpoint_(endpoint) {}
+  explicit Transaction(
+      Endpoint &endpoint,
+      std::function<void(uint8_t, uint32_t, uint64_t)> observer = {})
+      : endpoint_(endpoint), observer_(std::move(observer)) {}
   void start(std::vector<Step> steps, uint64_t now, bool may_enable) {
     if (result_.state == TxState::running)
       throw std::logic_error("Transaction busy");
@@ -45,6 +51,8 @@ public:
     index_ = 0;
     writes_ = reads_ = 0;
     waiting_ = false;
+    prepared_ = false;
+    drain_ = false;
     write_sent_ = false;
     enabling_ = may_enable;
     stream_.clear();
@@ -68,21 +76,37 @@ public:
              now);
       return;
     }
+    if (drain_ && !waiting_ && endpoint_.writable()) {
+      finish(TxState::cancelled, "cancelled", now);
+      return;
+    }
     auto bytes = endpoint_.receive();
     auto frames = stream_.feed(bytes.data(), bytes.size());
     auto &step = steps_[index_];
+    if (!prepared_) {
+      if (step.prepare)
+        step.prepare(step);
+      prepared_ = true;
+    }
     if (waiting_) {
       for (auto &frame : frames) {
         uint32_t value = 0;
         if (!dl24m::px3_reply(frame, step.read, value))
           continue;
         result_.value = value;
+        if (observer_)
+          observer_(step.read, value, now);
         waiting_ = false;
+        if (drain_) {
+          finish(TxState::cancelled, "cancelled", now);
+          return;
+        }
         if (!step.expected || value == *step.expected) {
           if (++index_ == steps_.size()) {
             finish(TxState::succeeded, "", now);
             return;
           }
+          prepared_ = false;
           writes_ = reads_ = 0;
           write_sent_ = false;
           due_ = now + steps_[index_].before_ms;
@@ -100,6 +124,10 @@ public:
       if (now < due_)
         return;
       waiting_ = false;
+      if (drain_) {
+        finish(TxState::cancelled, "cancelled_timeout", now);
+        return;
+      }
       if (reads_ >= 3) {
         if (!step.write || writes_ >= 3) {
           finish(TxState::failed, "read_timeout", now);
@@ -135,6 +163,7 @@ public:
         finish(TxState::succeeded, "", now);
         return;
       }
+      prepared_ = false;
       writes_ = reads_ = 0;
       write_sent_ = false;
       due_ = now + steps_[index_].before_ms;
@@ -148,6 +177,10 @@ public:
     }
     waiting_ = true;
     due_ = now + 160;
+  }
+  void cancel_after_io() {
+    if (result_.state == TxState::running)
+      drain_ = true;
   }
   void cancel() {
     if (result_.state == TxState::running) {
@@ -166,12 +199,14 @@ private:
     write_sent_ = false;
   }
   Endpoint &endpoint_;
+  std::function<void(uint8_t, uint32_t, uint64_t)> observer_;
   dl24m::AtorchStream stream_;
   std::vector<Step> steps_;
   TxResult result_;
   size_t index_ = 0;
   unsigned writes_ = 0, reads_ = 0;
   uint64_t start_ = 0, generation_ = 0, due_ = 0;
-  bool waiting_ = false, enabling_ = false, write_sent_ = false;
+  bool waiting_ = false, enabling_ = false, write_sent_ = false,
+       prepared_ = false, drain_ = false;
 };
 } // namespace labbridge

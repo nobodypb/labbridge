@@ -40,9 +40,11 @@ class Dl24mSettings(BaseModel):
     battery_overtemperature_c: Optional[Annotated[int, Field(le=100, strict=True, ge=40)]] = None
     language: Optional[Annotated[int, Field(le=1, strict=True, ge=0)]] = None
     mode: Optional[Annotated[int, Field(le=3, strict=True, ge=0)]] = None
-    __properties: ClassVar[List[str]] = ["cutoff_voltage_v", "time_limit_s", "working_brightness", "standby_brightness", "current_resolution", "overvoltage_v", "overcurrent_a", "overpower_w", "overtemperature_c", "fan_temperature_c", "battery_overtemperature_c", "language", "mode"]
+    standby_time: Optional[Annotated[int, Field(le=120, strict=True, ge=0)]] = None
+    __properties: ClassVar[List[str]] = ["cutoff_voltage_v", "time_limit_s", "working_brightness", "standby_brightness", "current_resolution", "overvoltage_v", "overcurrent_a", "overpower_w", "overtemperature_c", "fan_temperature_c", "battery_overtemperature_c", "language", "mode", "standby_time"]
 
     model_config = ConfigDict(
+        extra='forbid',
         populate_by_name=True,
         validate_assignment=True,
         protected_namespaces=(),
@@ -105,7 +107,8 @@ class Dl24mSettings(BaseModel):
             "fan_temperature_c": obj.get("fan_temperature_c"),
             "battery_overtemperature_c": obj.get("battery_overtemperature_c"),
             "language": obj.get("language"),
-            "mode": obj.get("mode")
+            "mode": obj.get("mode"),
+            "standby_time": obj.get("standby_time")
         })
         return _obj
 

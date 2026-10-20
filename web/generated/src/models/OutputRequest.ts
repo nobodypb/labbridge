@@ -25,6 +25,12 @@ export interface OutputRequest {
      * @memberof OutputRequest
      */
     enabled: boolean;
+    /**
+     * Optional local activation time cap; cannot exceed configured device duration.
+     * @type {number}
+     * @memberof OutputRequest
+     */
+    maxDurationMs?: number;
 }
 
 /**
@@ -46,6 +52,7 @@ export function OutputRequestFromJSONTyped(json: any, ignoreDiscriminator: boole
     return {
         
         'enabled': json['enabled'],
+        'maxDurationMs': json['max_duration_ms'] == null ? undefined : json['max_duration_ms'],
     };
 }
 
@@ -61,6 +68,7 @@ export function OutputRequestToJSONTyped(value?: OutputRequest | null, ignoreDis
     return {
         
         'enabled': value['enabled'],
+        'max_duration_ms': value['maxDurationMs'],
     };
 }
 

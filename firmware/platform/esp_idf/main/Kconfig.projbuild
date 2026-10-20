@@ -1,0 +1,25 @@
+menu "Laborbruecke"
+choice LAB_BOARD
+    prompt "Board"
+    default LAB_BOARD_ESP32_DEVKIT if IDF_TARGET_ESP32
+    default LAB_BOARD_USB_OTG if IDF_TARGET_ESP32S3
+config LAB_BOARD_ESP32_DEVKIT
+    bool "Classic ESP32 DevBoard (Wi-Fi, BLE and UART console)"
+    depends on IDF_TARGET_ESP32
+config LAB_BOARD_KNOB
+    bool "Waveshare Knob (classic ESP32, display not used)"
+    depends on IDF_TARGET_ESP32
+config LAB_BOARD_USB_OTG
+    bool "Espressif ESP32-S3-USB-OTG (USB host and UART console)"
+    depends on IDF_TARGET_ESP32S3
+config LAB_BOARD_STICKS3
+    bool "M5Stack StickS3 (BLE and USB Serial/JTAG console)"
+    depends on IDF_TARGET_ESP32S3
+endchoice
+config LAB_SERIAL_DIAGNOSTICS
+    bool "Local USB JSON API and diagnostic console"
+    default y
+endmenu
+config LAB_ALLOWED_PINS
+    string "Explicitly approved extension GPIO numbers (comma separated)"
+    default ""

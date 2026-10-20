@@ -703,6 +703,37 @@
         ]
       }
     },
+    "/management/token": {
+      "get": {
+        "operationId": "getManagementToken",
+        "tags": [
+          "core"
+        ],
+        "responses": {
+          "200": {
+            "description": "Confirmed result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ManagementToken"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Structured error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "x-labbridge-local-only": true
+      }
+    },
     "/api/v1/devices/{deviceId}/load/current": {
       "put": {
         "operationId": "setLoadCurrent",
@@ -967,6 +998,201 @@
             "application/json": {
               "schema": {
                 "$ref": "#/components/schemas/StopRequest"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/devices/{deviceId}/dl24m/registers": {
+      "get": {
+        "operationId": "getDl24mRegisters",
+        "tags": [
+          "dl24m"
+        ],
+        "responses": {
+          "200": {
+            "description": "Confirmed result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Dl24mRegisters"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Structured error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "deviceId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9_-]{1,48}$"
+            }
+          }
+        ]
+      }
+    },
+    "/api/v1/devices/{deviceId}/dl24m/banks/read": {
+      "post": {
+        "operationId": "readDl24mBankTarget",
+        "tags": [
+          "dl24m"
+        ],
+        "responses": {
+          "default": {
+            "description": "Structured error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "202": {
+            "description": "Operation accepted; poll Location until terminal",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Operation"
+                }
+              }
+            },
+            "headers": {
+              "Location": {
+                "description": "Operation URL",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "deviceId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9_-]{1,48}$"
+            }
+          },
+          {
+            "name": "X-Lab-Lease",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 96
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Dl24mBankRequest"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/devices/{deviceId}/dl24m/bank-target": {
+      "put": {
+        "operationId": "setDl24mBankTarget",
+        "tags": [
+          "dl24m"
+        ],
+        "responses": {
+          "default": {
+            "description": "Structured error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "202": {
+            "description": "Operation accepted; poll Location until terminal",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Operation"
+                }
+              }
+            },
+            "headers": {
+              "Location": {
+                "description": "Operation URL",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "deviceId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9_-]{1,48}$"
+            }
+          },
+          {
+            "name": "X-Lab-Lease",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 96
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Dl24mBankTargetRequest"
               }
             }
           }
@@ -1550,6 +1776,30 @@
             "items": {
               "$ref": "#/components/schemas/TemperatureChannel"
             }
+          },
+          "set_voltage_v": {
+            "type": "number",
+            "minimum": 0
+          },
+          "set_current_a": {
+            "type": "number",
+            "minimum": 0
+          },
+          "regulation_mode": {
+            "type": "string",
+            "enum": [
+              "cc",
+              "cv",
+              "unknown"
+            ]
+          },
+          "protection_code": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 65535
+          },
+          "boot_id": {
+            "type": "string"
           }
         },
         "required": [
@@ -1642,6 +1892,12 @@
         "properties": {
           "enabled": {
             "type": "boolean"
+          },
+          "max_duration_ms": {
+            "type": "integer",
+            "minimum": 100,
+            "maximum": 86400000,
+            "description": "Optional local activation time cap; cannot exceed configured device duration."
           }
         },
         "required": [
@@ -1772,6 +2028,12 @@
           },
           "limits": {
             "$ref": "#/components/schemas/SafetyLimits"
+          },
+          "cell_temperature": {
+            "$ref": "#/components/schemas/CellTemperatureGuard"
+          },
+          "interlock": {
+            "$ref": "#/components/schemas/InterlockConfiguration"
           }
         },
         "required": [
@@ -1812,10 +2074,19 @@
             "items": {
               "$ref": "#/components/schemas/WifiNetwork"
             }
+          },
+          "state": {
+            "type": "string",
+            "enum": [
+              "scanning",
+              "complete",
+              "failed"
+            ]
           }
         },
         "required": [
-          "networks"
+          "networks",
+          "state"
         ]
       },
       "WifiRequest": {
@@ -1873,7 +2144,8 @@
             "minimum": 0
           },
           "node_id": {
-            "type": "string"
+            "type": "string",
+            "pattern": "^[A-Za-z0-9_-]{1,48}$"
           },
           "board": {
             "type": "string"
@@ -1890,6 +2162,78 @@
           "node_id",
           "board",
           "devices"
+        ]
+      },
+      "CellTemperatureGuard": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "sensor_device_id",
+          "channel_id",
+          "minimum_c",
+          "maximum_c",
+          "max_age_ms"
+        ],
+        "properties": {
+          "sensor_device_id": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9_-]{1,48}$"
+          },
+          "channel_id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 48
+          },
+          "minimum_c": {
+            "type": "number",
+            "minimum": -20,
+            "maximum": 80
+          },
+          "maximum_c": {
+            "type": "number",
+            "minimum": -20,
+            "maximum": 80
+          },
+          "max_age_ms": {
+            "type": "integer",
+            "minimum": 100,
+            "maximum": 3000
+          }
+        }
+      },
+      "InterlockConfiguration": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "active_high",
+          "feedback_active_high",
+          "break_ms"
+        ],
+        "properties": {
+          "active_high": {
+            "type": "boolean"
+          },
+          "feedback_active_high": {
+            "type": "boolean"
+          },
+          "break_ms": {
+            "type": "integer",
+            "minimum": 20,
+            "maximum": 2000
+          }
+        }
+      },
+      "ManagementToken": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "token": {
+            "type": "string",
+            "format": "password"
+          }
+        },
+        "required": [
+          "token"
         ]
       },
       "Dl24mSettings": {
@@ -1973,6 +2317,107 @@
             "type": "integer",
             "minimum": 0,
             "maximum": 3
+          },
+          "standby_time": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 120
+          }
+        }
+      },
+      "Dl24mRegister": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "name",
+          "command",
+          "quality"
+        ],
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "command": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 255
+          },
+          "quality": {
+            "type": "string",
+            "enum": [
+              "valid",
+              "stale",
+              "unavailable"
+            ]
+          },
+          "value": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 16777215
+          },
+          "age_ms": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "received_ms": {
+            "type": "integer",
+            "minimum": 0
+          }
+        }
+      },
+      "Dl24mRegisters": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "registers"
+        ],
+        "properties": {
+          "registers": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Dl24mRegister"
+            }
+          }
+        }
+      },
+      "Dl24mBankRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "bank"
+        ],
+        "properties": {
+          "bank": {
+            "type": "integer",
+            "enum": [
+              1,
+              2,
+              3
+            ]
+          }
+        }
+      },
+      "Dl24mBankTargetRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "bank",
+          "target_raw"
+        ],
+        "properties": {
+          "bank": {
+            "type": "integer",
+            "enum": [
+              1,
+              2,
+              3
+            ]
+          },
+          "target_raw": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 2400,
+            "description": "OFF-only bank target. Conservative maxima: bank 1=1000, bank 2=2400, bank 3=100. Returns to CC and restores its original target."
           }
         }
       },

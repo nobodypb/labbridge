@@ -1,0 +1,4 @@
+firmware/generated/** linguist-generated=true whitespace=-blank-at-eol,-blank-at-eof
+host/generated/** linguist-generated=true whitespace=-blank-at-eol,-blank-at-eof
+web/generated/** linguist-generated=true whitespace=-blank-at-eol,-blank-at-eof
+tests/vendor/** linguist-vendored=true whitespace=-blank-at-eol,-blank-at-eof

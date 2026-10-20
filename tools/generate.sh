@@ -10,6 +10,7 @@ if [[ ! -f "$jar" ]]; then
 fi
 actual=$(sha256sum "$jar" | cut -d' ' -f1)
 [[ "$actual" == "$expected" ]] || { echo 'Generator checksum mismatch' >&2; exit 1; }
+python3 tools/prepare_templates.py
 python3 tools/assemble_api.py
 python3 - <<'CLEAN'
 from pathlib import Path
@@ -19,6 +20,6 @@ for name in ('host/generated','web/generated','firmware/generated/c'):
     if p.exists():shutil.rmtree(p)
 CLEAN
 java -jar "$jar" validate -i api/openapi.json
-java -jar "$jar" generate --git-user-id nobodypb --git-repo-id labbridge -i api/openapi.json -g python -o host/generated --additional-properties=packageName=labbridge_generated,projectName=labbridge-generated,packageVersion=0.1.0,hideGenerationTimestamp=true --global-property apiTests=false,modelTests=false,apiDocs=false,modelDocs=false
+java -jar "$jar" generate --git-user-id nobodypb --git-repo-id labbridge -i api/openapi.json -g python -t .tools/templates/python -o host/generated --additional-properties=packageName=labbridge_generated,projectName=labbridge-generated,packageVersion=0.1.0,hideGenerationTimestamp=true --global-property apiTests=false,modelTests=false,apiDocs=false,modelDocs=false
 java -jar "$jar" generate --git-user-id nobodypb --git-repo-id labbridge -i api/openapi.json -g typescript-fetch -o web/generated --additional-properties=hideGenerationTimestamp=true,npmName=@labbridge/api,npmVersion=0.1.0,supportsES6=true --global-property apiTests=false,modelTests=false,apiDocs=false,modelDocs=false
 java -jar "$jar" generate --git-user-id nobodypb --git-repo-id labbridge -i api/openapi.json -g c -o firmware/generated/c --additional-properties=hideGenerationTimestamp=true --global-property models,supportingFiles,modelDocs=false,modelTests=false

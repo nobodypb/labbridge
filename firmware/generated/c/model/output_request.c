@@ -6,23 +6,27 @@
 
 
 static output_request_t *output_request_create_internal(
-    int enabled
+    int enabled,
+    int max_duration_ms
     ) {
     output_request_t *output_request_local_var = malloc(sizeof(output_request_t));
     if (!output_request_local_var) {
         return NULL;
     }
     output_request_local_var->enabled = enabled;
+    output_request_local_var->max_duration_ms = max_duration_ms;
 
     output_request_local_var->_library_owned = 1;
     return output_request_local_var;
 }
 
 __attribute__((deprecated)) output_request_t *output_request_create(
-    int enabled
+    int enabled,
+    int max_duration_ms
     ) {
     return output_request_create_internal (
-        enabled
+        enabled,
+        max_duration_ms
         );
 }
 
@@ -47,6 +51,14 @@ cJSON *output_request_convertToJSON(output_request_t *output_request) {
     }
     if(cJSON_AddBoolToObject(item, "enabled", output_request->enabled) == NULL) {
     goto fail; //Bool
+    }
+
+
+    // output_request->max_duration_ms
+    if(output_request->max_duration_ms) {
+    if(cJSON_AddNumberToObject(item, "max_duration_ms", output_request->max_duration_ms) == NULL) {
+    goto fail; //Numeric
+    }
     }
 
     return item;
@@ -76,9 +88,22 @@ output_request_t *output_request_parseFromJSON(cJSON *output_requestJSON){
     goto end; //Bool
     }
 
+    // output_request->max_duration_ms
+    cJSON *max_duration_ms = cJSON_GetObjectItemCaseSensitive(output_requestJSON, "max_duration_ms");
+    if (cJSON_IsNull(max_duration_ms)) {
+        max_duration_ms = NULL;
+    }
+    if (max_duration_ms) { 
+    if(!cJSON_IsNumber(max_duration_ms))
+    {
+    goto end; //Numeric
+    }
+    }
+
 
     output_request_local_var = output_request_create_internal (
-        enabled->valueint
+        enabled->valueint,
+        max_duration_ms ? max_duration_ms->valuedouble : 0
         );
 
     return output_request_local_var;

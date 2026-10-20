@@ -15,6 +15,8 @@
 
 typedef struct device_configuration_t device_configuration_t;
 
+#include "cell_temperature_guard.h"
+#include "interlock_configuration.h"
 #include "safety_limits.h"
 
 
@@ -26,6 +28,8 @@ typedef struct device_configuration_t {
     char *endpoint; // string
     list_t *pins; //primitive container
     struct safety_limits_t *limits; //model
+    struct cell_temperature_guard_t *cell_temperature; //model
+    struct interlock_configuration_t *interlock; //model
 
     int _library_owned; // Is the library responsible for freeing this object?
 } device_configuration_t;
@@ -36,7 +40,9 @@ __attribute__((deprecated)) device_configuration_t *device_configuration_create(
     char *transport,
     char *endpoint,
     list_t *pins,
-    safety_limits_t *limits
+    safety_limits_t *limits,
+    cell_temperature_guard_t *cell_temperature,
+    interlock_configuration_t *interlock
 );
 
 void device_configuration_free(device_configuration_t *device_configuration);

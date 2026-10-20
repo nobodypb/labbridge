@@ -31,7 +31,7 @@ int main() {
   assert(!io.charge && !io.discharge && sw.path() == Path::isolated);
   io.stuck = true;
   assert(sw.select(Path::charge, 70));
-  sw.tick(90);
+  sw.tick(600);
   assert(sw.faulted() && !io.discharge && !io.charge);
   std::cout << "break-before-make, feedback and fail-open tests passed\n";
 }

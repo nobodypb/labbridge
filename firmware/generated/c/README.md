@@ -69,13 +69,20 @@ Category | Method | HTTP request | Description
 
 ## Documentation for Models
 
+ - [cell_temperature_guard_t](docs/cell_temperature_guard.md)
  - [current_request_t](docs/current_request.md)
  - [device_t](docs/device.md)
  - [device_configuration_t](docs/device_configuration.md)
  - [device_list_t](docs/device_list.md)
+ - [dl24m_bank_request_t](docs/dl24m_bank_request.md)
+ - [dl24m_bank_target_request_t](docs/dl24m_bank_target_request.md)
+ - [dl24m_register_t](docs/dl24m_register.md)
+ - [dl24m_registers_t](docs/dl24m_registers.md)
  - [dl24m_settings_t](docs/dl24m_settings.md)
+ - [interlock_configuration_t](docs/interlock_configuration.md)
  - [lease_t](docs/lease.md)
  - [lease_request_t](docs/lease_request.md)
+ - [management_token_t](docs/management_token.md)
  - [measurements_t](docs/measurements.md)
  - [node_configuration_t](docs/node_configuration.md)
  - [node_info_t](docs/node_info.md)

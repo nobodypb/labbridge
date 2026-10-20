@@ -18,7 +18,8 @@ static dl24m_settings_t *dl24m_settings_create_internal(
     long fan_temperature_c,
     long battery_overtemperature_c,
     long language,
-    int mode
+    int mode,
+    int standby_time
     ) {
     dl24m_settings_t *dl24m_settings_local_var = malloc(sizeof(dl24m_settings_t));
     if (!dl24m_settings_local_var) {
@@ -37,6 +38,7 @@ static dl24m_settings_t *dl24m_settings_create_internal(
     dl24m_settings_local_var->battery_overtemperature_c = battery_overtemperature_c;
     dl24m_settings_local_var->language = language;
     dl24m_settings_local_var->mode = mode;
+    dl24m_settings_local_var->standby_time = standby_time;
 
     dl24m_settings_local_var->_library_owned = 1;
     return dl24m_settings_local_var;
@@ -55,7 +57,8 @@ __attribute__((deprecated)) dl24m_settings_t *dl24m_settings_create(
     long fan_temperature_c,
     long battery_overtemperature_c,
     long language,
-    int mode
+    int mode,
+    int standby_time
     ) {
     return dl24m_settings_create_internal (
         cutoff_voltage_v,
@@ -70,7 +73,8 @@ __attribute__((deprecated)) dl24m_settings_t *dl24m_settings_create(
         fan_temperature_c,
         battery_overtemperature_c,
         language,
-        mode
+        mode,
+        standby_time
         );
 }
 
@@ -188,6 +192,14 @@ cJSON *dl24m_settings_convertToJSON(dl24m_settings_t *dl24m_settings) {
     // dl24m_settings->mode
     if(dl24m_settings->mode) {
     if(cJSON_AddNumberToObject(item, "mode", dl24m_settings->mode) == NULL) {
+    goto fail; //Numeric
+    }
+    }
+
+
+    // dl24m_settings->standby_time
+    if(dl24m_settings->standby_time) {
+    if(cJSON_AddNumberToObject(item, "standby_time", dl24m_settings->standby_time) == NULL) {
     goto fail; //Numeric
     }
     }
@@ -360,6 +372,18 @@ dl24m_settings_t *dl24m_settings_parseFromJSON(cJSON *dl24m_settingsJSON){
     }
     }
 
+    // dl24m_settings->standby_time
+    cJSON *standby_time = cJSON_GetObjectItemCaseSensitive(dl24m_settingsJSON, "standby_time");
+    if (cJSON_IsNull(standby_time)) {
+        standby_time = NULL;
+    }
+    if (standby_time) { 
+    if(!cJSON_IsNumber(standby_time))
+    {
+    goto end; //Numeric
+    }
+    }
+
 
     dl24m_settings_local_var = dl24m_settings_create_internal (
         cutoff_voltage_v ? cutoff_voltage_v->valuedouble : 0,
@@ -374,7 +398,8 @@ dl24m_settings_t *dl24m_settings_parseFromJSON(cJSON *dl24m_settingsJSON){
         fan_temperature_c ? fan_temperature_c->valuedouble : 0,
         battery_overtemperature_c ? battery_overtemperature_c->valuedouble : 0,
         language ? language->valuedouble : 0,
-        mode ? mode->valuedouble : 0
+        mode ? mode->valuedouble : 0,
+        standby_time ? standby_time->valuedouble : 0
         );
 
     return dl24m_settings_local_var;

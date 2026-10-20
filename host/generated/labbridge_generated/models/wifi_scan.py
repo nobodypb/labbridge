@@ -17,7 +17,7 @@ import pprint
 import re  # noqa: F401
 import json
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, StrictStr, field_validator
 from typing import Any, ClassVar, Dict, List
 from labbridge_generated.models.wifi_network import WifiNetwork
 from typing import Optional, Set
@@ -28,9 +28,18 @@ class WifiScan(BaseModel):
     WifiScan
     """ # noqa: E501
     networks: List[WifiNetwork]
-    __properties: ClassVar[List[str]] = ["networks"]
+    state: StrictStr
+    __properties: ClassVar[List[str]] = ["networks", "state"]
+
+    @field_validator('state')
+    def state_validate_enum(cls, value):
+        """Validates the enum"""
+        if value not in set(['scanning', 'complete', 'failed']):
+            raise ValueError("must be one of enum values ('scanning', 'complete', 'failed')")
+        return value
 
     model_config = ConfigDict(
+        extra='forbid',
         populate_by_name=True,
         validate_assignment=True,
         protected_namespaces=(),
@@ -88,7 +97,8 @@ class WifiScan(BaseModel):
             return cls.model_validate(obj)
 
         _obj = cls.model_validate({
-            "networks": [WifiNetwork.from_dict(_item) for _item in obj["networks"]] if obj.get("networks") is not None else None
+            "networks": [WifiNetwork.from_dict(_item) for _item in obj["networks"]] if obj.get("networks") is not None else None,
+            "state": obj.get("state")
         })
         return _obj
 

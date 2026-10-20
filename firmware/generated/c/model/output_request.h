@@ -20,12 +20,14 @@ typedef struct output_request_t output_request_t;
 
 typedef struct output_request_t {
     int enabled; //boolean
+    int max_duration_ms; //numeric
 
     int _library_owned; // Is the library responsible for freeing this object?
 } output_request_t;
 
 __attribute__((deprecated)) output_request_t *output_request_create(
-    int enabled
+    int enabled,
+    int max_duration_ms
 );
 
 void output_request_free(output_request_t *output_request);

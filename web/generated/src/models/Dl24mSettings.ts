@@ -97,6 +97,12 @@ export interface Dl24mSettings {
      * @memberof Dl24mSettings
      */
     mode?: number;
+    /**
+     * 
+     * @type {number}
+     * @memberof Dl24mSettings
+     */
+    standbyTime?: number;
 }
 
 /**
@@ -129,6 +135,7 @@ export function Dl24mSettingsFromJSONTyped(json: any, ignoreDiscriminator: boole
         'batteryOvertemperatureC': json['battery_overtemperature_c'] == null ? undefined : json['battery_overtemperature_c'],
         'language': json['language'] == null ? undefined : json['language'],
         'mode': json['mode'] == null ? undefined : json['mode'],
+        'standbyTime': json['standby_time'] == null ? undefined : json['standby_time'],
     };
 }
 
@@ -156,6 +163,7 @@ export function Dl24mSettingsToJSONTyped(value?: Dl24mSettings | null, ignoreDis
         'battery_overtemperature_c': value['batteryOvertemperatureC'],
         'language': value['language'],
         'mode': value['mode'],
+        'standby_time': value['standbyTime'],
     };
 }
 

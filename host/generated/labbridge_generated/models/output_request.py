@@ -17,8 +17,9 @@ import pprint
 import re  # noqa: F401
 import json
 
-from pydantic import BaseModel, ConfigDict, StrictBool
-from typing import Any, ClassVar, Dict, List
+from pydantic import BaseModel, ConfigDict, Field, StrictBool
+from typing import Any, ClassVar, Dict, List, Optional
+from typing_extensions import Annotated
 from typing import Optional, Set
 from typing_extensions import Self
 
@@ -27,9 +28,11 @@ class OutputRequest(BaseModel):
     OutputRequest
     """ # noqa: E501
     enabled: StrictBool
-    __properties: ClassVar[List[str]] = ["enabled"]
+    max_duration_ms: Optional[Annotated[int, Field(le=86400000, strict=True, ge=100)]] = Field(default=None, description="Optional local activation time cap; cannot exceed configured device duration.")
+    __properties: ClassVar[List[str]] = ["enabled", "max_duration_ms"]
 
     model_config = ConfigDict(
+        extra='forbid',
         populate_by_name=True,
         validate_assignment=True,
         protected_namespaces=(),
@@ -80,7 +83,8 @@ class OutputRequest(BaseModel):
             return cls.model_validate(obj)
 
         _obj = cls.model_validate({
-            "enabled": obj.get("enabled")
+            "enabled": obj.get("enabled"),
+            "max_duration_ms": obj.get("max_duration_ms")
         })
         return _obj
 

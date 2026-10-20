@@ -19,6 +19,7 @@ import type {
   DeviceList,
   Lease,
   LeaseRequest,
+  ManagementToken,
   Measurements,
   NodeConfiguration,
   NodeInfo,
@@ -39,6 +40,8 @@ import {
     LeaseToJSON,
     LeaseRequestFromJSON,
     LeaseRequestToJSON,
+    ManagementTokenFromJSON,
+    ManagementTokenToJSON,
     MeasurementsFromJSON,
     MeasurementsToJSON,
     NodeConfigurationFromJSON,
@@ -309,6 +312,38 @@ export class CoreApi extends runtime.BaseAPI {
      */
     async getLease(requestParameters: GetLeaseRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<Lease> {
         const response = await this.getLeaseRaw(requestParameters, initOverrides);
+        return await response.value();
+    }
+
+    /**
+     */
+    async getManagementTokenRaw(initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<ManagementToken>> {
+        const queryParameters: any = {};
+
+        const headerParameters: runtime.HTTPHeaders = {};
+
+        if (this.configuration && this.configuration.accessToken) {
+            const token = this.configuration.accessToken;
+            const tokenString = await token("bearerAuth", []);
+
+            if (tokenString) {
+                headerParameters["Authorization"] = `Bearer ${tokenString}`;
+            }
+        }
+        const response = await this.request({
+            path: `/management/token`,
+            method: 'GET',
+            headers: headerParameters,
+            query: queryParameters,
+        }, initOverrides);
+
+        return new runtime.JSONApiResponse(response, (jsonValue) => ManagementTokenFromJSON(jsonValue));
+    }
+
+    /**
+     */
+    async getManagementToken(initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<ManagementToken> {
+        const response = await this.getManagementTokenRaw(initOverrides);
         return await response.value();
     }
 

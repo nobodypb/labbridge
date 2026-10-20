@@ -14,13 +14,20 @@
 
 
 # import models into model package
+from labbridge_generated.models.cell_temperature_guard import CellTemperatureGuard
 from labbridge_generated.models.current_request import CurrentRequest
 from labbridge_generated.models.device import Device
 from labbridge_generated.models.device_configuration import DeviceConfiguration
 from labbridge_generated.models.device_list import DeviceList
+from labbridge_generated.models.dl24m_bank_request import Dl24mBankRequest
+from labbridge_generated.models.dl24m_bank_target_request import Dl24mBankTargetRequest
+from labbridge_generated.models.dl24m_register import Dl24mRegister
+from labbridge_generated.models.dl24m_registers import Dl24mRegisters
 from labbridge_generated.models.dl24m_settings import Dl24mSettings
+from labbridge_generated.models.interlock_configuration import InterlockConfiguration
 from labbridge_generated.models.lease import Lease
 from labbridge_generated.models.lease_request import LeaseRequest
+from labbridge_generated.models.management_token import ManagementToken
 from labbridge_generated.models.measurements import Measurements
 from labbridge_generated.models.node_configuration import NodeConfiguration
 from labbridge_generated.models.node_info import NodeInfo
