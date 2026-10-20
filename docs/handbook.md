@@ -363,6 +363,21 @@ is checked between packets and during the quiet interval. An eleven-byte result
 is counted only during phase two, for a matching peer/embedded AP-subnet address;
 it stops credential transmission but does not advance management or enable output.
 
+### Stable host USB names
+
+Use `/dev/serial/by-id/` paths or locally configured udev aliases instead of
+unstable `/dev/ttyACM0` numbering. The SDK resolves USB identity for native ESP
+CDC/JTAG line control while opening the selected stable path.
+
+The [example udev rules](../examples/host/99-labbridge-usb.rules.example) use
+synthetic aliases and serial placeholders. Adapt and install rules locally;
+never commit physical USB serials, installed host rules, node assignments or
+configured network identities. Recheck the physical device before flashing.
+
+```sh
+labbridge --endpoint serial:/dev/serial/by-id/REPLACE_WITH_DEVICE_ID call core.get_node
+```
+
 ## Public API and USB
 
 The authoritative contract is [OpenAPI](../api/openapi.json), assembled from
