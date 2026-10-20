@@ -685,3 +685,45 @@ normalized from mA to A while preserving direction. Disabled/unavailable channel
 remain unavailable. The implementation follows the manufacturer's
 [user guide](https://www.yoctopuce.com/EN/products/yocto-watt-v2-c/doc/YWATMK2C.usermanual.html).
 No physical Yocto-Watt has yet been exercised in this project.
+
+## DL24M Bench page
+
+Open `/dl24` on the node (also linked from `/devices`). The complete DL24 Bench
+interface is adapted from the GPL-3.0-or-later upstream page. Its unchanged source,
+licence and SHA-256 are recorded in `web/vendor/dl24-bench`; the device serves the
+licence and corresponding frontend source at `/dl24-license.txt` and
+`/dl24-source.tar.gz`. All runtime assets are local and use the existing CSP.
+
+Enter the USB-obtained API bearer token and connect, then choose one configured
+DL24M. Reading does not reserve devices. **Reserve device** acquires only the
+selected physical device, with a 10 s lease and 1 s heartbeat. Setpoints and output
+changes wait for confirmed operations. **STOP** remains available independently
+of a lease. Device switching and release first request STOP and confirm OFF;
+a failed STOP prevents the switch. Closing the page attempts STOP, but delivery
+is not guaranteed: the existing node-side lease expiry remains the fallback.
+Loss of the connection, reservation or boot invalidates control; reconnect never
+replays an ON command. Settings and device-counter reset require confirmed OFF.
+
+CC current, cutoff, minute-resolution timer, display settings and supported
+protection limits use the existing typed API. Device language is explicitly the
+backend's raw 0/1 enum, and standby time is a raw value with unconfirmed units.
+Active CV/CR/CP, calibration, no-load zero, factory reset, HID frames/snapshots
+and fan RPM remain visible with unavailable controls/values. No HID commands are
+sent by this page. These retained features do not imply commissioned support.
+
+The default HTTP refresh is 1 s (selectable 500 ms/1 s/2 s); this reads cached
+backend samples and does not alter BLE polling. Settings refresh every 5 s,
+subject to the driver's slower settings cache. Live records continuously; Load
+records only during confirmed ON, while state monitoring and heartbeat continue.
+The graph retains 900 points. At 100,000 CSV rows, recording pauses visibly until
+export/clear; device control and monitoring continue. Recording lives only in
+the browser session. Export before switching devices or closing/reloading.
+
+Capacity (mAh), energy (Wh) and observed time are browser-session values, not native
+DL24M counters or certified battery-test results. Integration uses trapezoids
+between distinct, fresh, finite samples with increasing device-monotonic time,
+within the configured freshness limit and one device/boot. Missing/stale samples
+and larger gaps break the trace/integration. CSV retains sample identity, boot,
+sequence, timestamps, units and quality. Missing measurements appear as unknown,
+never measured zero. Internal temperature is not a cell probe. **Clear** affects
+only the browser recording; **Zero all data** explicitly resets device counters.

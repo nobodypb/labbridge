@@ -155,3 +155,21 @@ matching visible framing/control flow, but its encrypted strings were not
 resolved. Public reference vectors contain synthetic inputs only. These checks
 validate the documented PC sender profile, not ESP RF delivery or W01 acceptance.
 No additional flashing or pairing attempt occurred during this investigation.
+
+## DL24M Bench (LB-020)
+
+The missing recording module and `/dl24` route were observed failing before
+implementation. Further regression tests caught and fixed out-of-order sample
+integration and overwritten language selection. Browser coverage checks every
+original HTML ID, unsupported action gating, single-device leases, confirmed
+commands, failed STOP blocking device switching, lease/network/reboot failures,
+stale measurements, live/load monitoring, local assets/source/licence downloads,
+CSV, both themes and narrow layouts. Browser screenshots use synthetic devices.
+Session tests cover units, bounded buffers, invalid/duplicate/late samples,
+identity/boot separation and gap handling.
+
+Hardware page/control acceptance is pending the final firmware deployment.
+A read-only preflight found the attached StickS3 and DL24M ready with confirmed
+OFF, fresh 0 V / 0 A, and reachable station HTTP. No energized-load or battery
+claim follows from this preflight. The planned on-device UI check uses reversible
+settings with output OFF and restores the original settings.

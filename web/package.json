@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "test": "node --test tests/*.test.js",
-    "build": "tsc --noEmit && esbuild src/main.ts --bundle --minify --outfile=dist/app.js && cp index.html dist/index.html",
+    "build": "tsc --noEmit && esbuild src/main.ts --bundle --minify --outfile=dist/app.js && cp index.html dist/index.html && node build-bench.mjs",
     "test:browser": "playwright test"
   },
   "devDependencies": {

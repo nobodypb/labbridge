@@ -71,3 +71,26 @@ Component routes, optional routing and measurement providers are delivered in PR
 #20. LB-015/016 have portable, generated-client, browser and DL24M bench acceptance.
 LB-017 software is implemented; actual INA228/Yocto hardware commissioning remains
 open in issue #19. The native ESP Yocto USB transport is not part of this delivery.
+
+## LB-020 — DL24M Bench page (software implemented; hardware acceptance pending)
+
+As a DL24M operator, I use the complete DL24 Bench interface at `/dl24` on the
+ESP with LabBridge HTTP control. Preserve every upstream function area: unsupported
+controls remain visible, disabled and explained, ready for later backend support.
+Keep the unchanged GPL-3.0-or-later upstream snapshot separate from adaptations.
+
+Acceptance: choose one DL24M; authenticate; reserve only that device; confirmed
+operations and independent STOP; stop/confirm OFF before releasing or switching;
+no automatic ON/replay after loss or reboot. Existing current/cutoff/timer/settings
+routes enforce their limits. All modes, calibration/reset and protocol diagnostics
+remain visible; unsupported actions never send commands. Retain themes, chart,
+all measurement tiles, live/load recording and CSV. Missing values remain unknown;
+capacity/energy are labelled browser session integrals with freshness, identity,
+boot and gap handling. Bound chart/log memory. Serve all assets locally under the
+existing CSP. Browser/portable/generation checks and all board builds pass;
+physical bench acceptance is recorded separately with original settings restored.
+
+Follow-ups: active CV/CR/CP commissioning, calibration/zero/factory-reset APIs,
+HID-frame/snapshot diagnostics, fan RPM and verified native counter scales,
+external probe telemetry, other device themes and persistent recording. Their
+absence is not permission to expose raw commands or claim hardware support.
