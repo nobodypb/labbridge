@@ -1,7 +1,7 @@
 /*
  * safety_limits.h
  *
- * 
+ * Bridge-local operating envelope for an actuator. The platform requires positive voltage/current/power limits for actuators; read-only sensors may omit limits. These are additional limits, not a replacement for instrument protection or a complete battery profile.
  */
 
 #ifndef _safety_limits_H_

@@ -1,7 +1,7 @@
 /*
  * actuator_state.h
  *
- * 
+ * Current actor-specific state, output confirmation and cached settings. Unknown output must not be treated as OFF.
  */
 
 #ifndef _actuator_state_H_

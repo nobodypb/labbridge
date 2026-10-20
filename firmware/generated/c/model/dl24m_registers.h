@@ -1,7 +1,7 @@
 /*
  * dl24m_registers.h
  *
- * 
+ * Cached view of the 22 audited passive reads. No arbitrary read/write access or side-effecting menu/calibration commands are exposed.
  */
 
 #ifndef _dl24m_registers_H_

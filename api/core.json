@@ -6,7 +6,8 @@
     "license": {
       "name": "MIT",
       "url": "https://opensource.org/licenses/MIT"
-    }
+    },
+    "description": "Configure and automate laboratory instruments through one ESP32 bridge. Physical devices expose discoverable source, sink and scalar sensor components; prefer their common routes for portable scripts. Driver-specific routes remain available for specialized settings and compatibility.\n\n## Typical automation sequence\n1. Read node identity/boot_id and discover devices, components, actions and limits.\n2. Reserve all actor devices on this node with createLease and heartbeat at least once per second. Ownership is per physical device, not per component.\n3. Send a setting/output mutation with X-Lab-Lease and a new Idempotency-Key. A 202 response is only acceptance: poll Location until a terminal Operation, checking final_output and restore_pending.\n4. Use valid, fresh sensor readings; preserve sign and units. Integrate only across consecutive samples with unchanged boot_id/epoch and bounded gaps.\n5. Request independent STOP when finished or uncertain, verify OFF, then release the lease. Output OFF is not electrical isolation.\n\n## Failure and retry contract\nThe bridge performs bounded device retries, write/readback verification and recovery. Never infer hardware success from an ATT acknowledgement, an HTTP 202 or a saved setpoint. A terminal failure can still have changed hardware. Device/component STOP requires no lease. Reconnect/reboot never resumes ON. Leases, operation IDs and idempotency keys are boot-local; do not replay an uncertain mutation after a reboot. Monotonic timestamps are not Unix time and cannot be compared across nodes/boots.\n\n## Access and provisioning\nLAN HTTP uses Authorization: Bearer <token> on a trusted network. Obtain the secret using getManagementToken over physically trusted USB. The open LabBridge-Setup AP at 192.168.4.1 allows Wi-Fi setup/scan without bearer credentials; it does not grant laboratory control. The separate UI pages are /wifi and /devices. USB uses the same methods/paths with JSON-line requests {id, method, path, headers, body} and replies prefixed LABJSON; ignore other boot/log lines and correlate IDs. Target Wi-Fi PSKs are never returned.\n\n## Local safeguards and hardware scope\nConfigured limits, lease expiry, measurement freshness, activation deadlines and optional external cell-temperature guards operate on the node. They supplement instrument protections and an explicit external battery test profile/wiring arrangement. Read-only sensors may omit actuator limits. Supported endpoint/pin combinations depend on the board. DL24M BLE behavior is commissioned on display Ver: 2.0; RD6024, INA228 and Yocto physical commissioning remains open. Native Yocto USB on ESP is not implemented (use native PC USB or HTTP VirtualHub/YoctoHub)."
   },
   "servers": [
     {
@@ -27,7 +28,7 @@
         ],
         "responses": {
           "200": {
-            "description": "Confirmed result",
+            "description": "Current NodeInfo result. Cached telemetry still requires per-value quality/freshness checks; a management result confirms only the documented management action.",
             "content": {
               "application/json": {
                 "schema": {
@@ -37,7 +38,7 @@
             }
           },
           "default": {
-            "description": "Structured error",
+            "description": "Request rejected or unavailable: 400 malformed/invalid request, 401 missing LAN credentials, 403 forbidden transport, 404 unknown resource, 409 state/ownership/idempotency conflict, 412 stale configuration ETag, 422 unsupported or unsafe setting, 423 missing/expired device lease, or 503 resource/transport unavailable, as applicable. An accepted operation can later fail through Operation.error; HTTP acceptance is not hardware success.",
             "content": {
               "application/problem+json": {
                 "schema": {
@@ -46,7 +47,9 @@
               }
             }
           }
-        }
+        },
+        "summary": "Identify this bridge and boot",
+        "description": "Return the configured node ID, board and firmware/API versions. Read boot_id before starting an automation session; a changed boot_id invalidates operation IDs, leases and monotonic timestamps from the previous boot."
       }
     },
     "/api/v1/devices": {
@@ -57,7 +60,7 @@
         ],
         "responses": {
           "200": {
-            "description": "Confirmed result",
+            "description": "Current DeviceList result. Cached telemetry still requires per-value quality/freshness checks; a management result confirms only the documented management action.",
             "content": {
               "application/json": {
                 "schema": {
@@ -67,7 +70,7 @@
             }
           },
           "default": {
-            "description": "Structured error",
+            "description": "Request rejected or unavailable: 400 malformed/invalid request, 401 missing LAN credentials, 403 forbidden transport, 404 unknown resource, 409 state/ownership/idempotency conflict, 412 stale configuration ETag, 422 unsupported or unsafe setting, 423 missing/expired device lease, or 503 resource/transport unavailable, as applicable. An accepted operation can later fail through Operation.error; HTTP acceptance is not hardware success.",
             "content": {
               "application/problem+json": {
                 "schema": {
@@ -76,7 +79,9 @@
               }
             }
           }
-        }
+        },
+        "summary": "Discover configured instruments",
+        "description": "List physical devices, transport identities, state, local safety limits and advertised components. Discover capabilities and component actions before using optional routes; multiple devices of the same driver have distinct configured IDs."
       }
     },
     "/api/v1/devices/{deviceId}": {
@@ -87,7 +92,7 @@
         ],
         "responses": {
           "200": {
-            "description": "Confirmed result",
+            "description": "Current Device result. Cached telemetry still requires per-value quality/freshness checks; a management result confirms only the documented management action.",
             "content": {
               "application/json": {
                 "schema": {
@@ -97,7 +102,7 @@
             }
           },
           "default": {
-            "description": "Structured error",
+            "description": "Request rejected or unavailable: 400 malformed/invalid request, 401 missing LAN credentials, 403 forbidden transport, 404 unknown resource, 409 state/ownership/idempotency conflict, 412 stale configuration ETag, 422 unsupported or unsafe setting, 423 missing/expired device lease, or 503 resource/transport unavailable, as applicable. An accepted operation can later fail through Operation.error; HTTP acceptance is not hardware success.",
             "content": {
               "application/problem+json": {
                 "schema": {
@@ -115,9 +120,12 @@
             "schema": {
               "type": "string",
               "pattern": "^[A-Za-z0-9_-]{1,48}$"
-            }
+            },
+            "description": "Configured physical device ID on this node. Discover IDs with listDevices; do not use a model name unless it is the configured ID."
           }
-        ]
+        ],
+        "summary": "Inspect one physical device",
+        "description": "Return discovery information for one configured device. Its lease and recovery state apply to all actor components on that device. An unknown device ID returns 404."
       }
     },
     "/api/v1/devices/{deviceId}/measurements": {
@@ -128,7 +136,7 @@
         ],
         "responses": {
           "200": {
-            "description": "Confirmed result",
+            "description": "Current Measurements result. Cached telemetry still requires per-value quality/freshness checks; a management result confirms only the documented management action.",
             "content": {
               "application/json": {
                 "schema": {
@@ -138,7 +146,7 @@
             }
           },
           "default": {
-            "description": "Structured error",
+            "description": "Request rejected or unavailable: 400 malformed/invalid request, 401 missing LAN credentials, 403 forbidden transport, 404 unknown resource, 409 state/ownership/idempotency conflict, 412 stale configuration ETag, 422 unsupported or unsafe setting, 423 missing/expired device lease, or 503 resource/transport unavailable, as applicable. An accepted operation can later fail through Operation.error; HTTP acceptance is not hardware success.",
             "content": {
               "application/problem+json": {
                 "schema": {
@@ -156,9 +164,12 @@
             "schema": {
               "type": "string",
               "pattern": "^[A-Za-z0-9_-]{1,48}$"
-            }
+            },
+            "description": "Configured physical device ID on this node. Discover IDs with listDevices; do not use a model name unless it is the configured ID."
           }
-        ]
+        ],
+        "summary": "Read the compatibility measurement snapshot",
+        "description": "Return the latest cached device-level voltage, current, power and temperature snapshot without forcing a new instrument transaction. Check quality, age_ms and boot_id before use. Missing or unavailable channels are not zero. Prefer the component readings API for composite instruments and independent meters."
       }
     },
     "/api/v1/devices/{deviceId}/output": {
@@ -169,7 +180,7 @@
         ],
         "responses": {
           "default": {
-            "description": "Structured error",
+            "description": "Request rejected or unavailable: 400 malformed/invalid request, 401 missing LAN credentials, 403 forbidden transport, 404 unknown resource, 409 state/ownership/idempotency conflict, 412 stale configuration ETag, 422 unsupported or unsafe setting, 423 missing/expired device lease, or 503 resource/transport unavailable, as applicable. An accepted operation can later fail through Operation.error; HTTP acceptance is not hardware success.",
             "content": {
               "application/problem+json": {
                 "schema": {
@@ -179,7 +190,7 @@
             }
           },
           "202": {
-            "description": "Operation accepted; poll Location until terminal",
+            "description": "Command accepted for asynchronous execution. Follow Location to getOperation until succeeded, failed or cancelled; inspect final_output and restore_pending.",
             "content": {
               "application/json": {
                 "schema": {
@@ -189,7 +200,7 @@
             },
             "headers": {
               "Location": {
-                "description": "Operation URL",
+                "description": "Relative URL /api/v1/operations/{operationId} for polling in this node boot.",
                 "schema": {
                   "type": "string"
                 }
@@ -205,7 +216,8 @@
             "schema": {
               "type": "string",
               "pattern": "^[A-Za-z0-9_-]{1,48}$"
-            }
+            },
+            "description": "Configured physical device ID on this node. Discover IDs with listDevices; do not use a model name unless it is the configured ID."
           },
           {
             "name": "X-Lab-Lease",
@@ -213,7 +225,8 @@
             "required": true,
             "schema": {
               "type": "string"
-            }
+            },
+            "description": "Active lease ID covering this physical device. Components share ownership; heartbeats must continue while commands are pending."
           },
           {
             "name": "Idempotency-Key",
@@ -223,7 +236,8 @@
               "type": "string",
               "minLength": 1,
               "maxLength": 96
-            }
+            },
+            "description": "Unique key per logical mutation (1..96 characters). Repeating the same method/path/semantic JSON body within this boot returns the existing operation; reusing it for different content returns 409. Retention is bounded. After an uncertain timeout or reboot, inspect state and STOP as needed instead of replaying ON."
           }
         ],
         "requestBody": {
@@ -234,8 +248,11 @@
                 "$ref": "#/components/schemas/OutputRequest"
               }
             }
-          }
-        }
+          },
+          "description": "JSON request with the fields documented by the referenced schema. Unknown properties are rejected; use {} for an empty StopRequest."
+        },
+        "summary": "Enable or disable a physical device output",
+        "description": "Compatibility output control for the device driver. Enabling requires a valid lease, ready state, fresh telemetry and configured safety limits/guards. Generated clients use the regular lease header for this route; use stopDevice for explicit lease-independent shutdown after a session failure. The runtime also treats enabled=false as priority STOP. Prefer component output control for composite devices.\n\nReturns 202 with an Operation and Location, not an instrument acknowledgement. Keep the lease alive where required and poll until terminal. Bounded device retries/readback recovery run on the bridge; callers receive a terminal failure when recovery is exhausted. Do not automatically replay an uncertain mutation."
       }
     },
     "/api/v1/devices/{deviceId}/stop": {
@@ -246,7 +263,7 @@
         ],
         "responses": {
           "default": {
-            "description": "Structured error",
+            "description": "Request rejected or unavailable: 400 malformed/invalid request, 401 missing LAN credentials, 403 forbidden transport, 404 unknown resource, 409 state/ownership/idempotency conflict, 412 stale configuration ETag, 422 unsupported or unsafe setting, 423 missing/expired device lease, or 503 resource/transport unavailable, as applicable. An accepted operation can later fail through Operation.error; HTTP acceptance is not hardware success.",
             "content": {
               "application/problem+json": {
                 "schema": {
@@ -256,7 +273,7 @@
             }
           },
           "202": {
-            "description": "Operation accepted; poll Location until terminal",
+            "description": "Command accepted for asynchronous execution. Follow Location to getOperation until succeeded, failed or cancelled; inspect final_output and restore_pending.",
             "content": {
               "application/json": {
                 "schema": {
@@ -266,7 +283,7 @@
             },
             "headers": {
               "Location": {
-                "description": "Operation URL",
+                "description": "Relative URL /api/v1/operations/{operationId} for polling in this node boot.",
                 "schema": {
                   "type": "string"
                 }
@@ -282,7 +299,8 @@
             "schema": {
               "type": "string",
               "pattern": "^[A-Za-z0-9_-]{1,48}$"
-            }
+            },
+            "description": "Configured physical device ID on this node. Discover IDs with listDevices; do not use a model name unless it is the configured ID."
           },
           {
             "name": "Idempotency-Key",
@@ -292,7 +310,8 @@
               "type": "string",
               "minLength": 1,
               "maxLength": 96
-            }
+            },
+            "description": "Unique key per logical mutation (1..96 characters). Repeating the same method/path/semantic JSON body within this boot returns the existing operation; reusing it for different content returns 409. Retention is bounded. After an uncertain timeout or reboot, inspect state and STOP as needed instead of replaying ON."
           }
         ],
         "requestBody": {
@@ -303,8 +322,11 @@
                 "$ref": "#/components/schemas/StopRequest"
               }
             }
-          }
-        }
+          },
+          "description": "JSON request with the fields documented by the referenced schema. Unknown properties are rejected; use {} for an empty StopRequest."
+        },
+        "summary": "Request independent priority STOP",
+        "description": "Request shutdown of all actors on this physical device without a lease, including after session expiry or an interrupted command. Pending work is cancelled as appropriate and OFF is verified when communication allows. Poll the operation and inspect final_output; acceptance alone does not confirm OFF. Unknown output remains a fault/recovery condition.\n\nReturns 202 with an Operation and Location, not an instrument acknowledgement. Keep the lease alive where required and poll until terminal. Bounded device retries/readback recovery run on the bridge; callers receive a terminal failure when recovery is exhausted. Do not automatically replay an uncertain mutation."
       }
     },
     "/api/v1/leases": {
@@ -315,7 +337,7 @@
         ],
         "responses": {
           "200": {
-            "description": "Confirmed result",
+            "description": "Current Lease result. Cached telemetry still requires per-value quality/freshness checks; a management result confirms only the documented management action.",
             "content": {
               "application/json": {
                 "schema": {
@@ -325,7 +347,7 @@
             }
           },
           "default": {
-            "description": "Structured error",
+            "description": "Request rejected or unavailable: 400 malformed/invalid request, 401 missing LAN credentials, 403 forbidden transport, 404 unknown resource, 409 state/ownership/idempotency conflict, 412 stale configuration ETag, 422 unsupported or unsafe setting, 423 missing/expired device lease, or 503 resource/transport unavailable, as applicable. An accepted operation can later fail through Operation.error; HTTP acceptance is not hardware success.",
             "content": {
               "application/problem+json": {
                 "schema": {
@@ -343,8 +365,11 @@
                 "$ref": "#/components/schemas/LeaseRequest"
               }
             }
-          }
-        }
+          },
+          "description": "JSON request with the fields documented by the referenced schema. Unknown properties are rejected; use {} for an empty StopRequest."
+        },
+        "summary": "Reserve a group of physical devices",
+        "description": "Acquire one exclusive lease for the listed devices on this node. Components share their physical device lease. Unknown IDs, duplicates and existing ownership are rejected. Heartbeat at least once per second; expiry or a group safety fault requests STOP for the entire group. Acquisition across multiple nodes is not atomic: unwind earlier acquisitions if another fails."
       }
     },
     "/api/v1/configuration": {
@@ -355,17 +380,25 @@
         ],
         "responses": {
           "200": {
-            "description": "Confirmed result",
+            "description": "Current NodeConfiguration result. Cached telemetry still requires per-value quality/freshness checks; a management result confirms only the documented management action.",
             "content": {
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/NodeConfiguration"
                 }
               }
+            },
+            "headers": {
+              "ETag": {
+                "description": "Quoted persistent revision, for example \"3\". Send exactly this value as If-Match for a replacement.",
+                "schema": {
+                  "type": "string"
+                }
+              }
             }
           },
           "default": {
-            "description": "Structured error",
+            "description": "Request rejected or unavailable: 400 malformed/invalid request, 401 missing LAN credentials, 403 forbidden transport, 404 unknown resource, 409 state/ownership/idempotency conflict, 412 stale configuration ETag, 422 unsupported or unsafe setting, 423 missing/expired device lease, or 503 resource/transport unavailable, as applicable. An accepted operation can later fail through Operation.error; HTTP acceptance is not hardware success.",
             "content": {
               "application/problem+json": {
                 "schema": {
@@ -374,7 +407,9 @@
               }
             }
           }
-        }
+        },
+        "summary": "Read persistent node configuration",
+        "description": "Return the full configuration and an ETag for conditional replacement. Configuration describes physical endpoints, board resources and local safeguards. Save the ETag and send it unchanged as If-Match when replacing the configuration."
       },
       "put": {
         "operationId": "setConfiguration",
@@ -383,17 +418,25 @@
         ],
         "responses": {
           "200": {
-            "description": "Confirmed result",
+            "description": "Current NodeConfiguration result. Cached telemetry still requires per-value quality/freshness checks; a management result confirms only the documented management action.",
             "content": {
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/NodeConfiguration"
                 }
               }
+            },
+            "headers": {
+              "ETag": {
+                "description": "Quoted persistent revision, for example \"3\". Send exactly this value as If-Match for a replacement.",
+                "schema": {
+                  "type": "string"
+                }
+              }
             }
           },
           "default": {
-            "description": "Structured error",
+            "description": "Request rejected or unavailable: 400 malformed/invalid request, 401 missing LAN credentials, 403 forbidden transport, 404 unknown resource, 409 state/ownership/idempotency conflict, 412 stale configuration ETag, 422 unsupported or unsafe setting, 423 missing/expired device lease, or 503 resource/transport unavailable, as applicable. An accepted operation can later fail through Operation.error; HTTP acceptance is not hardware success.",
             "content": {
               "application/problem+json": {
                 "schema": {
@@ -411,7 +454,8 @@
                 "$ref": "#/components/schemas/NodeConfiguration"
               }
             }
-          }
+          },
+          "description": "JSON request with the fields documented by the referenced schema. Unknown properties are rejected; use {} for an empty StopRequest."
         },
         "parameters": [
           {
@@ -420,9 +464,12 @@
             "required": true,
             "schema": {
               "type": "string"
-            }
+            },
+            "description": "Exact quoted ETag returned by getConfiguration (for example \"3\"). A stale/mismatched revision returns 412; GET the current configuration before retrying a deliberate replacement."
           }
-        ]
+        ],
+        "summary": "Validate and persist a complete configuration",
+        "description": "Replace the complete configuration, not a partial patch. First stop all outputs and release all leases; pending restoration/shutdown also blocks replacement (409). If-Match must equal the current ETag (412 otherwise). Driver, endpoint, pin, calibration and capacity checks run before saving (422 on rejection). The node assigns the next revision and reboots about 500 ms after success; reconnect and rediscover using the new boot_id."
       }
     },
     "/api/v1/wifi/scan": {
@@ -433,7 +480,7 @@
         ],
         "responses": {
           "200": {
-            "description": "Confirmed result",
+            "description": "Current WifiScan result. Cached telemetry still requires per-value quality/freshness checks; a management result confirms only the documented management action.",
             "content": {
               "application/json": {
                 "schema": {
@@ -443,7 +490,7 @@
             }
           },
           "default": {
-            "description": "Structured error",
+            "description": "Request rejected or unavailable: 400 malformed/invalid request, 401 missing LAN credentials, 403 forbidden transport, 404 unknown resource, 409 state/ownership/idempotency conflict, 412 stale configuration ETag, 422 unsupported or unsafe setting, 423 missing/expired device lease, or 503 resource/transport unavailable, as applicable. An accepted operation can later fail through Operation.error; HTTP acceptance is not hardware success.",
             "content": {
               "application/problem+json": {
                 "schema": {
@@ -452,7 +499,9 @@
               }
             }
           }
-        }
+        },
+        "summary": "Scan nearby Wi-Fi networks",
+        "description": "Start or poll an asynchronous Wi-Fi scan. Repeat while state is scanning; completed results are cached for about five seconds. Instruments must be idle and leases released, otherwise 409. Available without bearer credentials through the open setup AP; normal LAN requests require authentication."
       }
     },
     "/api/v1/wifi": {
@@ -463,7 +512,7 @@
         ],
         "responses": {
           "200": {
-            "description": "Confirmed result",
+            "description": "Current WifiState result. Cached telemetry still requires per-value quality/freshness checks; a management result confirms only the documented management action.",
             "content": {
               "application/json": {
                 "schema": {
@@ -473,7 +522,7 @@
             }
           },
           "default": {
-            "description": "Structured error",
+            "description": "Request rejected or unavailable: 400 malformed/invalid request, 401 missing LAN credentials, 403 forbidden transport, 404 unknown resource, 409 state/ownership/idempotency conflict, 412 stale configuration ETag, 422 unsupported or unsafe setting, 423 missing/expired device lease, or 503 resource/transport unavailable, as applicable. An accepted operation can later fail through Operation.error; HTTP acceptance is not hardware success.",
             "content": {
               "application/problem+json": {
                 "schema": {
@@ -482,7 +531,9 @@
               }
             }
           }
-        }
+        },
+        "summary": "Read Wi-Fi provisioning state",
+        "description": "Return station connection state, hostname and current address without returning the saved PSK. The open LabBridge-Setup AP uses 192.168.4.1; its setup UI is /wifi and the device UI is /devices. Provisioning routes are available without bearer credentials on that AP."
       },
       "put": {
         "operationId": "configureWifi",
@@ -491,7 +542,7 @@
         ],
         "responses": {
           "200": {
-            "description": "Confirmed result",
+            "description": "Current WifiState result. Cached telemetry still requires per-value quality/freshness checks; a management result confirms only the documented management action.",
             "content": {
               "application/json": {
                 "schema": {
@@ -501,7 +552,7 @@
             }
           },
           "default": {
-            "description": "Structured error",
+            "description": "Request rejected or unavailable: 400 malformed/invalid request, 401 missing LAN credentials, 403 forbidden transport, 404 unknown resource, 409 state/ownership/idempotency conflict, 412 stale configuration ETag, 422 unsupported or unsafe setting, 423 missing/expired device lease, or 503 resource/transport unavailable, as applicable. An accepted operation can later fail through Operation.error; HTTP acceptance is not hardware success.",
             "content": {
               "application/problem+json": {
                 "schema": {
@@ -519,8 +570,11 @@
                 "$ref": "#/components/schemas/WifiRequest"
               }
             }
-          }
-        }
+          },
+          "description": "JSON request with the fields documented by the referenced schema. Unknown properties are rejected; use {} for an empty StopRequest."
+        },
+        "summary": "Save Wi-Fi credentials and connect",
+        "description": "Persist the target SSID/PSK and schedule connection after the response (about 300 ms). The returned state is not a connection confirmation: poll getWifiState or reconnect to the new station address. Requires idle instruments and released leases (409 otherwise). Empty/omitted PSK selects an open network; non-empty PSK must be 8..63 characters or exactly 64 hexadecimal digits (422 otherwise). The setup AP itself requires no password."
       }
     },
     "/api/v1/operations/{operationId}": {
@@ -531,7 +585,7 @@
         ],
         "responses": {
           "200": {
-            "description": "Confirmed result",
+            "description": "Current Operation result. Cached telemetry still requires per-value quality/freshness checks; a management result confirms only the documented management action.",
             "content": {
               "application/json": {
                 "schema": {
@@ -541,7 +595,7 @@
             }
           },
           "default": {
-            "description": "Structured error",
+            "description": "Request rejected or unavailable: 400 malformed/invalid request, 401 missing LAN credentials, 403 forbidden transport, 404 unknown resource, 409 state/ownership/idempotency conflict, 412 stale configuration ETag, 422 unsupported or unsafe setting, 423 missing/expired device lease, or 503 resource/transport unavailable, as applicable. An accepted operation can later fail through Operation.error; HTTP acceptance is not hardware success.",
             "content": {
               "application/problem+json": {
                 "schema": {
@@ -558,9 +612,12 @@
             "required": true,
             "schema": {
               "type": "string"
-            }
+            },
+            "description": "Opaque ID from an accepted command, valid only for this boot and while retained."
           }
-        ]
+        ],
+        "summary": "Poll a command to completion",
+        "description": "Return the command result within the current boot. Poll the Location returned by an accepted mutation until succeeded, failed or cancelled. Inspect final_output, restore_pending and error even after a terminal result. Terminal records are retained for up to five minutes in a bounded 128-entry cache; priority STOP may evict old terminal records sooner. A 404 after reboot/eviction does not prove a write was never executed."
       }
     },
     "/api/v1/leases/{leaseId}": {
@@ -571,7 +628,7 @@
         ],
         "responses": {
           "200": {
-            "description": "Confirmed result",
+            "description": "Current Lease result. Cached telemetry still requires per-value quality/freshness checks; a management result confirms only the documented management action.",
             "content": {
               "application/json": {
                 "schema": {
@@ -581,7 +638,7 @@
             }
           },
           "default": {
-            "description": "Structured error",
+            "description": "Request rejected or unavailable: 400 malformed/invalid request, 401 missing LAN credentials, 403 forbidden transport, 404 unknown resource, 409 state/ownership/idempotency conflict, 412 stale configuration ETag, 422 unsupported or unsafe setting, 423 missing/expired device lease, or 503 resource/transport unavailable, as applicable. An accepted operation can later fail through Operation.error; HTTP acceptance is not hardware success.",
             "content": {
               "application/problem+json": {
                 "schema": {
@@ -598,9 +655,12 @@
             "required": true,
             "schema": {
               "type": "string"
-            }
+            },
+            "description": "Opaque lease ID returned by createLease, scoped to this node boot."
           }
-        ]
+        ],
+        "summary": "Inspect lease ownership and deadline",
+        "description": "Return the current lease state and its node-monotonic deadline. Reading does not renew the lease. A stopped or expired lease cannot authorize further writes; create a new lease after resolving device recovery."
       }
     },
     "/api/v1/leases/{leaseId}/heartbeat": {
@@ -611,7 +671,7 @@
         ],
         "responses": {
           "200": {
-            "description": "Confirmed result",
+            "description": "Current Lease result. Cached telemetry still requires per-value quality/freshness checks; a management result confirms only the documented management action.",
             "content": {
               "application/json": {
                 "schema": {
@@ -621,7 +681,7 @@
             }
           },
           "default": {
-            "description": "Structured error",
+            "description": "Request rejected or unavailable: 400 malformed/invalid request, 401 missing LAN credentials, 403 forbidden transport, 404 unknown resource, 409 state/ownership/idempotency conflict, 412 stale configuration ETag, 422 unsupported or unsafe setting, 423 missing/expired device lease, or 503 resource/transport unavailable, as applicable. An accepted operation can later fail through Operation.error; HTTP acceptance is not hardware success.",
             "content": {
               "application/problem+json": {
                 "schema": {
@@ -639,7 +699,8 @@
                 "$ref": "#/components/schemas/StopRequest"
               }
             }
-          }
+          },
+          "description": "JSON request with the fields documented by the referenced schema. Unknown properties are rejected; use {} for an empty StopRequest."
         },
         "parameters": [
           {
@@ -648,9 +709,12 @@
             "required": true,
             "schema": {
               "type": "string"
-            }
+            },
+            "description": "Opaque lease ID returned by createLease, scoped to this node boot."
           }
-        ]
+        ],
+        "summary": "Renew an active lease",
+        "description": "Extend the active lease by the TTL selected at creation, measured from receipt on this node. Send an empty object when no diagnostic reason is needed. Heartbeat at least every second independently of operation polling. Renewal of a stopped/expired lease returns 409 and never resumes outputs."
       }
     },
     "/api/v1/leases/{leaseId}/stop": {
@@ -661,7 +725,7 @@
         ],
         "responses": {
           "200": {
-            "description": "Confirmed result",
+            "description": "Current Lease result. Cached telemetry still requires per-value quality/freshness checks; a management result confirms only the documented management action.",
             "content": {
               "application/json": {
                 "schema": {
@@ -671,7 +735,7 @@
             }
           },
           "default": {
-            "description": "Structured error",
+            "description": "Request rejected or unavailable: 400 malformed/invalid request, 401 missing LAN credentials, 403 forbidden transport, 404 unknown resource, 409 state/ownership/idempotency conflict, 412 stale configuration ETag, 422 unsupported or unsafe setting, 423 missing/expired device lease, or 503 resource/transport unavailable, as applicable. An accepted operation can later fail through Operation.error; HTTP acceptance is not hardware success.",
             "content": {
               "application/problem+json": {
                 "schema": {
@@ -689,7 +753,8 @@
                 "$ref": "#/components/schemas/StopRequest"
               }
             }
-          }
+          },
+          "description": "JSON request with the fields documented by the referenced schema. Unknown properties are rejected; use {} for an empty StopRequest."
         },
         "parameters": [
           {
@@ -698,9 +763,12 @@
             "required": true,
             "schema": {
               "type": "string"
-            }
+            },
+            "description": "Opaque lease ID returned by createLease, scoped to this node boot."
           }
-        ]
+        ],
+        "summary": "Release ownership and stop the lease group",
+        "description": "Mark the lease stopped and request STOP for every member. The returned lease state confirms release, not physical OFF. Inspect each device output and pending recovery before changing wiring or reconfiguring. Device/component STOP remains available independently."
       }
     },
     "/management/token": {
@@ -711,7 +779,7 @@
         ],
         "responses": {
           "200": {
-            "description": "Confirmed result",
+            "description": "Current ManagementToken result. Cached telemetry still requires per-value quality/freshness checks; a management result confirms only the documented management action.",
             "content": {
               "application/json": {
                 "schema": {
@@ -721,7 +789,7 @@
             }
           },
           "default": {
-            "description": "Structured error",
+            "description": "Request rejected or unavailable: 400 malformed/invalid request, 401 missing LAN credentials, 403 forbidden transport, 404 unknown resource, 409 state/ownership/idempotency conflict, 412 stale configuration ETag, 422 unsupported or unsafe setting, 423 missing/expired device lease, or 503 resource/transport unavailable, as applicable. An accepted operation can later fail through Operation.error; HTTP acceptance is not hardware success.",
             "content": {
               "application/problem+json": {
                 "schema": {
@@ -731,7 +799,9 @@
             }
           }
         },
-        "x-labbridge-local-only": true
+        "x-labbridge-local-only": true,
+        "summary": "Read the LAN token over trusted USB",
+        "description": "Physically local management operation, available only over the trusted USB JSON-line transport. Return the node bearer token for pairing the host with the LAN API. Network access is rejected. Treat the response as a credential; do not write it to shared logs or profiles."
       }
     }
   },
@@ -739,7 +809,8 @@
     "securitySchemes": {
       "bearerAuth": {
         "type": "http",
-        "scheme": "bearer"
+        "scheme": "bearer",
+        "description": "Node bearer token for trusted-LAN HTTP, provisioned through physically trusted USB. USB local management is trusted without this header. Wi-Fi setup routes permit unauthenticated access only on the open setup AP; laboratory routes do not."
       }
     },
     "schemas": {
@@ -748,26 +819,33 @@
         "additionalProperties": false,
         "properties": {
           "type": {
-            "type": "string"
+            "type": "string",
+            "description": "Problem type identifier; use status/detail for diagnostics rather than parsing the title."
           },
           "title": {
-            "type": "string"
+            "type": "string",
+            "description": "Short human-readable problem summary."
           },
           "status": {
             "type": "integer",
-            "format": "int64"
+            "format": "int64",
+            "description": "HTTP status associated with this problem, including failures embedded in an operation."
           },
           "detail": {
-            "type": "string"
+            "type": "string",
+            "description": "Human-readable explanation of the failure; wording is not a stable machine discriminator."
           },
           "instance": {
-            "type": "string"
+            "type": "string",
+            "description": "Request/resource reference when available."
           },
           "request_id": {
-            "type": "string"
+            "type": "string",
+            "description": "Correlation identifier when supplied by the transport."
           },
           "stage": {
-            "type": "string"
+            "type": "string",
+            "description": "Driver/recovery stage where the failure was detected."
           },
           "final_output": {
             "type": "string",
@@ -775,10 +853,12 @@
               "on",
               "off",
               "unknown"
-            ]
+            ],
+            "description": "Last confirmed output state. unknown means shutdown has not been verified and must never be interpreted as off."
           },
           "restore_pending": {
-            "type": "boolean"
+            "type": "boolean",
+            "description": "True when the original instrument settings still require recovery. New conflicting work/configuration is blocked until recovery completes."
           }
         },
         "required": [
@@ -786,26 +866,32 @@
           "title",
           "status",
           "detail"
-        ]
+        ],
+        "description": "Structured request or operation failure using application/problem+json. A failed write may already have changed hardware. Inspect final_output and restore_pending and request independent STOP when the outcome is uncertain."
       },
       "NodeInfo": {
         "type": "object",
         "additionalProperties": false,
         "properties": {
           "id": {
-            "type": "string"
+            "type": "string",
+            "description": "Configured node ID; use a distinct alias/identity for each bridge in a multi-node test."
           },
           "boot_id": {
-            "type": "string"
+            "type": "string",
+            "description": "Opaque identifier for this node boot. A change invalidates prior monotonic timestamps, leases and operation IDs."
           },
           "firmware_version": {
-            "type": "string"
+            "type": "string",
+            "description": "Running firmware version/build identifier."
           },
           "board": {
-            "type": "string"
+            "type": "string",
+            "description": "Board profile that defines available transports and pin/resource restrictions."
           },
           "api_version": {
-            "type": "string"
+            "type": "string",
+            "description": "Public API version implemented by this node."
           }
         },
         "required": [
@@ -814,7 +900,8 @@
           "firmware_version",
           "board",
           "api_version"
-        ]
+        ],
+        "description": "Identity and version boundary for one bridge boot. Scope device IDs to a node, and scope leases, operations and monotonic timestamps to boot_id."
       },
       "SafetyLimits": {
         "type": "object",
@@ -823,28 +910,33 @@
           "voltage_v": {
             "type": "number",
             "format": "double",
-            "minimum": 0
+            "minimum": 0,
+            "description": "Maximum permitted operating voltage in V for this actuator."
           },
           "current_a": {
             "type": "number",
             "format": "double",
-            "minimum": 0
+            "minimum": 0,
+            "description": "Maximum permitted current in A for this actuator."
           },
           "power_w": {
             "type": "number",
             "format": "double",
-            "minimum": 0
+            "minimum": 0,
+            "description": "Maximum permitted operating power in W for this actuator."
           },
           "max_age_ms": {
             "type": "integer",
             "format": "int64",
             "minimum": 100,
-            "maximum": 3000
+            "maximum": 3000,
+            "description": "Maximum telemetry age in milliseconds before local safety shutdown, at most 3000 ms."
           },
           "max_duration_s": {
             "type": "integer",
             "format": "int64",
-            "minimum": 1
+            "minimum": 1,
+            "description": "Maximum local enabled duration in seconds. A per-activation output deadline can shorten this limit."
           }
         },
         "required": [
@@ -852,29 +944,35 @@
           "current_a",
           "power_w",
           "max_age_ms"
-        ]
+        ],
+        "description": "Bridge-local operating envelope for an actuator. The platform requires positive voltage/current/power limits for actuators; read-only sensors may omit limits. These are additional limits, not a replacement for instrument protection or a complete battery profile."
       },
       "Device": {
         "type": "object",
         "additionalProperties": false,
         "properties": {
           "id": {
-            "type": "string"
+            "type": "string",
+            "description": "Configured local physical device ID used in route paths."
           },
           "driver": {
-            "type": "string"
+            "type": "string",
+            "description": "Registered driver module identifier; use capabilities/components to discover functions."
           },
           "identity": {
-            "type": "string"
+            "type": "string",
+            "description": "Stable physical transport identity used to avoid binding two entries to the same instrument."
           },
           "transport": {
-            "type": "string"
+            "type": "string",
+            "description": "Configured transport class, such as ble, uart, usb, i2c, http or gpio."
           },
           "capabilities": {
             "type": "array",
             "items": {
               "type": "string"
-            }
+            },
+            "description": "Advertised device-level capability identifiers; optional features must be discovered."
           },
           "state": {
             "type": "string",
@@ -883,7 +981,8 @@
               "ready",
               "busy",
               "fault"
-            ]
+            ],
+            "description": "unavailable: cannot communicate; ready: available; busy: command/recovery in progress; fault: a guard or recovery condition requires attention."
           },
           "output": {
             "type": "string",
@@ -891,7 +990,8 @@
               "on",
               "off",
               "unknown"
-            ]
+            ],
+            "description": "Aggregate physical-device output status. unknown is not OFF."
           },
           "limits": {
             "$ref": "#/components/schemas/SafetyLimits"
@@ -900,7 +1000,8 @@
             "type": "array",
             "items": {
               "$ref": "#/components/schemas/Component"
-            }
+            },
+            "description": "Actor and sensor descriptors exposed by this physical device."
           }
         },
         "required": [
@@ -911,7 +1012,8 @@
           "capabilities",
           "state",
           "output"
-        ]
+        ],
+        "description": "One physical instrument and transport/recovery identity. All its components share physical-device ownership, fault handling and lease expiry behavior."
       },
       "DeviceList": {
         "type": "object",
@@ -921,19 +1023,22 @@
             "type": "array",
             "items": {
               "$ref": "#/components/schemas/Device"
-            }
+            },
+            "description": "Configured instruments, including unavailable entries; IDs are local to this node."
           }
         },
         "required": [
           "devices"
-        ]
+        ],
+        "description": "Configured local physical instruments, including currently unavailable devices."
       },
       "TemperatureChannel": {
         "type": "object",
         "additionalProperties": false,
         "properties": {
           "id": {
-            "type": "string"
+            "type": "string",
+            "description": "Driver-native channel ID, retained for compatibility and legacy guard bindings."
           },
           "kind": {
             "type": "string",
@@ -941,7 +1046,8 @@
               "internal",
               "external_probe",
               "cell"
-            ]
+            ],
+            "description": "internal is electronics/die temperature; external_probe/cell can be used for cell guarding after appropriate physical placement."
           },
           "quality": {
             "type": "string",
@@ -949,21 +1055,25 @@
               "valid",
               "stale",
               "unavailable"
-            ]
+            ],
+            "description": "valid: usable within freshness policy; stale: previous sample is too old; unavailable: no usable sample. Never substitute zero for invalid/missing data."
           },
           "value_c": {
             "type": "number",
-            "format": "double"
+            "format": "double",
+            "description": "Measured temperature in degrees Celsius; omitted when no usable value exists."
           },
           "received_ms": {
             "type": "integer",
             "format": "int64",
-            "minimum": 0
+            "minimum": 0,
+            "description": "Node-monotonic milliseconds when this sample was received. Compare only within the same node and boot_id."
           },
           "age_ms": {
             "type": "integer",
             "format": "int64",
-            "minimum": 0
+            "minimum": 0,
+            "description": "Elapsed milliseconds since receipt, evaluated for this response. A repeated read does not freshen a cached sample."
           }
         },
         "required": [
@@ -972,7 +1082,8 @@
           "quality",
           "received_ms",
           "age_ms"
-        ]
+        ],
+        "description": "One typed temperature channel. Only fresh external_probe/cell channels qualify for cell guards; internal temperature cannot substitute for a cell probe."
       },
       "TemperatureChannels": {
         "type": "object",
@@ -982,34 +1093,40 @@
             "type": "array",
             "items": {
               "$ref": "#/components/schemas/TemperatureChannel"
-            }
+            },
+            "description": "Independent typed channels with their own quality and age."
           }
         },
         "required": [
           "channels"
-        ]
+        ],
+        "description": "Cached per-channel temperature values with independent availability and freshness."
       },
       "Measurements": {
         "type": "object",
         "additionalProperties": false,
         "properties": {
           "device_id": {
-            "type": "string"
+            "type": "string",
+            "description": "Configured physical device ID, scoped to this node."
           },
           "sequence": {
             "type": "integer",
             "format": "int64",
-            "minimum": 0
+            "minimum": 0,
+            "description": "Provider sample sequence. Use it with boot_id/epoch to detect new samples; repeated API reads can return the same sequence."
           },
           "received_ms": {
             "type": "integer",
             "format": "int64",
-            "minimum": 0
+            "minimum": 0,
+            "description": "Node-monotonic milliseconds when this sample was received. Compare only within the same node and boot_id."
           },
           "age_ms": {
             "type": "integer",
             "format": "int64",
-            "minimum": 0
+            "minimum": 0,
+            "description": "Elapsed milliseconds since receipt, evaluated for this response. A repeated read does not freshen a cached sample."
           },
           "quality": {
             "type": "string",
@@ -1017,41 +1134,50 @@
               "valid",
               "stale",
               "unavailable"
-            ]
+            ],
+            "description": "valid: usable within freshness policy; stale: previous sample is too old; unavailable: no usable sample. Never substitute zero for invalid/missing data."
           },
           "voltage_v": {
             "type": "number",
-            "format": "double"
+            "format": "double",
+            "description": "Voltage in V. Preserve provider sign where supported."
           },
           "current_a": {
             "type": "number",
-            "format": "double"
+            "format": "double",
+            "description": "Current in A. Measurements retain provider sign; targets are non-negative limits/setpoints."
           },
           "power_w": {
             "type": "number",
-            "format": "double"
+            "format": "double",
+            "description": "Power in W. Measurements retain provider sign; configured limits are positive ceilings."
           },
           "capacity_ah": {
             "type": "number",
-            "format": "double"
+            "format": "double",
+            "description": "Native instrument capacity counter in Ah when its scale is supported; do not assume DL24M raw counter scales are commissioned."
           },
           "energy_wh": {
             "type": "number",
-            "format": "double"
+            "format": "double",
+            "description": "Native instrument energy counter in Wh when its scale is supported. Prefer traceable host integration where native scaling is uncertain."
           },
           "temperature_channels": {
             "type": "array",
             "items": {
               "$ref": "#/components/schemas/TemperatureChannel"
-            }
+            },
+            "description": "Typed temperature channels; an internal channel cannot stand in for a cell probe."
           },
           "set_voltage_v": {
             "type": "number",
-            "minimum": 0
+            "minimum": 0,
+            "description": "Cached voltage setpoint in V when available; this is not measured terminal voltage."
           },
           "set_current_a": {
             "type": "number",
-            "minimum": 0
+            "minimum": 0,
+            "description": "Cached current limit/target in A when available; this is not measured current."
           },
           "regulation_mode": {
             "type": "string",
@@ -1059,15 +1185,18 @@
               "cc",
               "cv",
               "unknown"
-            ]
+            ],
+            "description": "Observed/selected regulation mode where available: cc (constant current), cv (constant voltage), or unknown. Do not infer it solely from a setpoint."
           },
           "protection_code": {
             "type": "integer",
             "minimum": 0,
-            "maximum": 65535
+            "maximum": 65535,
+            "description": "Driver-specific protection status code, not a portable cross-device enum."
           },
           "boot_id": {
-            "type": "string"
+            "type": "string",
+            "description": "Opaque identifier for this node boot. A change invalidates prior monotonic timestamps, leases and operation IDs."
           }
         },
         "required": [
@@ -1077,17 +1206,20 @@
           "age_ms",
           "quality",
           "temperature_channels"
-        ]
+        ],
+        "description": "Compatibility device-level snapshot. Optional fields are present only when supported/available; absence must never be converted into a measured zero. Prefer SensorReading for new meter/composite integrations."
       },
       "Operation": {
         "type": "object",
         "additionalProperties": false,
         "properties": {
           "id": {
-            "type": "string"
+            "type": "string",
+            "description": "Opaque operation ID valid only in this boot; poll the returned Location."
           },
           "device_id": {
-            "type": "string"
+            "type": "string",
+            "description": "Configured physical device ID, scoped to this node."
           },
           "status": {
             "type": "string",
@@ -1097,34 +1229,41 @@
               "succeeded",
               "failed",
               "cancelled"
-            ]
+            ],
+            "description": "pending/running: unfinished; succeeded: verified completion; failed/cancelled: inspect error, final_output and restore_pending before further work."
           },
           "stage": {
-            "type": "string"
+            "type": "string",
+            "description": "Diagnostic progress/recovery stage; stage strings are driver-specific."
           },
           "read_attempts": {
             "type": "integer",
             "format": "int64",
-            "minimum": 0
+            "minimum": 0,
+            "description": "Number of device read attempts reported by the driver, including retries."
           },
           "write_attempts": {
             "type": "integer",
             "format": "int64",
-            "minimum": 0
+            "minimum": 0,
+            "description": "Number of device write attempts reported by the driver, including retries."
           },
           "reconnects": {
             "type": "integer",
             "format": "int64",
-            "minimum": 0
+            "minimum": 0,
+            "description": "Transport reconnection attempts made during the operation."
           },
           "duration_ms": {
             "type": "integer",
             "format": "int64",
-            "minimum": 0
+            "minimum": 0,
+            "description": "Operation elapsed time in milliseconds as reported by the driver."
           },
           "confirmed_value": {
             "type": "number",
-            "format": "double"
+            "format": "double",
+            "description": "Verified scalar result. Common component operations use confirmed_unit and expose it only on success; compatibility/device-specific operations may use raw register units."
           },
           "final_output": {
             "type": "string",
@@ -1132,26 +1271,32 @@
               "on",
               "off",
               "unknown"
-            ]
+            ],
+            "description": "Last confirmed output state. unknown means shutdown has not been verified and must never be interpreted as off."
           },
           "restore_pending": {
-            "type": "boolean"
+            "type": "boolean",
+            "description": "True when the original instrument settings still require recovery. New conflicting work/configuration is blocked until recovery completes."
           },
           "error": {
             "$ref": "#/components/schemas/Problem"
           },
           "component_id": {
-            "type": "string"
+            "type": "string",
+            "description": "Component ID scoped to the physical device; discover it through listComponents."
           },
           "confirmed_unit": {
-            "type": "string"
+            "type": "string",
+            "description": "Engineering unit for confirmed_value on a successful common component command; output uses 1 for boolean 0/1."
           },
           "requested_unit": {
-            "type": "string"
+            "type": "string",
+            "description": "Engineering unit of requested_value for a common component command."
           },
           "requested_value": {
             "type": "number",
-            "format": "double"
+            "format": "double",
+            "description": "Normalized common component target, for example amperes, volts, seconds or boolean 0/1."
           }
         },
         "required": [
@@ -1165,25 +1310,32 @@
           "duration_ms",
           "final_output",
           "restore_pending"
-        ]
+        ],
+        "description": "Asynchronous command lifecycle. Only succeeded confirms completion; pending/running are not confirmations. Failed/cancelled operations can have physical side effects. Common component routes report requested/confirmed values in engineering units; compatibility routes can return raw driver values."
       },
       "OutputRequest": {
         "type": "object",
         "additionalProperties": false,
         "properties": {
           "enabled": {
-            "type": "boolean"
+            "type": "boolean",
+            "description": "True requests ON; false requests OFF. Prefer independent STOP if no valid lease is available."
           },
           "max_duration_ms": {
             "type": "integer",
             "minimum": 100,
             "maximum": 86400000,
-            "description": "Optional local activation time cap; cannot exceed configured device duration."
+            "description": "Optional local upper bound in milliseconds for this activation (100 ms..24 h), starting at acceptance. It must not exceed a configured max_duration_s; exceeding the limit is rejected, not silently clamped. This is a safety deadline, not a precision pulse timer."
           }
         },
         "required": [
           "enabled"
-        ]
+        ],
+        "description": "Output intent, optionally with a bridge-local deadline for this activation. Sending a setpoint never implicitly enables an output.",
+        "example": {
+          "enabled": true,
+          "max_duration_ms": 1000
+        }
       },
       "CurrentRequest": {
         "type": "object",
@@ -1193,12 +1345,17 @@
             "type": "number",
             "format": "double",
             "minimum": 0,
-            "maximum": 40
+            "maximum": 40,
+            "description": "Current in A. Measurements retain provider sign; targets are non-negative limits/setpoints."
           }
         },
         "required": [
           "current_a"
-        ]
+        ],
+        "description": "Current target in A: source current limit or sink CC setpoint. Schema bounds are upper contract bounds; driver precision and configured limits can be stricter.",
+        "example": {
+          "current_a": 0.1
+        }
       },
       "VoltageRequest": {
         "type": "object",
@@ -1208,12 +1365,14 @@
             "type": "number",
             "format": "double",
             "minimum": 0,
-            "maximum": 200
+            "maximum": 200,
+            "description": "Voltage in V. Preserve provider sign where supported."
           }
         },
         "required": [
           "voltage_v"
-        ]
+        ],
+        "description": "Voltage target in V. Driver precision, capabilities and configured voltage/power limits may reject a value within the generic schema range."
       },
       "LeaseRequest": {
         "type": "object",
@@ -1223,37 +1382,49 @@
             "type": "array",
             "items": {
               "type": "string"
-            }
+            },
+            "description": "Physical device IDs to reserve together. List each device once, even if several of its actors are used."
           },
           "ttl_ms": {
             "type": "integer",
             "format": "int64",
             "minimum": 1000,
             "maximum": 10000,
-            "default": 10000
+            "default": 10000,
+            "description": "Heartbeat TTL in milliseconds (1000..10000, default 10000). Renew at least every second; expiry requests group shutdown."
           }
         },
         "required": [
           "device_ids"
-        ]
+        ],
+        "description": "Exclusive reservation of physical devices on one node. Reserve each physical device once, even when controlling several of its components.",
+        "example": {
+          "device_ids": [
+            "load"
+          ],
+          "ttl_ms": 10000
+        }
       },
       "Lease": {
         "type": "object",
         "additionalProperties": false,
         "properties": {
           "id": {
-            "type": "string"
+            "type": "string",
+            "description": "Opaque lease ID for X-Lab-Lease; valid only within this node boot."
           },
           "device_ids": {
             "type": "array",
             "items": {
               "type": "string"
-            }
+            },
+            "description": "Physical devices covered by this exclusive lease."
           },
           "expires_at_ms": {
             "type": "integer",
             "format": "int64",
-            "minimum": 0
+            "minimum": 0,
+            "description": "Node-monotonic heartbeat deadline in milliseconds; not a Unix timestamp."
           },
           "state": {
             "type": "string",
@@ -1261,7 +1432,8 @@
               "active",
               "stopped",
               "expired"
-            ]
+            ],
+            "description": "Only active authorizes commands. stopped/expired means ownership ended; shutdown verification may still be pending."
           }
         },
         "required": [
@@ -1269,7 +1441,8 @@
           "device_ids",
           "expires_at_ms",
           "state"
-        ]
+        ],
+        "description": "Boot-local device-group ownership and heartbeat deadline. Stopping/expiry initiates group shutdown; it is not itself proof that physical outputs are OFF."
       },
       "StopRequest": {
         "type": "object",
@@ -1277,8 +1450,13 @@
         "properties": {
           "reason": {
             "type": "string",
-            "maxLength": 120
+            "maxLength": 120,
+            "description": "Optional operator/application diagnostic note, at most 120 characters; does not change shutdown semantics."
           }
+        },
+        "description": "Optional diagnostic reason. Send {} when no reason is needed; this body is also used by lease heartbeats and counter reset.",
+        "example": {
+          "reason": "test complete"
         }
       },
       "DeviceConfiguration": {
@@ -1287,16 +1465,20 @@
         "properties": {
           "id": {
             "type": "string",
-            "pattern": "^[A-Za-z0-9_-]{1,48}$"
+            "pattern": "^[A-Za-z0-9_-]{1,48}$",
+            "description": "Stable local name used in API paths, unique within the node."
           },
           "driver": {
-            "type": "string"
+            "type": "string",
+            "description": "Registered module: for example dl24m, rd60xx, gpio_interlock, ds18b20, ina228 or yocto_watt."
           },
           "transport": {
-            "type": "string"
+            "type": "string",
+            "description": "Transport supported by the driver and board; incompatible combinations are rejected."
           },
           "endpoint": {
-            "type": "string"
+            "type": "string",
+            "description": "Stable physical endpoint. Examples: BLE address, serial endpoint, decimal I2C address 64..79 for INA228, or YWATMK2C-... hardware serial for Yocto."
           },
           "pins": {
             "type": "array",
@@ -1305,7 +1487,8 @@
               "format": "int64",
               "minimum": 0,
               "maximum": 48
-            }
+            },
+            "description": "Ordered driver-specific GPIO list, explicitly allowed by the board configuration. INA228 uses [SDA, SCL]; all I2C0 instances must share the pair."
           },
           "limits": {
             "$ref": "#/components/schemas/SafetyLimits"
@@ -1326,7 +1509,8 @@
             "type": "integer",
             "minimum": 100,
             "maximum": 3000,
-            "default": 1000
+            "default": 1000,
+            "description": "Read-only sensor freshness limit in milliseconds; defaults to 1000 and overrides the legacy limits.max_age_ms sensor setting."
           }
         },
         "required": [
@@ -1334,28 +1518,33 @@
           "driver",
           "transport",
           "endpoint"
-        ]
+        ],
+        "description": "One configured physical endpoint. Select a driver-supported transport, stable identity and explicitly approved pins. Resource conflicts and invalid driver calibration are rejected before allocation. Read-only sensors need no actuator limits."
       },
       "WifiNetwork": {
         "type": "object",
         "additionalProperties": false,
         "properties": {
           "ssid": {
-            "type": "string"
+            "type": "string",
+            "description": "Advertised network name."
           },
           "rssi_dbm": {
             "type": "integer",
-            "format": "int64"
+            "format": "int64",
+            "description": "Received signal strength in dBm; a larger (less negative) value is stronger."
           },
           "secured": {
-            "type": "boolean"
+            "type": "boolean",
+            "description": "Whether the discovered network advertises authentication; does not describe the open setup AP."
           }
         },
         "required": [
           "ssid",
           "rssi_dbm",
           "secured"
-        ]
+        ],
+        "description": "One network discovered by the asynchronous station scan. The setup AP itself remains open."
       },
       "WifiScan": {
         "type": "object",
@@ -1365,7 +1554,8 @@
             "type": "array",
             "items": {
               "$ref": "#/components/schemas/WifiNetwork"
-            }
+            },
+            "description": "Most recent discovered networks; may be empty while the scan is still running."
           },
           "state": {
             "type": "string",
@@ -1373,13 +1563,15 @@
               "scanning",
               "complete",
               "failed"
-            ]
+            ],
+            "description": "scanning: poll again; complete: cached results ready; failed: scan did not complete successfully."
           }
         },
         "required": [
           "networks",
           "state"
-        ]
+        ],
+        "description": "Current asynchronous scan status and cached networks. Poll while scanning; an empty list does not imply a completed scan."
       },
       "WifiRequest": {
         "type": "object",
@@ -1388,18 +1580,21 @@
           "ssid": {
             "type": "string",
             "minLength": 1,
-            "maxLength": 32
+            "maxLength": 32,
+            "description": "Target station network name (1..32 bytes accepted by the firmware)."
           },
           "psk": {
             "type": "string",
             "maxLength": 64,
-            "format": "password"
+            "format": "password",
+            "description": "Target network secret: empty/omitted for an open network, 8..63 characters, or exactly 64 hexadecimal digits. Never returned by the API."
           }
         },
         "required": [
           "ssid",
           "psk"
-        ]
+        ],
+        "description": "Target station credentials, separate from the password-free provisioning AP. Credentials are persisted locally and never returned by the state API."
       },
       "WifiState": {
         "type": "object",
@@ -1412,19 +1607,23 @@
               "connecting",
               "connected",
               "failed"
-            ]
+            ],
+            "description": "setup: no saved station SSID; connecting: credentials exist but no station address yet (also used while retrying after disconnect); connected: station has an address. failed is reserved by the contract; the current ESP runtime keeps retrying as connecting."
           },
           "hostname": {
-            "type": "string"
+            "type": "string",
+            "description": "Configured mDNS host name for the bridge."
           },
           "address": {
-            "type": "string"
+            "type": "string",
+            "description": "Current station IP address when connected; omitted until the station has an address. The setup AP is separately reachable at 192.168.4.1."
           }
         },
         "required": [
           "state",
           "hostname"
-        ]
+        ],
+        "description": "Station provisioning/connection snapshot. A successful credential-save response does not imply that the station is already connected."
       },
       "NodeConfiguration": {
         "type": "object",
@@ -1433,20 +1632,24 @@
           "revision": {
             "type": "integer",
             "format": "int64",
-            "minimum": 0
+            "minimum": 0,
+            "description": "Server-managed persistent configuration revision. Copy the current document for replacement; concurrency is enforced by the If-Match ETag."
           },
           "node_id": {
             "type": "string",
-            "pattern": "^[A-Za-z0-9_-]{1,48}$"
+            "pattern": "^[A-Za-z0-9_-]{1,48}$",
+            "description": "Configured unique node name and network hostname base."
           },
           "board": {
-            "type": "string"
+            "type": "string",
+            "description": "Board profile identifier; must match the running hardware profile."
           },
           "devices": {
             "type": "array",
             "items": {
               "$ref": "#/components/schemas/DeviceConfiguration"
-            }
+            },
+            "description": "Complete desired instrument list; replacement removes omitted entries. Resource and physical-identity conflicts are rejected."
           }
         },
         "required": [
@@ -1454,7 +1657,8 @@
           "node_id",
           "board",
           "devices"
-        ]
+        ],
+        "description": "Complete persistent bridge configuration. Replace conditionally using the current ETag; the node assigns the next revision and reboots after accepting a replacement."
       },
       "CellTemperatureGuard": {
         "type": "object",
@@ -1469,29 +1673,35 @@
         "properties": {
           "sensor_device_id": {
             "type": "string",
-            "pattern": "^[A-Za-z0-9_-]{1,48}$"
+            "pattern": "^[A-Za-z0-9_-]{1,48}$",
+            "description": "Sensor device on this same node, so the guard remains effective without the host/network."
           },
           "channel_id": {
             "type": "string",
             "minLength": 1,
-            "maxLength": 48
+            "maxLength": 48,
+            "description": "Temperature component ID or legacy channel ID. Must resolve to a degC external_probe/cell channel, not an internal sensor."
           },
           "minimum_c": {
             "type": "number",
             "minimum": -20,
-            "maximum": 80
+            "maximum": 80,
+            "description": "Lower allowed cell temperature in degrees Celsius; must be below maximum_c."
           },
           "maximum_c": {
             "type": "number",
             "minimum": -20,
-            "maximum": 80
+            "maximum": 80,
+            "description": "Upper allowed cell temperature in degrees Celsius; must exceed minimum_c."
           },
           "max_age_ms": {
             "type": "integer",
             "minimum": 100,
-            "maximum": 3000
+            "maximum": 3000,
+            "description": "Maximum permitted probe age in milliseconds; stale/unavailable data triggers local shutdown."
           }
-        }
+        },
+        "description": "Node-local guard for a cell or external-probe temperature channel. Require fresh valid degrees-Celsius data and minimum_c < maximum_c. The guard stops the associated actor on stale/missing/out-of-range data."
       },
       "InterlockConfiguration": {
         "type": "object",
@@ -1503,17 +1713,21 @@
         ],
         "properties": {
           "active_high": {
-            "type": "boolean"
+            "type": "boolean",
+            "description": "Whether a high GPIO level energizes a selected path."
           },
           "feedback_active_high": {
-            "type": "boolean"
+            "type": "boolean",
+            "description": "Whether a high feedback GPIO level means a path is closed."
           },
           "break_ms": {
             "type": "integer",
             "minimum": 20,
-            "maximum": 2000
+            "maximum": 2000,
+            "description": "Minimum both-paths-open interval in milliseconds before selecting the new path (20..2000)."
           }
-        }
+        },
+        "description": "GPIO polarity and break-before-make configuration for a feedback-verified charge/discharge switch. Wiring and feedback must be commissioned on the actual board."
       },
       "ManagementToken": {
         "type": "object",
@@ -1521,13 +1735,45 @@
         "properties": {
           "token": {
             "type": "string",
-            "format": "password"
+            "format": "password",
+            "description": "Node bearer credential for the Authorization: Bearer header on trusted-LAN HTTP requests."
           }
         },
         "required": [
           "token"
-        ]
+        ],
+        "description": "Secret bearer credential returned only through physically trusted USB management. Never publish it or include it in shared test artifacts."
       }
     }
+  },
+  "tags": [
+    {
+      "name": "core",
+      "description": "Node discovery, physical-device leases, asynchronous results, persistent configuration and Wi-Fi/USB management."
+    },
+    {
+      "name": "components",
+      "description": "Common source, sink and scalar sensor API. Discover advertised actions and use physical-device leases for actor writes."
+    },
+    {
+      "name": "dl24m",
+      "description": "Specialized DL24M BLE CC/settings/register operations with readback verification and restore recovery. Active non-CC modes are not commissioned."
+    },
+    {
+      "name": "rd60xx",
+      "description": "Compatibility source setpoints via Modbus RTU. Prefer common source component routes; actual RD6024 commissioning remains open."
+    },
+    {
+      "name": "gpio_interlock",
+      "description": "Optional feedback-verified path switching with break-before-make and both-open shutdown."
+    },
+    {
+      "name": "ds18b20",
+      "description": "Typed temperature-channel compatibility access; common sensor readings also support these channels."
+    }
+  ],
+  "externalDocs": {
+    "description": "Consolidated hardware, API and protocol handbook, including supported boards and driver-specific wire formats.",
+    "url": "https://github.com/nobodypb/labbridge/blob/main/docs/handbook.md"
   }
 }

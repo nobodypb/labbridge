@@ -1,7 +1,7 @@
 /*
  * measurements.h
  *
- * 
+ * Compatibility device-level snapshot. Optional fields are present only when supported/available; absence must never be converted into a measured zero. Prefer SensorReading for new meter/composite integrations.
  */
 
 #ifndef _measurements_H_

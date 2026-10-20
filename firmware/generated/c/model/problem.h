@@ -1,7 +1,7 @@
 /*
  * problem.h
  *
- * 
+ * Structured request or operation failure using application/problem+json. A failed write may already have changed hardware. Inspect final_output and restore_pending and request independent STOP when the outcome is uncertain.
  */
 
 #ifndef _problem_H_

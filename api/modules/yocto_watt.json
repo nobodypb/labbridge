@@ -22,8 +22,13 @@
       "properties": {
         "hub_url": {
           "type": "string",
-          "maxLength": 256
+          "maxLength": 256,
+          "description": "Plain HTTP VirtualHub/YoctoHub origin, e.g. http://virtualhub.local:4444. No credentials or path are accepted; the provider polls /bySerial/{endpoint}/api.json and verifies the hardware serial/product identity."
         }
+      },
+      "description": "ESP measurement provider via HTTP VirtualHub/YoctoHub, bound by hardware serial YWATMK2C-... in endpoint. DC voltage/current/power and optional AC/power-factor channels use common readings. Native PC USB is instead available through the host endpoint yocto+usb://SERIAL and official SDK. Native Yocto USB on ESP is not implemented; physical commissioning remains open.",
+      "example": {
+        "hub_url": "http://virtualhub.local:4444"
       }
     }
   }

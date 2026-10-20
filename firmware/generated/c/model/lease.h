@@ -1,7 +1,7 @@
 /*
  * lease.h
  *
- * 
+ * Boot-local device-group ownership and heartbeat deadline. Stopping/expiry initiates group shutdown; it is not itself proof that physical outputs are OFF.
  */
 
 #ifndef _lease_H_

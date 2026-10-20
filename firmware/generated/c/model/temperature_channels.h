@@ -1,7 +1,7 @@
 /*
  * temperature_channels.h
  *
- * 
+ * Cached per-channel temperature values with independent availability and freshness.
  */
 
 #ifndef _temperature_channels_H_

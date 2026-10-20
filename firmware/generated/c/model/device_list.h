@@ -1,7 +1,7 @@
 /*
  * device_list.h
  *
- * 
+ * Configured local physical instruments, including currently unavailable devices.
  */
 
 #ifndef _device_list_H_

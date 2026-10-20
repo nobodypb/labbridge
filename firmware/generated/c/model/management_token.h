@@ -1,7 +1,7 @@
 /*
  * management_token.h
  *
- * 
+ * Secret bearer credential returned only through physically trusted USB management. Never publish it or include it in shared test artifacts.
  */
 
 #ifndef _management_token_H_

@@ -1,7 +1,7 @@
 /*
  * dl24m_settings.h
  *
- * 
+ * Partial update or cached snapshot of supported DL24M settings in engineering units, except explicitly raw enums/time. Current integration is commissioned on display firmware Ver: 2.0. Conservative schema maxima are bridge support limits, not claimed instrument ratings.
  */
 
 #ifndef _dl24m_settings_H_

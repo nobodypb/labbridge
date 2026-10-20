@@ -1,7 +1,7 @@
 /*
  * dl24m_bank_request.h
  *
- * 
+ * Inactive bank selection for a temporary, OFF-only mode-switch transaction that restores CC afterwards.
  */
 
 #ifndef _dl24m_bank_request_H_

@@ -23,6 +23,7 @@ checks pass and its hardware claims match the evidence.
 | LB-015 | As a script author, I address source/sink/sensor components through one typed API regardless of device model. | LB-002, LB-004 | Done |
 | LB-016 | As a cell tester, I optionally use direct source/load switching and independent meters/additional temperature channels. | LB-012, LB-015 | Done |
 | LB-017 | As an operator, I configure INA228 I²C and Yocto-Watt-V2-C measurement providers. | LB-015 | Implemented; hardware acceptance open |
+| LB-018 | As an API consumer, I understand operations, units, prerequisites and failure handling directly from OpenAPI and generated clients. | LB-002, LB-015 | Done |
 
 ## Acceptance criteria
 
@@ -57,6 +58,7 @@ no claim of a production-ready battery test system or of tested optional PSU BT.
 
 ## New acceptance criteria
 
+- **LB-018:** every operation, parameter, schema and inline field has useful English documentation (reference fields use the shared schema); asynchronous confirmation, leases, STOP, freshness, units and device limitations are explicit; generated clients retain documentation; firmware validation excludes prose while preserving constraints; generation and contract checks pass.
 - **LB-015:** discover multiple actor/sensor components per device; identical typed routes for sources/sinks and scalar readings; per-component routing validated; physical-device leases and priority STOP preserved; SDK/CLI/UI use the abstraction; hardware-specific routes remain optional compatibility APIs.
 - **LB-016:** both chemistries run with and without a feedback switch; confirmed OFF before direction changes; independent meter selections and additional temperature channels recorded with identity/freshness/sign semantics; stale or rebooted selected sensors stop the run; original settings restored.
 - **LB-017:** INA228 calibration/identity/register scaling/sign/overflow/freshness tests, shared-I²C address/resource validation, explicit shunt calibration; Yocto serial binding, function/unit/status and finite-value validation through supported official transports; unavailable sensors never fabricate zeros. Actual new hardware commissioning remains open.

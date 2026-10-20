@@ -1,7 +1,7 @@
 /*
  * temperature_channel.h
  *
- * 
+ * One typed temperature channel. Only fresh external_probe/cell channels qualify for cell guards; internal temperature cannot substitute for a cell probe.
  */
 
 #ifndef _temperature_channel_H_

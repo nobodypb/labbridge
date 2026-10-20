@@ -1,7 +1,7 @@
 /*
  * current_request.h
  *
- * 
+ * Current target in A: source current limit or sink CC setpoint. Schema bounds are upper contract bounds; driver precision and configured limits can be stricter.
  */
 
 #ifndef _current_request_H_

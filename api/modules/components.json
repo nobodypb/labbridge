@@ -15,7 +15,7 @@
         ],
         "responses": {
           "default": {
-            "description": "Structured error",
+            "description": "Request rejected or unavailable: 400 malformed/invalid request, 401 missing LAN credentials, 403 forbidden transport, 404 unknown resource, 409 state/ownership/idempotency conflict, 412 stale configuration ETag, 422 unsupported or unsafe setting, 423 missing/expired device lease, or 503 resource/transport unavailable, as applicable. An accepted operation can later fail through Operation.error; HTTP acceptance is not hardware success.",
             "content": {
               "application/problem+json": {
                 "schema": {
@@ -25,7 +25,7 @@
             }
           },
           "200": {
-            "description": "Component result",
+            "description": "Current ComponentList result. Cached telemetry still requires per-value quality/freshness checks; a management result confirms only the documented management action.",
             "content": {
               "application/json": {
                 "schema": {
@@ -43,9 +43,12 @@
             "schema": {
               "type": "string",
               "pattern": "^[A-Za-z0-9_-]{1,48}$"
-            }
+            },
+            "description": "Configured physical device ID on this node. Discover IDs with listDevices; do not use a model name unless it is the configured ID."
           }
-        ]
+        ],
+        "summary": "Discover actors and sensors on a device",
+        "description": "List source, sink and scalar sensor components with their IDs, supported actions, quantities and units. A physical device can expose several of these. Use advertised actions instead of inferring functionality from a driver name or assuming a source and sink have identical settings."
       }
     },
     "/api/v1/devices/{deviceId}/readings": {
@@ -56,7 +59,7 @@
         ],
         "responses": {
           "default": {
-            "description": "Structured error",
+            "description": "Request rejected or unavailable: 400 malformed/invalid request, 401 missing LAN credentials, 403 forbidden transport, 404 unknown resource, 409 state/ownership/idempotency conflict, 412 stale configuration ETag, 422 unsupported or unsafe setting, 423 missing/expired device lease, or 503 resource/transport unavailable, as applicable. An accepted operation can later fail through Operation.error; HTTP acceptance is not hardware success.",
             "content": {
               "application/problem+json": {
                 "schema": {
@@ -66,7 +69,7 @@
             }
           },
           "200": {
-            "description": "Component result",
+            "description": "Current SensorReadings result. Cached telemetry still requires per-value quality/freshness checks; a management result confirms only the documented management action.",
             "content": {
               "application/json": {
                 "schema": {
@@ -84,9 +87,12 @@
             "schema": {
               "type": "string",
               "pattern": "^[A-Za-z0-9_-]{1,48}$"
-            }
+            },
+            "description": "Configured physical device ID on this node. Discover IDs with listDevices; do not use a model name unless it is the configured ID."
           }
-        ]
+        ],
+        "summary": "Read all scalar sensors in one snapshot",
+        "description": "Return cached scalar readings with component identity, units and individual freshness. This supports standalone meters and instruments containing multiple sensors. Require valid quality and acceptable age for every selected channel; correlate sequences/epochs rather than treating every HTTP response as a fresh sample."
       }
     },
     "/api/v1/devices/{deviceId}/components/{componentId}/measurement": {
@@ -97,7 +103,7 @@
         ],
         "responses": {
           "default": {
-            "description": "Structured error",
+            "description": "Request rejected or unavailable: 400 malformed/invalid request, 401 missing LAN credentials, 403 forbidden transport, 404 unknown resource, 409 state/ownership/idempotency conflict, 412 stale configuration ETag, 422 unsupported or unsafe setting, 423 missing/expired device lease, or 503 resource/transport unavailable, as applicable. An accepted operation can later fail through Operation.error; HTTP acceptance is not hardware success.",
             "content": {
               "application/problem+json": {
                 "schema": {
@@ -107,7 +113,7 @@
             }
           },
           "200": {
-            "description": "Component result",
+            "description": "Current SensorReading result. Cached telemetry still requires per-value quality/freshness checks; a management result confirms only the documented management action.",
             "content": {
               "application/json": {
                 "schema": {
@@ -125,7 +131,8 @@
             "schema": {
               "type": "string",
               "pattern": "^[A-Za-z0-9_-]{1,48}$"
-            }
+            },
+            "description": "Configured physical device ID on this node. Discover IDs with listDevices; do not use a model name unless it is the configured ID."
           },
           {
             "name": "componentId",
@@ -134,9 +141,12 @@
             "schema": {
               "type": "string",
               "pattern": "^[A-Za-z0-9_-]{1,96}$"
-            }
+            },
+            "description": "Component ID within deviceId. Discover it through listComponents and check its kind/actions."
           }
-        ]
+        ],
+        "summary": "Read one scalar sensor",
+        "description": "Return the cached value and quality of a sensor component. Values retain the provider sign convention; the external test script must explicitly configure current/power orientation. Check boot_id, optional epoch, sequence and age before integration. A non-sensor component returns 422."
       }
     },
     "/api/v1/devices/{deviceId}/components/{componentId}/state": {
@@ -147,7 +157,7 @@
         ],
         "responses": {
           "default": {
-            "description": "Structured error",
+            "description": "Request rejected or unavailable: 400 malformed/invalid request, 401 missing LAN credentials, 403 forbidden transport, 404 unknown resource, 409 state/ownership/idempotency conflict, 412 stale configuration ETag, 422 unsupported or unsafe setting, 423 missing/expired device lease, or 503 resource/transport unavailable, as applicable. An accepted operation can later fail through Operation.error; HTTP acceptance is not hardware success.",
             "content": {
               "application/problem+json": {
                 "schema": {
@@ -157,7 +167,7 @@
             }
           },
           "200": {
-            "description": "Component result",
+            "description": "Current ActuatorState result. Cached telemetry still requires per-value quality/freshness checks; a management result confirms only the documented management action.",
             "content": {
               "application/json": {
                 "schema": {
@@ -175,7 +185,8 @@
             "schema": {
               "type": "string",
               "pattern": "^[A-Za-z0-9_-]{1,48}$"
-            }
+            },
+            "description": "Configured physical device ID on this node. Discover IDs with listDevices; do not use a model name unless it is the configured ID."
           },
           {
             "name": "componentId",
@@ -184,9 +195,12 @@
             "schema": {
               "type": "string",
               "pattern": "^[A-Za-z0-9_-]{1,96}$"
-            }
+            },
+            "description": "Component ID within deviceId. Discover it through listComponents and check its kind/actions."
           }
-        ]
+        ],
+        "summary": "Read an actor output and setpoints",
+        "description": "Return one source/sink actor state, confirmed output state and available cached settings. This is a snapshot, not a fresh write/readback operation. Unknown or absent settings must not be inferred as zero. A sensor component returns 422."
       }
     },
     "/api/v1/devices/{deviceId}/components/{componentId}/current": {
@@ -197,7 +211,7 @@
         ],
         "responses": {
           "default": {
-            "description": "Structured error",
+            "description": "Request rejected or unavailable: 400 malformed/invalid request, 401 missing LAN credentials, 403 forbidden transport, 404 unknown resource, 409 state/ownership/idempotency conflict, 412 stale configuration ETag, 422 unsupported or unsafe setting, 423 missing/expired device lease, or 503 resource/transport unavailable, as applicable. An accepted operation can later fail through Operation.error; HTTP acceptance is not hardware success.",
             "content": {
               "application/problem+json": {
                 "schema": {
@@ -207,7 +221,7 @@
             }
           },
           "202": {
-            "description": "Operation accepted; poll until terminal",
+            "description": "Command accepted for asynchronous execution. Follow Location to getOperation until succeeded, failed or cancelled; inspect final_output and restore_pending.",
             "content": {
               "application/json": {
                 "schema": {
@@ -217,7 +231,7 @@
             },
             "headers": {
               "Location": {
-                "description": "Operation status URL",
+                "description": "Relative URL /api/v1/operations/{operationId} for polling in this node boot.",
                 "schema": {
                   "type": "string"
                 }
@@ -233,7 +247,8 @@
             "schema": {
               "type": "string",
               "pattern": "^[A-Za-z0-9_-]{1,48}$"
-            }
+            },
+            "description": "Configured physical device ID on this node. Discover IDs with listDevices; do not use a model name unless it is the configured ID."
           },
           {
             "name": "componentId",
@@ -242,7 +257,8 @@
             "schema": {
               "type": "string",
               "pattern": "^[A-Za-z0-9_-]{1,96}$"
-            }
+            },
+            "description": "Component ID within deviceId. Discover it through listComponents and check its kind/actions."
           },
           {
             "name": "X-Lab-Lease",
@@ -250,7 +266,8 @@
             "required": true,
             "schema": {
               "type": "string"
-            }
+            },
+            "description": "Active lease ID covering this physical device. Components share ownership; heartbeats must continue while commands are pending."
           },
           {
             "name": "Idempotency-Key",
@@ -260,7 +277,8 @@
               "type": "string",
               "minLength": 1,
               "maxLength": 96
-            }
+            },
+            "description": "Unique key per logical mutation (1..96 characters). Repeating the same method/path/semantic JSON body within this boot returns the existing operation; reusing it for different content returns 409. Retention is bounded. After an uncertain timeout or reboot, inspect state and STOP as needed instead of replaying ON."
           }
         ],
         "requestBody": {
@@ -271,8 +289,11 @@
                 "$ref": "#/components/schemas/CurrentRequest"
               }
             }
-          }
-        }
+          },
+          "description": "JSON request with the fields documented by the referenced schema. Unknown properties are rejected; use {} for an empty StopRequest."
+        },
+        "summary": "Set source current limit or sink CC target",
+        "description": "Set amperes on a source or sink advertising the current action. The driver enforces configured limits and representable precision; it does not silently round an unsupported target. On success the operation confirms the value in A. This does not enable the output. Actor commands on the same physical device are serialized.\n\nReturns 202 with an Operation and Location, not an instrument acknowledgement. Keep the lease alive where required and poll until terminal. Bounded device retries/readback recovery run on the bridge; callers receive a terminal failure when recovery is exhausted. Do not automatically replay an uncertain mutation."
       }
     },
     "/api/v1/devices/{deviceId}/components/{componentId}/voltage": {
@@ -283,7 +304,7 @@
         ],
         "responses": {
           "default": {
-            "description": "Structured error",
+            "description": "Request rejected or unavailable: 400 malformed/invalid request, 401 missing LAN credentials, 403 forbidden transport, 404 unknown resource, 409 state/ownership/idempotency conflict, 412 stale configuration ETag, 422 unsupported or unsafe setting, 423 missing/expired device lease, or 503 resource/transport unavailable, as applicable. An accepted operation can later fail through Operation.error; HTTP acceptance is not hardware success.",
             "content": {
               "application/problem+json": {
                 "schema": {
@@ -293,7 +314,7 @@
             }
           },
           "202": {
-            "description": "Operation accepted; poll until terminal",
+            "description": "Command accepted for asynchronous execution. Follow Location to getOperation until succeeded, failed or cancelled; inspect final_output and restore_pending.",
             "content": {
               "application/json": {
                 "schema": {
@@ -303,7 +324,7 @@
             },
             "headers": {
               "Location": {
-                "description": "Operation status URL",
+                "description": "Relative URL /api/v1/operations/{operationId} for polling in this node boot.",
                 "schema": {
                   "type": "string"
                 }
@@ -319,7 +340,8 @@
             "schema": {
               "type": "string",
               "pattern": "^[A-Za-z0-9_-]{1,48}$"
-            }
+            },
+            "description": "Configured physical device ID on this node. Discover IDs with listDevices; do not use a model name unless it is the configured ID."
           },
           {
             "name": "componentId",
@@ -328,7 +350,8 @@
             "schema": {
               "type": "string",
               "pattern": "^[A-Za-z0-9_-]{1,96}$"
-            }
+            },
+            "description": "Component ID within deviceId. Discover it through listComponents and check its kind/actions."
           },
           {
             "name": "X-Lab-Lease",
@@ -336,7 +359,8 @@
             "required": true,
             "schema": {
               "type": "string"
-            }
+            },
+            "description": "Active lease ID covering this physical device. Components share ownership; heartbeats must continue while commands are pending."
           },
           {
             "name": "Idempotency-Key",
@@ -346,7 +370,8 @@
               "type": "string",
               "minLength": 1,
               "maxLength": 96
-            }
+            },
+            "description": "Unique key per logical mutation (1..96 characters). Repeating the same method/path/semantic JSON body within this boot returns the existing operation; reusing it for different content returns 409. Retention is bounded. After an uncertain timeout or reboot, inspect state and STOP as needed instead of replaying ON."
           }
         ],
         "requestBody": {
@@ -357,8 +382,11 @@
                 "$ref": "#/components/schemas/VoltageRequest"
               }
             }
-          }
-        }
+          },
+          "description": "JSON request with the fields documented by the referenced schema. Unknown properties are rejected; use {} for an empty StopRequest."
+        },
+        "summary": "Set a source voltage target",
+        "description": "Set volts on an actor advertising the voltage action. Enforce local voltage/power limits and device precision before sending. This does not enable the output. On success the common operation confirms the target in V; an unsupported action returns 422.\n\nReturns 202 with an Operation and Location, not an instrument acknowledgement. Keep the lease alive where required and poll until terminal. Bounded device retries/readback recovery run on the bridge; callers receive a terminal failure when recovery is exhausted. Do not automatically replay an uncertain mutation."
       }
     },
     "/api/v1/devices/{deviceId}/components/{componentId}/cutoff": {
@@ -369,7 +397,7 @@
         ],
         "responses": {
           "default": {
-            "description": "Structured error",
+            "description": "Request rejected or unavailable: 400 malformed/invalid request, 401 missing LAN credentials, 403 forbidden transport, 404 unknown resource, 409 state/ownership/idempotency conflict, 412 stale configuration ETag, 422 unsupported or unsafe setting, 423 missing/expired device lease, or 503 resource/transport unavailable, as applicable. An accepted operation can later fail through Operation.error; HTTP acceptance is not hardware success.",
             "content": {
               "application/problem+json": {
                 "schema": {
@@ -379,7 +407,7 @@
             }
           },
           "202": {
-            "description": "Operation accepted; poll until terminal",
+            "description": "Command accepted for asynchronous execution. Follow Location to getOperation until succeeded, failed or cancelled; inspect final_output and restore_pending.",
             "content": {
               "application/json": {
                 "schema": {
@@ -389,7 +417,7 @@
             },
             "headers": {
               "Location": {
-                "description": "Operation status URL",
+                "description": "Relative URL /api/v1/operations/{operationId} for polling in this node boot.",
                 "schema": {
                   "type": "string"
                 }
@@ -405,7 +433,8 @@
             "schema": {
               "type": "string",
               "pattern": "^[A-Za-z0-9_-]{1,48}$"
-            }
+            },
+            "description": "Configured physical device ID on this node. Discover IDs with listDevices; do not use a model name unless it is the configured ID."
           },
           {
             "name": "componentId",
@@ -414,7 +443,8 @@
             "schema": {
               "type": "string",
               "pattern": "^[A-Za-z0-9_-]{1,96}$"
-            }
+            },
+            "description": "Component ID within deviceId. Discover it through listComponents and check its kind/actions."
           },
           {
             "name": "X-Lab-Lease",
@@ -422,7 +452,8 @@
             "required": true,
             "schema": {
               "type": "string"
-            }
+            },
+            "description": "Active lease ID covering this physical device. Components share ownership; heartbeats must continue while commands are pending."
           },
           {
             "name": "Idempotency-Key",
@@ -432,7 +463,8 @@
               "type": "string",
               "minLength": 1,
               "maxLength": 96
-            }
+            },
+            "description": "Unique key per logical mutation (1..96 characters). Repeating the same method/path/semantic JSON body within this boot returns the existing operation; reusing it for different content returns 409. Retention is bounded. After an uncertain timeout or reboot, inspect state and STOP as needed instead of replaying ON."
           }
         ],
         "requestBody": {
@@ -443,8 +475,11 @@
                 "$ref": "#/components/schemas/CutoffRequest"
               }
             }
-          }
-        }
+          },
+          "description": "JSON request with the fields documented by the referenced schema. Unknown properties are rejected; use {} for an empty StopRequest."
+        },
+        "summary": "Set an instrument discharge cutoff",
+        "description": "Set the low-voltage cutoff in V on a supporting sink. Device precision and configured limits apply; DL24M requires 0.1 V steps. A host workflow should also monitor the selected cell voltage independently. This setting does not enable the load.\n\nReturns 202 with an Operation and Location, not an instrument acknowledgement. Keep the lease alive where required and poll until terminal. Bounded device retries/readback recovery run on the bridge; callers receive a terminal failure when recovery is exhausted. Do not automatically replay an uncertain mutation."
       }
     },
     "/api/v1/devices/{deviceId}/components/{componentId}/duration": {
@@ -455,7 +490,7 @@
         ],
         "responses": {
           "default": {
-            "description": "Structured error",
+            "description": "Request rejected or unavailable: 400 malformed/invalid request, 401 missing LAN credentials, 403 forbidden transport, 404 unknown resource, 409 state/ownership/idempotency conflict, 412 stale configuration ETag, 422 unsupported or unsafe setting, 423 missing/expired device lease, or 503 resource/transport unavailable, as applicable. An accepted operation can later fail through Operation.error; HTTP acceptance is not hardware success.",
             "content": {
               "application/problem+json": {
                 "schema": {
@@ -465,7 +500,7 @@
             }
           },
           "202": {
-            "description": "Operation accepted; poll until terminal",
+            "description": "Command accepted for asynchronous execution. Follow Location to getOperation until succeeded, failed or cancelled; inspect final_output and restore_pending.",
             "content": {
               "application/json": {
                 "schema": {
@@ -475,7 +510,7 @@
             },
             "headers": {
               "Location": {
-                "description": "Operation status URL",
+                "description": "Relative URL /api/v1/operations/{operationId} for polling in this node boot.",
                 "schema": {
                   "type": "string"
                 }
@@ -491,7 +526,8 @@
             "schema": {
               "type": "string",
               "pattern": "^[A-Za-z0-9_-]{1,48}$"
-            }
+            },
+            "description": "Configured physical device ID on this node. Discover IDs with listDevices; do not use a model name unless it is the configured ID."
           },
           {
             "name": "componentId",
@@ -500,7 +536,8 @@
             "schema": {
               "type": "string",
               "pattern": "^[A-Za-z0-9_-]{1,96}$"
-            }
+            },
+            "description": "Component ID within deviceId. Discover it through listComponents and check its kind/actions."
           },
           {
             "name": "X-Lab-Lease",
@@ -508,7 +545,8 @@
             "required": true,
             "schema": {
               "type": "string"
-            }
+            },
+            "description": "Active lease ID covering this physical device. Components share ownership; heartbeats must continue while commands are pending."
           },
           {
             "name": "Idempotency-Key",
@@ -518,7 +556,8 @@
               "type": "string",
               "minLength": 1,
               "maxLength": 96
-            }
+            },
+            "description": "Unique key per logical mutation (1..96 characters). Repeating the same method/path/semantic JSON body within this boot returns the existing operation; reusing it for different content returns 409. Retention is bounded. After an uncertain timeout or reboot, inspect state and STOP as needed instead of replaying ON."
           }
         ],
         "requestBody": {
@@ -529,8 +568,11 @@
                 "$ref": "#/components/schemas/DurationRequest"
               }
             }
-          }
-        }
+          },
+          "description": "JSON request with the fields documented by the referenced schema. Unknown properties are rejected; use {} for an empty StopRequest."
+        },
+        "summary": "Set an instrument run timer",
+        "description": "Set the instrument timer in seconds, with zero disabling that timer. Device granularity applies: DL24M accepts whole minutes. This is separate from output.max_duration_ms and lease expiry, which impose bridge-local shutdown deadlines. This setting does not enable the output.\n\nReturns 202 with an Operation and Location, not an instrument acknowledgement. Keep the lease alive where required and poll until terminal. Bounded device retries/readback recovery run on the bridge; callers receive a terminal failure when recovery is exhausted. Do not automatically replay an uncertain mutation."
       }
     },
     "/api/v1/devices/{deviceId}/components/{componentId}/output": {
@@ -541,7 +583,7 @@
         ],
         "responses": {
           "default": {
-            "description": "Structured error",
+            "description": "Request rejected or unavailable: 400 malformed/invalid request, 401 missing LAN credentials, 403 forbidden transport, 404 unknown resource, 409 state/ownership/idempotency conflict, 412 stale configuration ETag, 422 unsupported or unsafe setting, 423 missing/expired device lease, or 503 resource/transport unavailable, as applicable. An accepted operation can later fail through Operation.error; HTTP acceptance is not hardware success.",
             "content": {
               "application/problem+json": {
                 "schema": {
@@ -551,7 +593,7 @@
             }
           },
           "202": {
-            "description": "Operation accepted; poll until terminal",
+            "description": "Command accepted for asynchronous execution. Follow Location to getOperation until succeeded, failed or cancelled; inspect final_output and restore_pending.",
             "content": {
               "application/json": {
                 "schema": {
@@ -561,7 +603,7 @@
             },
             "headers": {
               "Location": {
-                "description": "Operation status URL",
+                "description": "Relative URL /api/v1/operations/{operationId} for polling in this node boot.",
                 "schema": {
                   "type": "string"
                 }
@@ -577,7 +619,8 @@
             "schema": {
               "type": "string",
               "pattern": "^[A-Za-z0-9_-]{1,48}$"
-            }
+            },
+            "description": "Configured physical device ID on this node. Discover IDs with listDevices; do not use a model name unless it is the configured ID."
           },
           {
             "name": "componentId",
@@ -586,7 +629,8 @@
             "schema": {
               "type": "string",
               "pattern": "^[A-Za-z0-9_-]{1,96}$"
-            }
+            },
+            "description": "Component ID within deviceId. Discover it through listComponents and check its kind/actions."
           },
           {
             "name": "X-Lab-Lease",
@@ -594,7 +638,8 @@
             "required": true,
             "schema": {
               "type": "string"
-            }
+            },
+            "description": "Active lease ID covering this physical device. Components share ownership; heartbeats must continue while commands are pending."
           },
           {
             "name": "Idempotency-Key",
@@ -604,7 +649,8 @@
               "type": "string",
               "minLength": 1,
               "maxLength": 96
-            }
+            },
+            "description": "Unique key per logical mutation (1..96 characters). Repeating the same method/path/semantic JSON body within this boot returns the existing operation; reusing it for different content returns 409. Retention is bounded. After an uncertain timeout or reboot, inspect state and STOP as needed instead of replaying ON."
           }
         ],
         "requestBody": {
@@ -615,8 +661,11 @@
                 "$ref": "#/components/schemas/OutputRequest"
               }
             }
-          }
-        }
+          },
+          "description": "JSON request with the fields documented by the referenced schema. Unknown properties are rejected; use {} for an empty StopRequest."
+        },
+        "summary": "Enable or disable one actor",
+        "description": "Set the selected actor output using its advertised output action. ON requires the physical-device lease, ready state, fresh measurements and all configured safeguards. max_duration_ms bounds this activation locally. Generated clients use the regular lease header for this route; use stopComponent for explicit lease-independent shutdown. The runtime also treats enabled=false as priority STOP. Reconnect/reboot never automatically resumes ON.\n\nReturns 202 with an Operation and Location, not an instrument acknowledgement. Keep the lease alive where required and poll until terminal. Bounded device retries/readback recovery run on the bridge; callers receive a terminal failure when recovery is exhausted. Do not automatically replay an uncertain mutation."
       }
     },
     "/api/v1/devices/{deviceId}/components/{componentId}/stop": {
@@ -627,7 +676,7 @@
         ],
         "responses": {
           "default": {
-            "description": "Structured error",
+            "description": "Request rejected or unavailable: 400 malformed/invalid request, 401 missing LAN credentials, 403 forbidden transport, 404 unknown resource, 409 state/ownership/idempotency conflict, 412 stale configuration ETag, 422 unsupported or unsafe setting, 423 missing/expired device lease, or 503 resource/transport unavailable, as applicable. An accepted operation can later fail through Operation.error; HTTP acceptance is not hardware success.",
             "content": {
               "application/problem+json": {
                 "schema": {
@@ -637,7 +686,7 @@
             }
           },
           "202": {
-            "description": "Operation accepted; poll until terminal",
+            "description": "Command accepted for asynchronous execution. Follow Location to getOperation until succeeded, failed or cancelled; inspect final_output and restore_pending.",
             "content": {
               "application/json": {
                 "schema": {
@@ -647,7 +696,7 @@
             },
             "headers": {
               "Location": {
-                "description": "Operation status URL",
+                "description": "Relative URL /api/v1/operations/{operationId} for polling in this node boot.",
                 "schema": {
                   "type": "string"
                 }
@@ -663,7 +712,8 @@
             "schema": {
               "type": "string",
               "pattern": "^[A-Za-z0-9_-]{1,48}$"
-            }
+            },
+            "description": "Configured physical device ID on this node. Discover IDs with listDevices; do not use a model name unless it is the configured ID."
           },
           {
             "name": "componentId",
@@ -672,7 +722,8 @@
             "schema": {
               "type": "string",
               "pattern": "^[A-Za-z0-9_-]{1,96}$"
-            }
+            },
+            "description": "Component ID within deviceId. Discover it through listComponents and check its kind/actions."
           },
           {
             "name": "Idempotency-Key",
@@ -682,7 +733,8 @@
               "type": "string",
               "minLength": 1,
               "maxLength": 96
-            }
+            },
+            "description": "Unique key per logical mutation (1..96 characters). Repeating the same method/path/semantic JSON body within this boot returns the existing operation; reusing it for different content returns 409. Retention is bounded. After an uncertain timeout or reboot, inspect state and STOP as needed instead of replaying ON."
           }
         ],
         "requestBody": {
@@ -693,8 +745,11 @@
                 "$ref": "#/components/schemas/StopRequest"
               }
             }
-          }
-        }
+          },
+          "description": "JSON request with the fields documented by the referenced schema. Unknown properties are rejected; use {} for an empty StopRequest."
+        },
+        "summary": "Request priority STOP for an actor",
+        "description": "Request shutdown without a lease. By default the driver stops the whole physical device, so sibling actors may also turn off; a driver may implement a verified narrower STOP. Lease expiry and stopDevice always cover all actors. Poll final_output for this actor; an accepted STOP is not yet confirmed OFF.\n\nReturns 202 with an Operation and Location, not an instrument acknowledgement. Keep the lease alive where required and poll until terminal. Bounded device retries/readback recovery run on the bridge; callers receive a terminal failure when recovery is exhausted. Do not automatically replay an uncertain mutation."
       }
     }
   },
@@ -705,7 +760,8 @@
       "properties": {
         "id": {
           "type": "string",
-          "pattern": "^[A-Za-z0-9_-]{1,96}$"
+          "pattern": "^[A-Za-z0-9_-]{1,96}$",
+          "description": "Stable component ID within this physical device, used in common API paths."
         },
         "kind": {
           "type": "string",
@@ -713,19 +769,23 @@
             "source",
             "sink",
             "sensor"
-          ]
+          ],
+          "description": "source supplies energy; sink absorbs energy; sensor exposes one scalar quantity."
         },
         "actions": {
           "type": "array",
           "items": {
             "type": "string"
-          }
+          },
+          "description": "Supported actor actions, such as current, voltage, cutoff, duration and output. Only call advertised actions; sensors do not accept actor writes."
         },
         "quantity": {
-          "type": "string"
+          "type": "string",
+          "description": "Physical quantity identifier, for example voltage, current, power, energy, charge or temperature. Treat this vocabulary as extensible."
         },
         "unit": {
-          "type": "string"
+          "type": "string",
+          "description": "Value unit: V, A, W, Wh, Ah, degC or 1 (dimensionless) for built-in sensors. Other providers can advertise additional units."
         },
         "temperature_kind": {
           "type": "string",
@@ -733,14 +793,16 @@
             "internal",
             "external_probe",
             "cell"
-          ]
+          ],
+          "description": "Temperature placement/type when quantity is temperature. Internal/die sensors are not suitable as cell guards."
         }
       },
       "required": [
         "id",
         "kind",
         "actions"
-      ]
+      ],
+      "description": "Discoverable source, sink or scalar sensor within one physical device. Actions describe supported mutations; sensors expose quantity/unit instead. IDs need only be unique within the device."
     },
     "ComponentList": {
       "type": "object",
@@ -750,31 +812,38 @@
           "type": "array",
           "items": {
             "$ref": "#/components/schemas/Component"
-          }
+          },
+          "description": "Discoverable actor/sensor descriptors for this physical device."
         }
       },
       "required": [
         "components"
-      ]
+      ],
+      "description": "All actor/sensor descriptors for one physical device."
     },
     "SensorReading": {
       "type": "object",
       "additionalProperties": false,
       "properties": {
         "device_id": {
-          "type": "string"
+          "type": "string",
+          "description": "Configured physical device ID, scoped to this node."
         },
         "component_id": {
-          "type": "string"
+          "type": "string",
+          "description": "Component ID scoped to the physical device; discover it through listComponents."
         },
         "boot_id": {
-          "type": "string"
+          "type": "string",
+          "description": "Opaque identifier for this node boot. A change invalidates prior monotonic timestamps, leases and operation IDs."
         },
         "quantity": {
-          "type": "string"
+          "type": "string",
+          "description": "Physical quantity identifier, for example voltage, current, power, energy, charge or temperature. Treat this vocabulary as extensible."
         },
         "unit": {
-          "type": "string"
+          "type": "string",
+          "description": "Value unit: V, A, W, Wh, Ah, degC or 1 (dimensionless) for built-in sensors. Other providers can advertise additional units."
         },
         "quality": {
           "type": "string",
@@ -782,29 +851,35 @@
             "valid",
             "stale",
             "unavailable"
-          ]
+          ],
+          "description": "valid: usable within freshness policy; stale: previous sample is too old; unavailable: no usable sample. Never substitute zero for invalid/missing data."
         },
         "value": {
           "type": "number",
-          "format": "double"
+          "format": "double",
+          "description": "Measured scalar in unit, preserving provider sign. Omitted for unavailable data; absence must never be replaced by zero."
         },
         "sequence": {
           "type": "integer",
           "format": "int64",
-          "minimum": 0
+          "minimum": 0,
+          "description": "Provider sample sequence. Use it with boot_id/epoch to detect new samples; repeated API reads can return the same sequence."
         },
         "received_ms": {
           "type": "integer",
           "format": "int64",
-          "minimum": 0
+          "minimum": 0,
+          "description": "Node-monotonic milliseconds when this sample was received. Compare only within the same node and boot_id."
         },
         "age_ms": {
           "type": "integer",
           "format": "int64",
-          "minimum": 0
+          "minimum": 0,
+          "description": "Elapsed milliseconds since receipt, evaluated for this response. A repeated read does not freshen a cached sample."
         },
         "epoch": {
-          "type": "string"
+          "type": "string",
+          "description": "Optional upstream measurement/calibration continuity identifier. A change invalidates integration continuity even if the ESP boot_id is unchanged. INA228 energy/charge are relative to the first valid sample of each epoch."
         }
       },
       "required": [
@@ -817,47 +892,68 @@
         "sequence",
         "received_ms",
         "age_ms"
-      ]
+      ],
+      "description": "Scalar measurement with units, sign and continuity metadata. Require valid quality and acceptable age before control/integration. boot_id changes on node reboot; epoch can change when only the upstream meter restarts or calibration history is reset.",
+      "example": {
+        "device_id": "load",
+        "component_id": "voltage",
+        "boot_id": "example-boot",
+        "quantity": "voltage",
+        "unit": "V",
+        "quality": "valid",
+        "value": 3.7,
+        "sequence": 42,
+        "received_ms": 12000,
+        "age_ms": 25
+      }
     },
     "SensorReadings": {
       "type": "object",
       "additionalProperties": false,
       "properties": {
         "device_id": {
-          "type": "string"
+          "type": "string",
+          "description": "Configured physical device ID, scoped to this node."
         },
         "boot_id": {
-          "type": "string"
+          "type": "string",
+          "description": "Opaque identifier for this node boot. A change invalidates prior monotonic timestamps, leases and operation IDs."
         },
         "readings": {
           "type": "array",
           "items": {
             "$ref": "#/components/schemas/SensorReading"
-          }
+          },
+          "description": "Cached per-component sensor snapshots. Validate every selected reading independently."
         }
       },
       "required": [
         "device_id",
         "boot_id",
         "readings"
-      ]
+      ],
+      "description": "Cached readings for one physical device. Individual channels may have different validity/age; use sequence/epoch to avoid combining unrelated samples."
     },
     "ActuatorSettings": {
       "type": "object",
       "additionalProperties": false,
       "properties": {
         "voltage_v": {
-          "type": "number"
+          "type": "number",
+          "description": "Cached confirmed voltage setpoint in V, when supported."
         },
         "current_a": {
-          "type": "number"
+          "type": "number",
+          "description": "Cached confirmed source current limit or sink current target in A."
         },
         "cutoff_voltage_v": {
-          "type": "number"
+          "type": "number",
+          "description": "Instrument low-voltage cutoff in V; DL24M supports 0.1 V steps."
         },
         "time_limit_s": {
           "type": "integer",
-          "minimum": 0
+          "minimum": 0,
+          "description": "Instrument timer in seconds, zero disables it. DL24M requires multiples of 60; this is not the bridge-local activation deadline."
         },
         "regulation_mode": {
           "type": "string",
@@ -865,20 +961,24 @@
             "cc",
             "cv",
             "unknown"
-          ]
+          ],
+          "description": "Observed/selected regulation mode where available: cc (constant current), cv (constant voltage), or unknown. Do not infer it solely from a setpoint."
         }
       },
-      "required": []
+      "required": [],
+      "description": "Available cached settings for one source/sink. Omitted values are unknown or unsupported, not zero. Settings do not imply that output is enabled."
     },
     "ActuatorState": {
       "type": "object",
       "additionalProperties": false,
       "properties": {
         "device_id": {
-          "type": "string"
+          "type": "string",
+          "description": "Configured physical device ID, scoped to this node."
         },
         "component_id": {
-          "type": "string"
+          "type": "string",
+          "description": "Component ID scoped to the physical device; discover it through listComponents."
         },
         "state": {
           "type": "string",
@@ -887,7 +987,8 @@
             "ready",
             "busy",
             "fault"
-          ]
+          ],
+          "description": "Actor availability/progress/fault state, distinct from output ON/OFF."
         },
         "output": {
           "type": "string",
@@ -895,7 +996,8 @@
             "on",
             "off",
             "unknown"
-          ]
+          ],
+          "description": "Actor-specific confirmed output state. unknown requires recovery and must not be interpreted as OFF."
         },
         "settings": {
           "$ref": "#/components/schemas/ActuatorSettings"
@@ -907,7 +1009,8 @@
         "state",
         "output",
         "settings"
-      ]
+      ],
+      "description": "Current actor-specific state, output confirmation and cached settings. Unknown output must not be treated as OFF."
     },
     "CutoffRequest": {
       "type": "object",
@@ -916,12 +1019,14 @@
         "cutoff_voltage_v": {
           "type": "number",
           "minimum": 0,
-          "maximum": 1000
+          "maximum": 1000,
+          "description": "Instrument low-voltage cutoff in V; DL24M supports 0.1 V steps."
         }
       },
       "required": [
         "cutoff_voltage_v"
-      ]
+      ],
+      "description": "Low-voltage cutoff in V for a supporting sink. Driver precision can be stricter than this generic contract."
     },
     "DurationRequest": {
       "type": "object",
@@ -930,12 +1035,14 @@
         "time_limit_s": {
           "type": "integer",
           "minimum": 0,
-          "maximum": 86400
+          "maximum": 86400,
+          "description": "Instrument timer in seconds, zero disables it. DL24M requires multiples of 60; this is not the bridge-local activation deadline."
         }
       },
       "required": [
         "time_limit_s"
-      ]
+      ],
+      "description": "Instrument run timer in seconds, separate from the bridge-local activation deadline. Zero disables the instrument timer; hardware granularity still applies."
     }
   }
 }

@@ -1,7 +1,7 @@
 /*
  * lease_request.h
  *
- * 
+ * Exclusive reservation of physical devices on one node. Reserve each physical device once, even when controlling several of its components.
  */
 
 #ifndef _lease_request_H_

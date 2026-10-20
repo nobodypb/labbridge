@@ -1,7 +1,7 @@
 /*
  * operation.h
  *
- * 
+ * Asynchronous command lifecycle. Only succeeded confirms completion; pending/running are not confirmations. Failed/cancelled operations can have physical side effects. Common component routes report requested/confirmed values in engineering units; compatibility routes can return raw driver values.
  */
 
 #ifndef _operation_H_

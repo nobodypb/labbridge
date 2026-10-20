@@ -1,7 +1,7 @@
 /*
  * cutoff_request.h
  *
- * 
+ * Low-voltage cutoff in V for a supporting sink. Driver precision can be stricter than this generic contract.
  */
 
 #ifndef _cutoff_request_H_

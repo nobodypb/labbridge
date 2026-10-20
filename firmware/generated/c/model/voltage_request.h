@@ -1,7 +1,7 @@
 /*
  * voltage_request.h
  *
- * 
+ * Voltage target in V. Driver precision, capabilities and configured voltage/power limits may reject a value within the generic schema range.
  */
 
 #ifndef _voltage_request_H_

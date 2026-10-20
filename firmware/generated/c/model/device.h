@@ -1,7 +1,7 @@
 /*
  * device.h
  *
- * 
+ * One physical instrument and transport/recovery identity. All its components share physical-device ownership, fault handling and lease expiry behavior.
  */
 
 #ifndef _device_H_

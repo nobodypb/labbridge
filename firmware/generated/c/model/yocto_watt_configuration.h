@@ -1,7 +1,7 @@
 /*
  * yocto_watt_configuration.h
  *
- * 
+ * ESP measurement provider via HTTP VirtualHub/YoctoHub, bound by hardware serial YWATMK2C-... in endpoint. DC voltage/current/power and optional AC/power-factor channels use common readings. Native PC USB is instead available through the host endpoint yocto+usb://SERIAL and official SDK. Native Yocto USB on ESP is not implemented; physical commissioning remains open.
  */
 
 #ifndef _yocto_watt_configuration_H_

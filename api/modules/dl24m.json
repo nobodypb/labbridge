@@ -24,7 +24,7 @@
         ],
         "responses": {
           "default": {
-            "description": "Structured error",
+            "description": "Request rejected or unavailable: 400 malformed/invalid request, 401 missing LAN credentials, 403 forbidden transport, 404 unknown resource, 409 state/ownership/idempotency conflict, 412 stale configuration ETag, 422 unsupported or unsafe setting, 423 missing/expired device lease, or 503 resource/transport unavailable, as applicable. An accepted operation can later fail through Operation.error; HTTP acceptance is not hardware success.",
             "content": {
               "application/problem+json": {
                 "schema": {
@@ -34,7 +34,7 @@
             }
           },
           "202": {
-            "description": "Operation accepted; poll Location until terminal",
+            "description": "Command accepted for asynchronous execution. Follow Location to getOperation until succeeded, failed or cancelled; inspect final_output and restore_pending.",
             "content": {
               "application/json": {
                 "schema": {
@@ -44,7 +44,7 @@
             },
             "headers": {
               "Location": {
-                "description": "Operation URL",
+                "description": "Relative URL /api/v1/operations/{operationId} for polling in this node boot.",
                 "schema": {
                   "type": "string"
                 }
@@ -60,7 +60,8 @@
             "schema": {
               "type": "string",
               "pattern": "^[A-Za-z0-9_-]{1,48}$"
-            }
+            },
+            "description": "Configured physical device ID on this node. Discover IDs with listDevices; do not use a model name unless it is the configured ID."
           },
           {
             "name": "X-Lab-Lease",
@@ -68,7 +69,8 @@
             "required": true,
             "schema": {
               "type": "string"
-            }
+            },
+            "description": "Active lease ID covering this physical device. Components share ownership; heartbeats must continue while commands are pending."
           },
           {
             "name": "Idempotency-Key",
@@ -78,7 +80,8 @@
               "type": "string",
               "minLength": 1,
               "maxLength": 96
-            }
+            },
+            "description": "Unique key per logical mutation (1..96 characters). Repeating the same method/path/semantic JSON body within this boot returns the existing operation; reusing it for different content returns 409. Retention is bounded. After an uncertain timeout or reboot, inspect state and STOP as needed instead of replaying ON."
           }
         ],
         "requestBody": {
@@ -89,8 +92,11 @@
                 "$ref": "#/components/schemas/CurrentRequest"
               }
             }
-          }
-        }
+          },
+          "description": "JSON request with the fields documented by the referenced schema. Unknown properties are rejected; use {} for an empty StopRequest."
+        },
+        "summary": "Set DL24M CC target (compatibility)",
+        "description": "Set the active CC current in A without enabling the load. DL24M uses 0.001 A target steps; local current/power limits still apply. Prefer setComponentCurrent for new integrations. Unlike common component operations, device-specific confirmed_value retains the driver raw-value convention.\n\nReturns 202 with an Operation and Location, not an instrument acknowledgement. Keep the lease alive where required and poll until terminal. Bounded device retries/readback recovery run on the bridge; callers receive a terminal failure when recovery is exhausted. Do not automatically replay an uncertain mutation."
       }
     },
     "/api/v1/devices/{deviceId}/dl24m/settings": {
@@ -101,7 +107,7 @@
         ],
         "responses": {
           "200": {
-            "description": "Confirmed result",
+            "description": "Current Dl24mSettings result. Cached telemetry still requires per-value quality/freshness checks; a management result confirms only the documented management action.",
             "content": {
               "application/json": {
                 "schema": {
@@ -111,7 +117,7 @@
             }
           },
           "default": {
-            "description": "Structured error",
+            "description": "Request rejected or unavailable: 400 malformed/invalid request, 401 missing LAN credentials, 403 forbidden transport, 404 unknown resource, 409 state/ownership/idempotency conflict, 412 stale configuration ETag, 422 unsupported or unsafe setting, 423 missing/expired device lease, or 503 resource/transport unavailable, as applicable. An accepted operation can later fail through Operation.error; HTTP acceptance is not hardware success.",
             "content": {
               "application/problem+json": {
                 "schema": {
@@ -129,9 +135,12 @@
             "schema": {
               "type": "string",
               "pattern": "^[A-Za-z0-9_-]{1,48}$"
-            }
+            },
+            "description": "Configured physical device ID on this node. Discover IDs with listDevices; do not use a model name unless it is the configured ID."
           }
-        ]
+        ],
+        "summary": "Read cached DL24M settings",
+        "description": "Return settings already read from the device, in the documented engineering units. Fields may be absent while polling warms the cache; a missing field is not zero. This GET does not enter menus or change modes. Static settings refresh on a slower polling cycle (about 30 s)."
       },
       "put": {
         "operationId": "setDl24mSettings",
@@ -140,7 +149,7 @@
         ],
         "responses": {
           "default": {
-            "description": "Structured error",
+            "description": "Request rejected or unavailable: 400 malformed/invalid request, 401 missing LAN credentials, 403 forbidden transport, 404 unknown resource, 409 state/ownership/idempotency conflict, 412 stale configuration ETag, 422 unsupported or unsafe setting, 423 missing/expired device lease, or 503 resource/transport unavailable, as applicable. An accepted operation can later fail through Operation.error; HTTP acceptance is not hardware success.",
             "content": {
               "application/problem+json": {
                 "schema": {
@@ -150,7 +159,7 @@
             }
           },
           "202": {
-            "description": "Operation accepted; poll Location until terminal",
+            "description": "Command accepted for asynchronous execution. Follow Location to getOperation until succeeded, failed or cancelled; inspect final_output and restore_pending.",
             "content": {
               "application/json": {
                 "schema": {
@@ -160,7 +169,7 @@
             },
             "headers": {
               "Location": {
-                "description": "Operation URL",
+                "description": "Relative URL /api/v1/operations/{operationId} for polling in this node boot.",
                 "schema": {
                   "type": "string"
                 }
@@ -176,7 +185,8 @@
             "schema": {
               "type": "string",
               "pattern": "^[A-Za-z0-9_-]{1,48}$"
-            }
+            },
+            "description": "Configured physical device ID on this node. Discover IDs with listDevices; do not use a model name unless it is the configured ID."
           },
           {
             "name": "X-Lab-Lease",
@@ -184,7 +194,8 @@
             "required": true,
             "schema": {
               "type": "string"
-            }
+            },
+            "description": "Active lease ID covering this physical device. Components share ownership; heartbeats must continue while commands are pending."
           },
           {
             "name": "Idempotency-Key",
@@ -194,7 +205,8 @@
               "type": "string",
               "minLength": 1,
               "maxLength": 96
-            }
+            },
+            "description": "Unique key per logical mutation (1..96 characters). Repeating the same method/path/semantic JSON body within this boot returns the existing operation; reusing it for different content returns 409. Retention is bounded. After an uncertain timeout or reboot, inspect state and STOP as needed instead of replaying ON."
           }
         ],
         "requestBody": {
@@ -205,8 +217,11 @@
                 "$ref": "#/components/schemas/Dl24mSettings"
               }
             }
-          }
-        }
+          },
+          "description": "JSON request with the fields documented by the referenced schema. Unknown properties are rejected; use {} for an empty StopRequest."
+        },
+        "summary": "Apply and verify DL24M settings",
+        "description": "Apply only the supplied fields; omitted settings remain unchanged. Requires a lease and confirmed output OFF for settings changes. Snapshot original values before the multi-step operation, use device timing and bounded readback retries, and restore on failure. Check restore_pending before issuing new work. mode 0 is CC; other banks may be edited OFF, but active non-CC operation is not commissioned and ON is blocked.\n\nReturns 202 with an Operation and Location, not an instrument acknowledgement. Keep the lease alive where required and poll until terminal. Bounded device retries/readback recovery run on the bridge; callers receive a terminal failure when recovery is exhausted. Do not automatically replay an uncertain mutation."
       }
     },
     "/api/v1/devices/{deviceId}/dl24m/counters/reset": {
@@ -217,7 +232,7 @@
         ],
         "responses": {
           "default": {
-            "description": "Structured error",
+            "description": "Request rejected or unavailable: 400 malformed/invalid request, 401 missing LAN credentials, 403 forbidden transport, 404 unknown resource, 409 state/ownership/idempotency conflict, 412 stale configuration ETag, 422 unsupported or unsafe setting, 423 missing/expired device lease, or 503 resource/transport unavailable, as applicable. An accepted operation can later fail through Operation.error; HTTP acceptance is not hardware success.",
             "content": {
               "application/problem+json": {
                 "schema": {
@@ -227,7 +242,7 @@
             }
           },
           "202": {
-            "description": "Operation accepted; poll Location until terminal",
+            "description": "Command accepted for asynchronous execution. Follow Location to getOperation until succeeded, failed or cancelled; inspect final_output and restore_pending.",
             "content": {
               "application/json": {
                 "schema": {
@@ -237,7 +252,7 @@
             },
             "headers": {
               "Location": {
-                "description": "Operation URL",
+                "description": "Relative URL /api/v1/operations/{operationId} for polling in this node boot.",
                 "schema": {
                   "type": "string"
                 }
@@ -253,7 +268,8 @@
             "schema": {
               "type": "string",
               "pattern": "^[A-Za-z0-9_-]{1,48}$"
-            }
+            },
+            "description": "Configured physical device ID on this node. Discover IDs with listDevices; do not use a model name unless it is the configured ID."
           },
           {
             "name": "X-Lab-Lease",
@@ -261,7 +277,8 @@
             "required": true,
             "schema": {
               "type": "string"
-            }
+            },
+            "description": "Active lease ID covering this physical device. Components share ownership; heartbeats must continue while commands are pending."
           },
           {
             "name": "Idempotency-Key",
@@ -271,7 +288,8 @@
               "type": "string",
               "minLength": 1,
               "maxLength": 96
-            }
+            },
+            "description": "Unique key per logical mutation (1..96 characters). Repeating the same method/path/semantic JSON body within this boot returns the existing operation; reusing it for different content returns 409. Retention is bounded. After an uncertain timeout or reboot, inspect state and STOP as needed instead of replaying ON."
           }
         ],
         "requestBody": {
@@ -282,8 +300,11 @@
                 "$ref": "#/components/schemas/StopRequest"
               }
             }
-          }
-        }
+          },
+          "description": "JSON request with the fields documented by the referenced schema. Unknown properties are rejected; use {} for an empty StopRequest."
+        },
+        "summary": "Reset DL24M elapsed/accumulated counters",
+        "description": "Reset the instrument elapsed time and accumulation counters under the lease, with output OFF. Previous counter contents cannot be restored. Native capacity/energy register scales are not commissioned; use host integration of fresh voltage/current/power for traceable battery results. Send an empty object or a diagnostic reason.\n\nReturns 202 with an Operation and Location, not an instrument acknowledgement. Keep the lease alive where required and poll until terminal. Bounded device retries/readback recovery run on the bridge; callers receive a terminal failure when recovery is exhausted. Do not automatically replay an uncertain mutation."
       }
     },
     "/api/v1/devices/{deviceId}/dl24m/registers": {
@@ -294,7 +315,7 @@
         ],
         "responses": {
           "200": {
-            "description": "Confirmed result",
+            "description": "Current Dl24mRegisters result. Cached telemetry still requires per-value quality/freshness checks; a management result confirms only the documented management action.",
             "content": {
               "application/json": {
                 "schema": {
@@ -304,7 +325,7 @@
             }
           },
           "default": {
-            "description": "Structured error",
+            "description": "Request rejected or unavailable: 400 malformed/invalid request, 401 missing LAN credentials, 403 forbidden transport, 404 unknown resource, 409 state/ownership/idempotency conflict, 412 stale configuration ETag, 422 unsupported or unsafe setting, 423 missing/expired device lease, or 503 resource/transport unavailable, as applicable. An accepted operation can later fail through Operation.error; HTTP acceptance is not hardware success.",
             "content": {
               "application/problem+json": {
                 "schema": {
@@ -322,9 +343,12 @@
             "schema": {
               "type": "string",
               "pattern": "^[A-Za-z0-9_-]{1,48}$"
-            }
+            },
+            "description": "Configured physical device ID on this node. Discover IDs with listDevices; do not use a model name unless it is the configured ID."
           }
-        ]
+        ],
+        "summary": "Read audited raw DL24M register cache",
+        "description": "Return the 22 audited passive numeric registers with raw unsigned 24-bit values and individual quality/age. This is a cached diagnostic view, not an arbitrary register command interface. Side-effecting reads such as menu entry or event clearing and uncommissioned calibration/factory commands are excluded. See the protocol handbook for scales and command numbers."
       }
     },
     "/api/v1/devices/{deviceId}/dl24m/banks/read": {
@@ -335,7 +359,7 @@
         ],
         "responses": {
           "default": {
-            "description": "Structured error",
+            "description": "Request rejected or unavailable: 400 malformed/invalid request, 401 missing LAN credentials, 403 forbidden transport, 404 unknown resource, 409 state/ownership/idempotency conflict, 412 stale configuration ETag, 422 unsupported or unsafe setting, 423 missing/expired device lease, or 503 resource/transport unavailable, as applicable. An accepted operation can later fail through Operation.error; HTTP acceptance is not hardware success.",
             "content": {
               "application/problem+json": {
                 "schema": {
@@ -345,7 +369,7 @@
             }
           },
           "202": {
-            "description": "Operation accepted; poll Location until terminal",
+            "description": "Command accepted for asynchronous execution. Follow Location to getOperation until succeeded, failed or cancelled; inspect final_output and restore_pending.",
             "content": {
               "application/json": {
                 "schema": {
@@ -355,7 +379,7 @@
             },
             "headers": {
               "Location": {
-                "description": "Operation URL",
+                "description": "Relative URL /api/v1/operations/{operationId} for polling in this node boot.",
                 "schema": {
                   "type": "string"
                 }
@@ -371,7 +395,8 @@
             "schema": {
               "type": "string",
               "pattern": "^[A-Za-z0-9_-]{1,48}$"
-            }
+            },
+            "description": "Configured physical device ID on this node. Discover IDs with listDevices; do not use a model name unless it is the configured ID."
           },
           {
             "name": "X-Lab-Lease",
@@ -379,7 +404,8 @@
             "required": true,
             "schema": {
               "type": "string"
-            }
+            },
+            "description": "Active lease ID covering this physical device. Components share ownership; heartbeats must continue while commands are pending."
           },
           {
             "name": "Idempotency-Key",
@@ -389,7 +415,8 @@
               "type": "string",
               "minLength": 1,
               "maxLength": 96
-            }
+            },
+            "description": "Unique key per logical mutation (1..96 characters). Repeating the same method/path/semantic JSON body within this boot returns the existing operation; reusing it for different content returns 409. Retention is bounded. After an uncertain timeout or reboot, inspect state and STOP as needed instead of replaying ON."
           }
         ],
         "requestBody": {
@@ -400,8 +427,11 @@
                 "$ref": "#/components/schemas/Dl24mBankRequest"
               }
             }
-          }
-        }
+          },
+          "description": "JSON request with the fields documented by the referenced schema. Unknown properties are rejected; use {} for an empty StopRequest."
+        },
+        "summary": "Inspect an inactive DL24M target bank",
+        "description": "This read uses POST because the instrument must temporarily change mode. Requires CC, confirmed OFF and a lease. Snapshot the bank/CC state, select the requested inactive bank, read its raw target, then restore CC and its original target. Poll the operation for confirmed_value (raw bank units) and restoration status. The active meaning/units of banks 1..3 are not commissioned.\n\nReturns 202 with an Operation and Location, not an instrument acknowledgement. Keep the lease alive where required and poll until terminal. Bounded device retries/readback recovery run on the bridge; callers receive a terminal failure when recovery is exhausted. Do not automatically replay an uncertain mutation."
       }
     },
     "/api/v1/devices/{deviceId}/dl24m/bank-target": {
@@ -412,7 +442,7 @@
         ],
         "responses": {
           "default": {
-            "description": "Structured error",
+            "description": "Request rejected or unavailable: 400 malformed/invalid request, 401 missing LAN credentials, 403 forbidden transport, 404 unknown resource, 409 state/ownership/idempotency conflict, 412 stale configuration ETag, 422 unsupported or unsafe setting, 423 missing/expired device lease, or 503 resource/transport unavailable, as applicable. An accepted operation can later fail through Operation.error; HTTP acceptance is not hardware success.",
             "content": {
               "application/problem+json": {
                 "schema": {
@@ -422,7 +452,7 @@
             }
           },
           "202": {
-            "description": "Operation accepted; poll Location until terminal",
+            "description": "Command accepted for asynchronous execution. Follow Location to getOperation until succeeded, failed or cancelled; inspect final_output and restore_pending.",
             "content": {
               "application/json": {
                 "schema": {
@@ -432,7 +462,7 @@
             },
             "headers": {
               "Location": {
-                "description": "Operation URL",
+                "description": "Relative URL /api/v1/operations/{operationId} for polling in this node boot.",
                 "schema": {
                   "type": "string"
                 }
@@ -448,7 +478,8 @@
             "schema": {
               "type": "string",
               "pattern": "^[A-Za-z0-9_-]{1,48}$"
-            }
+            },
+            "description": "Configured physical device ID on this node. Discover IDs with listDevices; do not use a model name unless it is the configured ID."
           },
           {
             "name": "X-Lab-Lease",
@@ -456,7 +487,8 @@
             "required": true,
             "schema": {
               "type": "string"
-            }
+            },
+            "description": "Active lease ID covering this physical device. Components share ownership; heartbeats must continue while commands are pending."
           },
           {
             "name": "Idempotency-Key",
@@ -466,7 +498,8 @@
               "type": "string",
               "minLength": 1,
               "maxLength": 96
-            }
+            },
+            "description": "Unique key per logical mutation (1..96 characters). Repeating the same method/path/semantic JSON body within this boot returns the existing operation; reusing it for different content returns 409. Retention is bounded. After an uncertain timeout or reboot, inspect state and STOP as needed instead of replaying ON."
           }
         ],
         "requestBody": {
@@ -477,8 +510,11 @@
                 "$ref": "#/components/schemas/Dl24mBankTargetRequest"
               }
             }
-          }
-        }
+          },
+          "description": "JSON request with the fields documented by the referenced schema. Unknown properties are rejected; use {} for an empty StopRequest."
+        },
+        "summary": "Write an inactive DL24M target bank",
+        "description": "Requires CC, confirmed OFF and a lease. Temporarily select the inactive bank, write and read back its raw target, then return to CC and restore the original CC target. Conservative raw maxima are bank 1: 1000, bank 2: 2400, bank 3: 100. This does not enable or commission CV/CR/CP operation. Recovery must complete before further commands.\n\nReturns 202 with an Operation and Location, not an instrument acknowledgement. Keep the lease alive where required and poll until terminal. Bounded device retries/readback recovery run on the bridge; callers receive a terminal failure when recovery is exhausted. Do not automatically replay an uncertain mutation."
       }
     }
   },
@@ -491,86 +527,101 @@
           "type": "number",
           "format": "double",
           "minimum": 0,
-          "maximum": 25
+          "maximum": 25,
+          "description": "Instrument low-voltage cutoff in V; DL24M supports 0.1 V steps."
         },
         "time_limit_s": {
           "type": "integer",
           "format": "int64",
           "minimum": 0,
           "maximum": 86400,
-          "multipleOf": 60
+          "multipleOf": 60,
+          "description": "Instrument timer in seconds, zero disables it. DL24M requires multiples of 60; this is not the bridge-local activation deadline."
         },
         "working_brightness": {
           "type": "integer",
           "format": "int64",
           "minimum": 0,
-          "maximum": 9
+          "maximum": 9,
+          "description": "Active display brightness level 0..9 (numeric level, not a percentage)."
         },
         "standby_brightness": {
           "type": "integer",
           "format": "int64",
           "minimum": 0,
-          "maximum": 9
+          "maximum": 9,
+          "description": "Standby display brightness level 0..9."
         },
         "current_resolution": {
           "type": "integer",
           "format": "int64",
           "minimum": 0,
-          "maximum": 2
+          "maximum": 2,
+          "description": "Instrument current display/resolution enum 0..2; no cross-device numeric precision is implied."
         },
         "overvoltage_v": {
           "type": "number",
           "format": "double",
           "minimum": 3,
-          "maximum": 25
+          "maximum": 25,
+          "description": "Instrument overvoltage protection threshold in V; conservative supported range 3..25 V."
         },
         "overcurrent_a": {
           "type": "number",
           "format": "double",
           "minimum": 0.05,
-          "maximum": 2.5
+          "maximum": 2.5,
+          "description": "Instrument overcurrent protection threshold in A; conservative supported range 0.05..2.5 A."
         },
         "overpower_w": {
           "type": "number",
           "format": "double",
           "minimum": 1,
-          "maximum": 15
+          "maximum": 15,
+          "description": "Instrument overpower protection threshold in W; conservative supported range 1..15 W. Wire write/read scales differ and are handled by the driver."
         },
         "overtemperature_c": {
           "type": "integer",
           "format": "int64",
           "minimum": 40,
-          "maximum": 100
+          "maximum": 100,
+          "description": "Internal instrument overtemperature protection threshold in degrees Celsius."
         },
         "fan_temperature_c": {
           "type": "integer",
           "format": "int64",
           "minimum": 20,
-          "maximum": 90
+          "maximum": 90,
+          "description": "Instrument fan start threshold in degrees Celsius."
         },
         "battery_overtemperature_c": {
           "type": "integer",
           "format": "int64",
           "minimum": 40,
-          "maximum": 100
+          "maximum": 100,
+          "description": "Instrument battery-probe overtemperature threshold in degrees Celsius (command 0x50, read 0x3C). It is not a PID gain or a substitute for the bridge cell guard."
         },
         "language": {
           "type": "integer",
           "format": "int64",
           "minimum": 0,
-          "maximum": 1
+          "maximum": 1,
+          "description": "Raw instrument language enum 0 or 1. The driver handles temporary menu entry and exit."
         },
         "mode": {
           "type": "integer",
           "minimum": 0,
-          "maximum": 3
+          "maximum": 3,
+          "description": "0 selects CC; 1..3 select inactive banks. Output ON outside CC is blocked because active CV/CR/CP behavior is not commissioned."
         },
         "standby_time": {
           "type": "integer",
           "minimum": 0,
-          "maximum": 120
+          "maximum": 120,
+          "description": "Raw standby-time value 0..120; its physical time unit is not yet confirmed. Do not interpret it as seconds."
         }
-      }
+      },
+      "description": "Partial update or cached snapshot of supported DL24M settings in engineering units, except explicitly raw enums/time. Current integration is commissioned on display firmware Ver: 2.0. Conservative schema maxima are bridge support limits, not claimed instrument ratings."
     },
     "Dl24mRegister": {
       "type": "object",
@@ -582,12 +633,14 @@
       ],
       "properties": {
         "name": {
-          "type": "string"
+          "type": "string",
+          "description": "Stable driver register label; see the protocol handbook for command/scaling."
         },
         "command": {
           "type": "integer",
           "minimum": 0,
-          "maximum": 255
+          "maximum": 255,
+          "description": "Read command byte as a decimal integer (for example 17 means 0x11)."
         },
         "quality": {
           "type": "string",
@@ -595,22 +648,27 @@
             "valid",
             "stale",
             "unavailable"
-          ]
+          ],
+          "description": "valid: usable within freshness policy; stale: previous sample is too old; unavailable: no usable sample. Never substitute zero for invalid/missing data."
         },
         "value": {
           "type": "integer",
           "minimum": 0,
-          "maximum": 16777215
+          "maximum": 16777215,
+          "description": "Unsigned 24-bit raw register payload; omitted until usable data is available."
         },
         "age_ms": {
           "type": "integer",
-          "minimum": 0
+          "minimum": 0,
+          "description": "Elapsed milliseconds since receipt, evaluated for this response. A repeated read does not freshen a cached sample."
         },
         "received_ms": {
           "type": "integer",
-          "minimum": 0
+          "minimum": 0,
+          "description": "Node-monotonic milliseconds when this sample was received. Compare only within the same node and boot_id."
         }
-      }
+      },
+      "description": "One audited passive DL24M numeric read. Values are unsigned 24-bit raw payloads; meaning and scaling depend on command. Missing values indicate unavailable data, not zero."
     },
     "Dl24mRegisters": {
       "type": "object",
@@ -623,9 +681,11 @@
           "type": "array",
           "items": {
             "$ref": "#/components/schemas/Dl24mRegister"
-          }
+          },
+          "description": "The audited passive register set, each carrying its own quality and age."
         }
-      }
+      },
+      "description": "Cached view of the 22 audited passive reads. No arbitrary read/write access or side-effecting menu/calibration commands are exposed."
     },
     "Dl24mBankRequest": {
       "type": "object",
@@ -640,9 +700,11 @@
             1,
             2,
             3
-          ]
+          ],
+          "description": "Inactive target bank 1, 2 or 3. Bank 0 is the active CC bank and is not selected through this interface."
         }
-      }
+      },
+      "description": "Inactive bank selection for a temporary, OFF-only mode-switch transaction that restores CC afterwards."
     },
     "Dl24mBankTargetRequest": {
       "type": "object",
@@ -658,15 +720,17 @@
             1,
             2,
             3
-          ]
+          ],
+          "description": "Inactive bank 1, 2 or 3; active semantics/units are uncommissioned."
         },
         "target_raw": {
           "type": "integer",
           "minimum": 0,
           "maximum": 2400,
-          "description": "OFF-only bank target. Conservative maxima: bank 1=1000, bank 2=2400, bank 3=100. Returns to CC and restores its original target."
+          "description": "OFF-only raw target. Additional bank-dependent maxima: 1=1000, 2=2400, 3=100. Successful completion returns to CC and restores its original target."
         }
-      }
+      },
+      "description": "Inactive bank target in raw register units. This interface does not claim that the corresponding active CV/CR/CP behavior or scales are commissioned."
     }
   }
 }
