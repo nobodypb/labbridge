@@ -35,9 +35,9 @@ async function wifi(){
  const s=el('section');el('h2','Wi-Fi setup',s);el('p','Choose the target network below. Setup-AP Wi-Fi configuration works without signing in; access through your LAN requires the device password.',s);
  const selection=el('select','',s),ssid=input(s,'Network name (SSID)'),psk=input(s,'Wi-Fi password (PSK)','password');psk.autocomplete='new-password';
  selection.onchange=()=>{ssid.value=selection.value;};
- async function scan(){status.textContent='Scanning Wi-Fi…';let found=await core.scanWifi();const deadline=Date.now()+15000;while(found.state==='scanning'){if(Date.now()>deadline)throw Error('Scan timeout');await new Promise(r=>setTimeout(r,300));found=await core.scanWifi();}if(found.state==='failed')throw Error('Wi-Fi scan failed; try again');selection.replaceChildren();for(const net of found.networks){const o=el('option',`${net.ssid} (${net.rssiDbm} dBm)`,selection);o.value=net.ssid;}if(found.networks.length)ssid.value=found.networks[0].ssid;status.textContent=`${found.networks.length} networks found`;}
+ async function scan(){status.textContent='Scanning Wi-Fi…';let found=await core.scanWifi();const deadline=Date.now()+15000;while(found.state==='scanning'){if(!s.isConnected)return;if(Date.now()>deadline)throw Error('Scan timeout');await new Promise(r=>setTimeout(r,300));found=await core.scanWifi();}if(!s.isConnected)return;if(found.state==='failed')throw Error('Wi-Fi scan failed; try again');selection.replaceChildren();for(const net of found.networks){const o=el('option',`${net.ssid} (${net.rssiDbm} dBm)`,selection);o.value=net.ssid;}if(found.networks.length)ssid.value=found.networks[0].ssid;status.textContent=`${found.networks.length} networks found`;}
  action(s,'Scan again',scan);action(s,'Save and connect',async()=>{await core.configureWifi({wifiRequest:{ssid:ssid.value,psk:psk.value}});psk.value='';status.textContent='Network saved. Reconnect to the configured network if needed.';});
- try{await scan();}catch(e){report(e);}
+ try{await scan();}catch(e){if(s.isConnected)report(e);}
 }
 async function instruments(){
  app.replaceChildren();const controls=el('section');el('h2','Instruments',controls);auth.render(app,currentPage);

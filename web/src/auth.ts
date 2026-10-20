@@ -11,11 +11,16 @@ export class UiAuth {
   notify: (message:string) => void = () => {};
 
   fetch: typeof fetch = async (input, init) => {
+    const authenticated = this.state.authenticated, csrfToken = this.state.csrfToken;
     const headers = new Headers(init?.headers);
-    if (this.state.csrfToken && !['GET','HEAD'].includes(init?.method ?? 'GET'))
-      headers.set('X-Lab-CSRF',this.state.csrfToken);
+    if (csrfToken && !['GET','HEAD'].includes(init?.method ?? 'GET'))
+      headers.set('X-Lab-CSRF',csrfToken);
     const response = await fetch(input,{...init,headers,credentials:'same-origin'});
-    if (response.status === 401 && !new URL(String(input),location.origin).pathname.startsWith('/api/v1/auth/')) {
+    // A public scan started before sign-in may finish after password autofill
+    // or a successful login. Only the session used by this request can be lost.
+    if (response.status === 401 && authenticated && this.state.authenticated &&
+        csrfToken === this.state.csrfToken &&
+        !new URL(String(input),location.origin).pathname.startsWith('/api/v1/auth/')) {
       this.state = {...this.state,authenticated:false,csrfToken:undefined};
       this.onLost(); // Display login; never replay the failed request.
     }

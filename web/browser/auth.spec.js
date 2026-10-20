@@ -62,3 +62,26 @@ for(const path of ['/','/wifi','/devices','/dl24','/dl24/'])test(`password sign-
  await page.reload();await expect(page.getByRole('button',{name:'Sign out',exact:true})).toBeVisible();
  expect(requests.filter(r=>r.method!=='GET')).toHaveLength(0);
 });
+for(const afterLogin of [false,true])test(`delayed unauthenticated scan cannot erase ${afterLogin?'a new login':'password-manager input'}`,async({page})=>{
+ await backend(page);await mockAuth(page);let held=false,release;
+ await page.route('**/api/v1/wifi/scan',async route=>{
+  if(!held&&!route.request().headers().cookie?.includes('LabBridgeSession=')){
+   held=true;await new Promise(r=>{release=r;});
+   return route.fulfill({status:401,contentType:'application/problem+json',body:JSON.stringify({detail:'Sign in required'})});
+  }
+  return route.fallback();
+ });
+ await page.goto('/wifi');await expect.poll(()=>held).toBe(true);
+ await page.getByLabel('Device password',{exact:true}).fill('synthetic password');
+ if(afterLogin){
+  await page.getByRole('button',{name:'Sign in',exact:true}).click();
+  await expect(page.getByLabel('Network name (SSID)')).toHaveValue('Bench network');
+ }
+ const rejected=page.waitForResponse(r=>new URL(r.url()).pathname==='/api/v1/wifi/scan'&&r.status()===401);release();await rejected;
+ if(!afterLogin){
+  await expect(page.getByLabel('Device password',{exact:true})).toHaveValue('synthetic password');
+  await page.getByRole('button',{name:'Sign in',exact:true}).click();
+ }
+ await expect(page.getByRole('button',{name:'Sign out',exact:true})).toBeVisible();
+ await expect(page.locator('#status')).toHaveText('1 networks found');
+});
