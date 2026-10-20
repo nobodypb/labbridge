@@ -895,6 +895,12 @@
           },
           "limits": {
             "$ref": "#/components/schemas/SafetyLimits"
+          },
+          "components": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Component"
+            }
           }
         },
         "required": [
@@ -904,8 +910,7 @@
           "transport",
           "capabilities",
           "state",
-          "output",
-          "limits"
+          "output"
         ]
       },
       "DeviceList": {
@@ -1134,6 +1139,9 @@
           },
           "error": {
             "$ref": "#/components/schemas/Problem"
+          },
+          "component_id": {
+            "type": "string"
           }
         },
         "required": [
@@ -1297,14 +1305,25 @@
           },
           "interlock": {
             "$ref": "#/components/schemas/InterlockConfiguration"
+          },
+          "ina228": {
+            "$ref": "#/components/schemas/Ina228Configuration"
+          },
+          "yocto_watt": {
+            "$ref": "#/components/schemas/YoctoWattConfiguration"
+          },
+          "sensor_max_age_ms": {
+            "type": "integer",
+            "minimum": 100,
+            "maximum": 3000,
+            "default": 1000
           }
         },
         "required": [
           "id",
           "driver",
           "transport",
-          "endpoint",
-          "limits"
+          "endpoint"
         ]
       },
       "WifiNetwork": {

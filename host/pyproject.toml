@@ -8,6 +8,8 @@ description = "Typed host automation for modular ESP32 instrument bridges"
 requires-python = ">=3.11"
 dependencies = ["labbridge-generated==0.1.0", "pyserial==3.5"]
 license = "MIT"
+[project.optional-dependencies]
+yocto = ["yoctopuce==2.1.16087"]
 [project.scripts]
 labbridge = "labbridge.cli:main"
 [tool.setuptools.packages.find]

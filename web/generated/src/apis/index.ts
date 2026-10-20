@@ -1,5 +1,6 @@
 /* tslint:disable */
 /* eslint-disable */
+export * from './ComponentsApi';
 export * from './CoreApi';
 export * from './Dl24mApi';
 export * from './Ds18b20Api';

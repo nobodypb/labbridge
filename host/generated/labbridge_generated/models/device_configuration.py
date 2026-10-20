@@ -21,8 +21,10 @@ from pydantic import BaseModel, ConfigDict, Field, StrictStr, field_validator
 from typing import Any, ClassVar, Dict, List, Optional
 from typing_extensions import Annotated
 from labbridge_generated.models.cell_temperature_guard import CellTemperatureGuard
+from labbridge_generated.models.ina228_configuration import Ina228Configuration
 from labbridge_generated.models.interlock_configuration import InterlockConfiguration
 from labbridge_generated.models.safety_limits import SafetyLimits
+from labbridge_generated.models.yocto_watt_configuration import YoctoWattConfiguration
 from typing import Optional, Set
 from typing_extensions import Self
 
@@ -35,10 +37,13 @@ class DeviceConfiguration(BaseModel):
     transport: StrictStr
     endpoint: StrictStr
     pins: Optional[List[Annotated[int, Field(le=48, strict=True, ge=0)]]] = None
-    limits: SafetyLimits
+    limits: Optional[SafetyLimits] = None
     cell_temperature: Optional[CellTemperatureGuard] = None
     interlock: Optional[InterlockConfiguration] = None
-    __properties: ClassVar[List[str]] = ["id", "driver", "transport", "endpoint", "pins", "limits", "cell_temperature", "interlock"]
+    ina228: Optional[Ina228Configuration] = None
+    yocto_watt: Optional[YoctoWattConfiguration] = None
+    sensor_max_age_ms: Optional[Annotated[int, Field(le=3000, strict=True, ge=100)]] = 1000
+    __properties: ClassVar[List[str]] = ["id", "driver", "transport", "endpoint", "pins", "limits", "cell_temperature", "interlock", "ina228", "yocto_watt", "sensor_max_age_ms"]
 
     @field_validator('id')
     def id_validate_regular_expression(cls, value):
@@ -96,6 +101,12 @@ class DeviceConfiguration(BaseModel):
         # override the default output from pydantic by calling `to_dict()` of interlock
         if self.interlock:
             _dict['interlock'] = self.interlock.to_dict()
+        # override the default output from pydantic by calling `to_dict()` of ina228
+        if self.ina228:
+            _dict['ina228'] = self.ina228.to_dict()
+        # override the default output from pydantic by calling `to_dict()` of yocto_watt
+        if self.yocto_watt:
+            _dict['yocto_watt'] = self.yocto_watt.to_dict()
         return _dict
 
     @classmethod
@@ -115,7 +126,10 @@ class DeviceConfiguration(BaseModel):
             "pins": obj.get("pins"),
             "limits": SafetyLimits.from_dict(obj["limits"]) if obj.get("limits") is not None else None,
             "cell_temperature": CellTemperatureGuard.from_dict(obj["cell_temperature"]) if obj.get("cell_temperature") is not None else None,
-            "interlock": InterlockConfiguration.from_dict(obj["interlock"]) if obj.get("interlock") is not None else None
+            "interlock": InterlockConfiguration.from_dict(obj["interlock"]) if obj.get("interlock") is not None else None,
+            "ina228": Ina228Configuration.from_dict(obj["ina228"]) if obj.get("ina228") is not None else None,
+            "yocto_watt": YoctoWattConfiguration.from_dict(obj["yocto_watt"]) if obj.get("yocto_watt") is not None else None,
+            "sensor_max_age_ms": obj.get("sensor_max_age_ms") if obj.get("sensor_max_age_ms") is not None else 1000
         })
         return _obj
 

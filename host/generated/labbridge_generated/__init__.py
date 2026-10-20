@@ -17,6 +17,7 @@
 __version__ = "0.1.0"
 
 # import apis into sdk package
+from labbridge_generated.api.components_api import ComponentsApi
 from labbridge_generated.api.core_api import CoreApi
 from labbridge_generated.api.dl24m_api import Dl24mApi
 from labbridge_generated.api.ds18b20_api import Ds18b20Api
@@ -35,8 +36,13 @@ from labbridge_generated.exceptions import ApiAttributeError
 from labbridge_generated.exceptions import ApiException
 
 # import models into sdk package
+from labbridge_generated.models.actuator_settings import ActuatorSettings
+from labbridge_generated.models.actuator_state import ActuatorState
 from labbridge_generated.models.cell_temperature_guard import CellTemperatureGuard
+from labbridge_generated.models.component import Component
+from labbridge_generated.models.component_list import ComponentList
 from labbridge_generated.models.current_request import CurrentRequest
+from labbridge_generated.models.cutoff_request import CutoffRequest
 from labbridge_generated.models.device import Device
 from labbridge_generated.models.device_configuration import DeviceConfiguration
 from labbridge_generated.models.device_list import DeviceList
@@ -45,6 +51,8 @@ from labbridge_generated.models.dl24m_bank_target_request import Dl24mBankTarget
 from labbridge_generated.models.dl24m_register import Dl24mRegister
 from labbridge_generated.models.dl24m_registers import Dl24mRegisters
 from labbridge_generated.models.dl24m_settings import Dl24mSettings
+from labbridge_generated.models.duration_request import DurationRequest
+from labbridge_generated.models.ina228_configuration import Ina228Configuration
 from labbridge_generated.models.interlock_configuration import InterlockConfiguration
 from labbridge_generated.models.lease import Lease
 from labbridge_generated.models.lease_request import LeaseRequest
@@ -56,6 +64,8 @@ from labbridge_generated.models.operation import Operation
 from labbridge_generated.models.output_request import OutputRequest
 from labbridge_generated.models.problem import Problem
 from labbridge_generated.models.safety_limits import SafetyLimits
+from labbridge_generated.models.sensor_reading import SensorReading
+from labbridge_generated.models.sensor_readings import SensorReadings
 from labbridge_generated.models.stop_request import StopRequest
 from labbridge_generated.models.switch_path_request import SwitchPathRequest
 from labbridge_generated.models.temperature_channel import TemperatureChannel
@@ -65,3 +75,4 @@ from labbridge_generated.models.wifi_network import WifiNetwork
 from labbridge_generated.models.wifi_request import WifiRequest
 from labbridge_generated.models.wifi_scan import WifiScan
 from labbridge_generated.models.wifi_state import WifiState
+from labbridge_generated.models.yocto_watt_configuration import YoctoWattConfiguration

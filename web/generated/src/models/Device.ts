@@ -20,6 +20,13 @@ import {
     SafetyLimitsToJSON,
     SafetyLimitsToJSONTyped,
 } from './SafetyLimits';
+import type { Component } from './Component';
+import {
+    ComponentFromJSON,
+    ComponentFromJSONTyped,
+    ComponentToJSON,
+    ComponentToJSONTyped,
+} from './Component';
 
 /**
  * 
@@ -74,7 +81,13 @@ export interface Device {
      * @type {SafetyLimits}
      * @memberof Device
      */
-    limits: SafetyLimits;
+    limits?: SafetyLimits;
+    /**
+     * 
+     * @type {Array<Component>}
+     * @memberof Device
+     */
+    components?: Array<Component>;
 }
 
 
@@ -111,7 +124,6 @@ export function instanceOfDevice(value: object): value is Device {
     if (!('capabilities' in value) || value['capabilities'] === undefined) return false;
     if (!('state' in value) || value['state'] === undefined) return false;
     if (!('output' in value) || value['output'] === undefined) return false;
-    if (!('limits' in value) || value['limits'] === undefined) return false;
     return true;
 }
 
@@ -132,7 +144,8 @@ export function DeviceFromJSONTyped(json: any, ignoreDiscriminator: boolean): De
         'capabilities': json['capabilities'],
         'state': json['state'],
         'output': json['output'],
-        'limits': SafetyLimitsFromJSON(json['limits']),
+        'limits': json['limits'] == null ? undefined : SafetyLimitsFromJSON(json['limits']),
+        'components': json['components'] == null ? undefined : ((json['components'] as Array<any>).map(ComponentFromJSON)),
     };
 }
 
@@ -155,6 +168,7 @@ export function DeviceToJSONTyped(value?: Device | null, ignoreDiscriminator: bo
         'state': value['state'],
         'output': value['output'],
         'limits': SafetyLimitsToJSON(value['limits']),
+        'components': value['components'] == null ? undefined : ((value['components'] as Array<any>).map(ComponentToJSON)),
     };
 }
 

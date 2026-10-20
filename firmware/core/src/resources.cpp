@@ -4,7 +4,8 @@
 namespace labbridge {
 BoardProfile BoardProfile::stick_s3() {
   return {"m5stack-sticks3",
-          {{"ble", 2},
+          {{"http", 4},
+           {"ble", 2},
            {"usb", 0},
            {"spp", 0},
            {"uart", 0},
@@ -14,7 +15,8 @@ BoardProfile BoardProfile::stick_s3() {
 }
 BoardProfile BoardProfile::s3_usb_otg() {
   return {"esp32-s3-usb-otg",
-          {{"ble", 2},
+          {{"http", 4},
+           {"ble", 2},
            {"usb", 2},
            {"spp", 0},
            {"uart", 0},
@@ -24,7 +26,8 @@ BoardProfile BoardProfile::s3_usb_otg() {
 }
 BoardProfile BoardProfile::esp32_devkit() {
   return {"esp32-devkit",
-          {{"ble", 2},
+          {{"http", 4},
+           {"ble", 2},
            {"usb", 0},
            {"spp", 0},
            {"uart", 1},
@@ -60,8 +63,12 @@ void Registry::add(DeviceSpec spec) {
       if (canonical(old.endpoint) == canonical(spec.endpoint))
         throw ConfigurationError("Endpoint already assigned");
     }
+    bool shared_i2c = old.transport == "i2c" && spec.transport == "i2c";
+    if (shared_i2c && old.pins != spec.pins)
+      throw ConfigurationError("I2C0 devices must share the same SDA/SCL pair");
     for (int pin : spec.pins)
-      if (std::find(old.pins.begin(), old.pins.end(), pin) != old.pins.end())
+      if (!shared_i2c &&
+          std::find(old.pins.begin(), old.pins.end(), pin) != old.pins.end())
         throw ConfigurationError("Pin already assigned");
   }
   if (used >= capacity->second)

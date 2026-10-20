@@ -734,6 +734,696 @@
         "x-labbridge-local-only": true
       }
     },
+    "/api/v1/devices/{deviceId}/components": {
+      "get": {
+        "operationId": "listComponents",
+        "tags": [
+          "components"
+        ],
+        "responses": {
+          "default": {
+            "description": "Structured error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "Component result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ComponentList"
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "deviceId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9_-]{1,48}$"
+            }
+          }
+        ]
+      }
+    },
+    "/api/v1/devices/{deviceId}/readings": {
+      "get": {
+        "operationId": "getSensorReadings",
+        "tags": [
+          "components"
+        ],
+        "responses": {
+          "default": {
+            "description": "Structured error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "Component result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SensorReadings"
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "deviceId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9_-]{1,48}$"
+            }
+          }
+        ]
+      }
+    },
+    "/api/v1/devices/{deviceId}/components/{componentId}/measurement": {
+      "get": {
+        "operationId": "getComponentReading",
+        "tags": [
+          "components"
+        ],
+        "responses": {
+          "default": {
+            "description": "Structured error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "Component result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SensorReading"
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "deviceId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9_-]{1,48}$"
+            }
+          },
+          {
+            "name": "componentId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9_-]{1,96}$"
+            }
+          }
+        ]
+      }
+    },
+    "/api/v1/devices/{deviceId}/components/{componentId}/state": {
+      "get": {
+        "operationId": "getActuatorState",
+        "tags": [
+          "components"
+        ],
+        "responses": {
+          "default": {
+            "description": "Structured error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "Component result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ActuatorState"
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "deviceId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9_-]{1,48}$"
+            }
+          },
+          {
+            "name": "componentId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9_-]{1,96}$"
+            }
+          }
+        ]
+      }
+    },
+    "/api/v1/devices/{deviceId}/components/{componentId}/current": {
+      "put": {
+        "operationId": "setComponentCurrent",
+        "tags": [
+          "components"
+        ],
+        "responses": {
+          "default": {
+            "description": "Structured error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "202": {
+            "description": "Operation accepted; poll until terminal",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Operation"
+                }
+              }
+            },
+            "headers": {
+              "Location": {
+                "description": "Operation status URL",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "deviceId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9_-]{1,48}$"
+            }
+          },
+          {
+            "name": "componentId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9_-]{1,96}$"
+            }
+          },
+          {
+            "name": "X-Lab-Lease",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 96
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CurrentRequest"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/devices/{deviceId}/components/{componentId}/voltage": {
+      "put": {
+        "operationId": "setComponentVoltage",
+        "tags": [
+          "components"
+        ],
+        "responses": {
+          "default": {
+            "description": "Structured error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "202": {
+            "description": "Operation accepted; poll until terminal",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Operation"
+                }
+              }
+            },
+            "headers": {
+              "Location": {
+                "description": "Operation status URL",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "deviceId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9_-]{1,48}$"
+            }
+          },
+          {
+            "name": "componentId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9_-]{1,96}$"
+            }
+          },
+          {
+            "name": "X-Lab-Lease",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 96
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/VoltageRequest"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/devices/{deviceId}/components/{componentId}/cutoff": {
+      "put": {
+        "operationId": "setComponentCutoff",
+        "tags": [
+          "components"
+        ],
+        "responses": {
+          "default": {
+            "description": "Structured error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "202": {
+            "description": "Operation accepted; poll until terminal",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Operation"
+                }
+              }
+            },
+            "headers": {
+              "Location": {
+                "description": "Operation status URL",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "deviceId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9_-]{1,48}$"
+            }
+          },
+          {
+            "name": "componentId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9_-]{1,96}$"
+            }
+          },
+          {
+            "name": "X-Lab-Lease",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 96
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CutoffRequest"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/devices/{deviceId}/components/{componentId}/duration": {
+      "put": {
+        "operationId": "setComponentDuration",
+        "tags": [
+          "components"
+        ],
+        "responses": {
+          "default": {
+            "description": "Structured error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "202": {
+            "description": "Operation accepted; poll until terminal",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Operation"
+                }
+              }
+            },
+            "headers": {
+              "Location": {
+                "description": "Operation status URL",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "deviceId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9_-]{1,48}$"
+            }
+          },
+          {
+            "name": "componentId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9_-]{1,96}$"
+            }
+          },
+          {
+            "name": "X-Lab-Lease",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 96
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DurationRequest"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/devices/{deviceId}/components/{componentId}/output": {
+      "put": {
+        "operationId": "setComponentOutput",
+        "tags": [
+          "components"
+        ],
+        "responses": {
+          "default": {
+            "description": "Structured error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "202": {
+            "description": "Operation accepted; poll until terminal",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Operation"
+                }
+              }
+            },
+            "headers": {
+              "Location": {
+                "description": "Operation status URL",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "deviceId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9_-]{1,48}$"
+            }
+          },
+          {
+            "name": "componentId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9_-]{1,96}$"
+            }
+          },
+          {
+            "name": "X-Lab-Lease",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 96
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OutputRequest"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/devices/{deviceId}/components/{componentId}/stop": {
+      "post": {
+        "operationId": "stopComponent",
+        "tags": [
+          "components"
+        ],
+        "responses": {
+          "default": {
+            "description": "Structured error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "202": {
+            "description": "Operation accepted; poll until terminal",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Operation"
+                }
+              }
+            },
+            "headers": {
+              "Location": {
+                "description": "Operation status URL",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "deviceId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9_-]{1,48}$"
+            }
+          },
+          {
+            "name": "componentId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9_-]{1,96}$"
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 96
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/StopRequest"
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/devices/{deviceId}/load/current": {
       "put": {
         "operationId": "setLoadCurrent",
@@ -1632,6 +2322,12 @@
           },
           "limits": {
             "$ref": "#/components/schemas/SafetyLimits"
+          },
+          "components": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Component"
+            }
           }
         },
         "required": [
@@ -1641,8 +2337,7 @@
           "transport",
           "capabilities",
           "state",
-          "output",
-          "limits"
+          "output"
         ]
       },
       "DeviceList": {
@@ -1871,6 +2566,9 @@
           },
           "error": {
             "$ref": "#/components/schemas/Problem"
+          },
+          "component_id": {
+            "type": "string"
           }
         },
         "required": [
@@ -2034,14 +2732,25 @@
           },
           "interlock": {
             "$ref": "#/components/schemas/InterlockConfiguration"
+          },
+          "ina228": {
+            "$ref": "#/components/schemas/Ina228Configuration"
+          },
+          "yocto_watt": {
+            "$ref": "#/components/schemas/YoctoWattConfiguration"
+          },
+          "sensor_max_age_ms": {
+            "type": "integer",
+            "minimum": 100,
+            "maximum": 3000,
+            "default": 1000
           }
         },
         "required": [
           "id",
           "driver",
           "transport",
-          "endpoint",
-          "limits"
+          "endpoint"
         ]
       },
       "WifiNetwork": {
@@ -2234,6 +2943,244 @@
         },
         "required": [
           "token"
+        ]
+      },
+      "Component": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9_-]{1,96}$"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "source",
+              "sink",
+              "sensor"
+            ]
+          },
+          "actions": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "quantity": {
+            "type": "string"
+          },
+          "unit": {
+            "type": "string"
+          },
+          "temperature_kind": {
+            "type": "string",
+            "enum": [
+              "internal",
+              "external_probe",
+              "cell"
+            ]
+          }
+        },
+        "required": [
+          "id",
+          "kind",
+          "actions"
+        ]
+      },
+      "ComponentList": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "components": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Component"
+            }
+          }
+        },
+        "required": [
+          "components"
+        ]
+      },
+      "SensorReading": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "device_id": {
+            "type": "string"
+          },
+          "component_id": {
+            "type": "string"
+          },
+          "boot_id": {
+            "type": "string"
+          },
+          "quantity": {
+            "type": "string"
+          },
+          "unit": {
+            "type": "string"
+          },
+          "quality": {
+            "type": "string",
+            "enum": [
+              "valid",
+              "stale",
+              "unavailable"
+            ]
+          },
+          "value": {
+            "type": "number",
+            "format": "double"
+          },
+          "sequence": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
+          },
+          "received_ms": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
+          },
+          "age_ms": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
+          },
+          "epoch": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "device_id",
+          "component_id",
+          "boot_id",
+          "quantity",
+          "unit",
+          "quality",
+          "sequence",
+          "received_ms",
+          "age_ms"
+        ]
+      },
+      "SensorReadings": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "device_id": {
+            "type": "string"
+          },
+          "boot_id": {
+            "type": "string"
+          },
+          "readings": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SensorReading"
+            }
+          }
+        },
+        "required": [
+          "device_id",
+          "boot_id",
+          "readings"
+        ]
+      },
+      "ActuatorSettings": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "voltage_v": {
+            "type": "number"
+          },
+          "current_a": {
+            "type": "number"
+          },
+          "cutoff_voltage_v": {
+            "type": "number"
+          },
+          "time_limit_s": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "regulation_mode": {
+            "type": "string",
+            "enum": [
+              "cc",
+              "cv",
+              "unknown"
+            ]
+          }
+        },
+        "required": []
+      },
+      "ActuatorState": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "device_id": {
+            "type": "string"
+          },
+          "component_id": {
+            "type": "string"
+          },
+          "state": {
+            "type": "string",
+            "enum": [
+              "unavailable",
+              "ready",
+              "busy",
+              "fault"
+            ]
+          },
+          "output": {
+            "type": "string",
+            "enum": [
+              "on",
+              "off",
+              "unknown"
+            ]
+          },
+          "settings": {
+            "$ref": "#/components/schemas/ActuatorSettings"
+          }
+        },
+        "required": [
+          "device_id",
+          "component_id",
+          "state",
+          "output",
+          "settings"
+        ]
+      },
+      "CutoffRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "cutoff_voltage_v": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1000
+          }
+        },
+        "required": [
+          "cutoff_voltage_v"
+        ]
+      },
+      "DurationRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "time_limit_s": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 86400
+          }
+        },
+        "required": [
+          "time_limit_s"
         ]
       },
       "Dl24mSettings": {
@@ -2437,10 +3384,58 @@
         "required": [
           "path"
         ]
+      },
+      "Ina228Configuration": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "shunt_ohms",
+          "max_current_a",
+          "adc_range"
+        ],
+        "properties": {
+          "shunt_ohms": {
+            "type": "number",
+            "exclusiveMinimum": true,
+            "minimum": 0,
+            "maximum": 100
+          },
+          "max_current_a": {
+            "type": "number",
+            "exclusiveMinimum": true,
+            "minimum": 0,
+            "maximum": 100000
+          },
+          "adc_range": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 1
+          }
+        }
+      },
+      "YoctoWattConfiguration": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "hub_url"
+        ],
+        "properties": {
+          "hub_url": {
+            "type": "string",
+            "maxLength": 256
+          }
+        }
       }
     }
   },
   "x-labbridge-modules": [
+    {
+      "id": "components",
+      "transports": [],
+      "capabilities": [
+        "components"
+      ]
+    },
     {
       "id": "dl24m",
       "transports": [
@@ -2477,6 +3472,18 @@
       ]
     },
     {
+      "id": "ina228",
+      "transports": [
+        "i2c"
+      ],
+      "capabilities": [
+        "components",
+        "voltage.measure",
+        "current.measure",
+        "power.measure"
+      ]
+    },
+    {
       "id": "rd60xx",
       "transports": [
         "usb",
@@ -2485,6 +3492,18 @@
       "capabilities": [
         "source.cc_cv",
         "output",
+        "voltage.measure",
+        "current.measure",
+        "power.measure"
+      ]
+    },
+    {
+      "id": "yocto_watt",
+      "transports": [
+        "http"
+      ],
+      "capabilities": [
+        "components",
         "voltage.measure",
         "current.measure",
         "power.measure"

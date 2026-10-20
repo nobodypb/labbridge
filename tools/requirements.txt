@@ -7,3 +7,4 @@ pyserial==3.5
 clang-format==18.1.8
 black==24.10.0
 setuptools==77.0.3
+yoctopuce==2.1.16087

@@ -13,7 +13,10 @@ static device_configuration_t *device_configuration_create_internal(
     list_t *pins,
     safety_limits_t *limits,
     cell_temperature_guard_t *cell_temperature,
-    interlock_configuration_t *interlock
+    interlock_configuration_t *interlock,
+    ina228_configuration_t *ina228,
+    yocto_watt_configuration_t *yocto_watt,
+    int sensor_max_age_ms
     ) {
     device_configuration_t *device_configuration_local_var = malloc(sizeof(device_configuration_t));
     if (!device_configuration_local_var) {
@@ -27,6 +30,9 @@ static device_configuration_t *device_configuration_create_internal(
     device_configuration_local_var->limits = limits;
     device_configuration_local_var->cell_temperature = cell_temperature;
     device_configuration_local_var->interlock = interlock;
+    device_configuration_local_var->ina228 = ina228;
+    device_configuration_local_var->yocto_watt = yocto_watt;
+    device_configuration_local_var->sensor_max_age_ms = sensor_max_age_ms;
 
     device_configuration_local_var->_library_owned = 1;
     return device_configuration_local_var;
@@ -40,7 +46,10 @@ __attribute__((deprecated)) device_configuration_t *device_configuration_create(
     list_t *pins,
     safety_limits_t *limits,
     cell_temperature_guard_t *cell_temperature,
-    interlock_configuration_t *interlock
+    interlock_configuration_t *interlock,
+    ina228_configuration_t *ina228,
+    yocto_watt_configuration_t *yocto_watt,
+    int sensor_max_age_ms
     ) {
     return device_configuration_create_internal (
         id,
@@ -50,7 +59,10 @@ __attribute__((deprecated)) device_configuration_t *device_configuration_create(
         pins,
         limits,
         cell_temperature,
-        interlock
+        interlock,
+        ina228,
+        yocto_watt,
+        sensor_max_age_ms
         );
 }
 
@@ -97,6 +109,14 @@ void device_configuration_free(device_configuration_t *device_configuration) {
     if (device_configuration->interlock) {
         interlock_configuration_free(device_configuration->interlock);
         device_configuration->interlock = NULL;
+    }
+    if (device_configuration->ina228) {
+        ina228_configuration_free(device_configuration->ina228);
+        device_configuration->ina228 = NULL;
+    }
+    if (device_configuration->yocto_watt) {
+        yocto_watt_configuration_free(device_configuration->yocto_watt);
+        device_configuration->yocto_watt = NULL;
     }
     free(device_configuration);
 }
@@ -158,9 +178,7 @@ cJSON *device_configuration_convertToJSON(device_configuration_t *device_configu
 
 
     // device_configuration->limits
-    if (!device_configuration->limits) {
-        goto fail;
-    }
+    if(device_configuration->limits) {
     cJSON *limits_local_JSON = safety_limits_convertToJSON(device_configuration->limits);
     if(limits_local_JSON == NULL) {
     goto fail; //model
@@ -168,6 +186,7 @@ cJSON *device_configuration_convertToJSON(device_configuration_t *device_configu
     cJSON_AddItemToObject(item, "limits", limits_local_JSON);
     if(item->child == NULL) {
     goto fail;
+    }
     }
 
 
@@ -196,6 +215,40 @@ cJSON *device_configuration_convertToJSON(device_configuration_t *device_configu
     }
     }
 
+
+    // device_configuration->ina228
+    if(device_configuration->ina228) {
+    cJSON *ina228_local_JSON = ina228_configuration_convertToJSON(device_configuration->ina228);
+    if(ina228_local_JSON == NULL) {
+    goto fail; //model
+    }
+    cJSON_AddItemToObject(item, "ina228", ina228_local_JSON);
+    if(item->child == NULL) {
+    goto fail;
+    }
+    }
+
+
+    // device_configuration->yocto_watt
+    if(device_configuration->yocto_watt) {
+    cJSON *yocto_watt_local_JSON = yocto_watt_configuration_convertToJSON(device_configuration->yocto_watt);
+    if(yocto_watt_local_JSON == NULL) {
+    goto fail; //model
+    }
+    cJSON_AddItemToObject(item, "yocto_watt", yocto_watt_local_JSON);
+    if(item->child == NULL) {
+    goto fail;
+    }
+    }
+
+
+    // device_configuration->sensor_max_age_ms
+    if(device_configuration->sensor_max_age_ms) {
+    if(cJSON_AddNumberToObject(item, "sensor_max_age_ms", device_configuration->sensor_max_age_ms) == NULL) {
+    goto fail; //Numeric
+    }
+    }
+
     return item;
 fail:
     if (item) {
@@ -219,6 +272,12 @@ device_configuration_t *device_configuration_parseFromJSON(cJSON *device_configu
 
     // define the local variable for device_configuration->interlock
     interlock_configuration_t *interlock_local_nonprim = NULL;
+
+    // define the local variable for device_configuration->ina228
+    ina228_configuration_t *ina228_local_nonprim = NULL;
+
+    // define the local variable for device_configuration->yocto_watt
+    yocto_watt_configuration_t *yocto_watt_local_nonprim = NULL;
 
     // device_configuration->id
     cJSON *id = cJSON_GetObjectItemCaseSensitive(device_configurationJSON, "id");
@@ -313,12 +372,9 @@ device_configuration_t *device_configuration_parseFromJSON(cJSON *device_configu
     if (cJSON_IsNull(limits)) {
         limits = NULL;
     }
-    if (!limits) {
-        goto end;
-    }
-
-    
+    if (limits) { 
     limits_local_nonprim = safety_limits_parseFromJSON(limits); //nonprimitive
+    }
 
     // device_configuration->cell_temperature
     cJSON *cell_temperature = cJSON_GetObjectItemCaseSensitive(device_configurationJSON, "cell_temperature");
@@ -338,6 +394,36 @@ device_configuration_t *device_configuration_parseFromJSON(cJSON *device_configu
     interlock_local_nonprim = interlock_configuration_parseFromJSON(interlock); //nonprimitive
     }
 
+    // device_configuration->ina228
+    cJSON *ina228 = cJSON_GetObjectItemCaseSensitive(device_configurationJSON, "ina228");
+    if (cJSON_IsNull(ina228)) {
+        ina228 = NULL;
+    }
+    if (ina228) { 
+    ina228_local_nonprim = ina228_configuration_parseFromJSON(ina228); //nonprimitive
+    }
+
+    // device_configuration->yocto_watt
+    cJSON *yocto_watt = cJSON_GetObjectItemCaseSensitive(device_configurationJSON, "yocto_watt");
+    if (cJSON_IsNull(yocto_watt)) {
+        yocto_watt = NULL;
+    }
+    if (yocto_watt) { 
+    yocto_watt_local_nonprim = yocto_watt_configuration_parseFromJSON(yocto_watt); //nonprimitive
+    }
+
+    // device_configuration->sensor_max_age_ms
+    cJSON *sensor_max_age_ms = cJSON_GetObjectItemCaseSensitive(device_configurationJSON, "sensor_max_age_ms");
+    if (cJSON_IsNull(sensor_max_age_ms)) {
+        sensor_max_age_ms = NULL;
+    }
+    if (sensor_max_age_ms) { 
+    if(!cJSON_IsNumber(sensor_max_age_ms))
+    {
+    goto end; //Numeric
+    }
+    }
+
 
     device_configuration_local_var = device_configuration_create_internal (
         strdup(id->valuestring),
@@ -345,9 +431,12 @@ device_configuration_t *device_configuration_parseFromJSON(cJSON *device_configu
         strdup(transport->valuestring),
         strdup(endpoint->valuestring),
         pins ? pinsList : NULL,
-        limits_local_nonprim,
+        limits ? limits_local_nonprim : NULL,
         cell_temperature ? cell_temperature_local_nonprim : NULL,
-        interlock ? interlock_local_nonprim : NULL
+        interlock ? interlock_local_nonprim : NULL,
+        ina228 ? ina228_local_nonprim : NULL,
+        yocto_watt ? yocto_watt_local_nonprim : NULL,
+        sensor_max_age_ms ? sensor_max_age_ms->valuedouble : 0
         );
 
     return device_configuration_local_var;
@@ -372,6 +461,14 @@ end:
     if (interlock_local_nonprim) {
         interlock_configuration_free(interlock_local_nonprim);
         interlock_local_nonprim = NULL;
+    }
+    if (ina228_local_nonprim) {
+        ina228_configuration_free(ina228_local_nonprim);
+        ina228_local_nonprim = NULL;
+    }
+    if (yocto_watt_local_nonprim) {
+        yocto_watt_configuration_free(yocto_watt_local_nonprim);
+        yocto_watt_local_nonprim = NULL;
     }
     return NULL;
 

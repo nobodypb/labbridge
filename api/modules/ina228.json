@@ -1,0 +1,45 @@
+{
+  "x-labbridge-module": {
+    "id": "ina228",
+    "transports": [
+      "i2c"
+    ],
+    "capabilities": [
+      "components",
+      "voltage.measure",
+      "current.measure",
+      "power.measure"
+    ]
+  },
+  "paths": {},
+  "schemas": {
+    "Ina228Configuration": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "shunt_ohms",
+        "max_current_a",
+        "adc_range"
+      ],
+      "properties": {
+        "shunt_ohms": {
+          "type": "number",
+          "exclusiveMinimum": true,
+          "minimum": 0,
+          "maximum": 100
+        },
+        "max_current_a": {
+          "type": "number",
+          "exclusiveMinimum": true,
+          "minimum": 0,
+          "maximum": 100000
+        },
+        "adc_range": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 1
+        }
+      }
+    }
+  }
+}

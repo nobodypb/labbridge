@@ -3,6 +3,7 @@
 .openapi-generator-ignore
 README.md
 package.json
+src/apis/ComponentsApi.ts
 src/apis/CoreApi.ts
 src/apis/Dl24mApi.ts
 src/apis/Ds18b20Api.ts
@@ -10,8 +11,13 @@ src/apis/GpioInterlockApi.ts
 src/apis/Rd60xxApi.ts
 src/apis/index.ts
 src/index.ts
+src/models/ActuatorSettings.ts
+src/models/ActuatorState.ts
 src/models/CellTemperatureGuard.ts
+src/models/Component.ts
+src/models/ComponentList.ts
 src/models/CurrentRequest.ts
+src/models/CutoffRequest.ts
 src/models/Device.ts
 src/models/DeviceConfiguration.ts
 src/models/DeviceList.ts
@@ -20,6 +26,8 @@ src/models/Dl24mBankTargetRequest.ts
 src/models/Dl24mRegister.ts
 src/models/Dl24mRegisters.ts
 src/models/Dl24mSettings.ts
+src/models/DurationRequest.ts
+src/models/Ina228Configuration.ts
 src/models/InterlockConfiguration.ts
 src/models/Lease.ts
 src/models/LeaseRequest.ts
@@ -31,6 +39,8 @@ src/models/Operation.ts
 src/models/OutputRequest.ts
 src/models/Problem.ts
 src/models/SafetyLimits.ts
+src/models/SensorReading.ts
+src/models/SensorReadings.ts
 src/models/StopRequest.ts
 src/models/SwitchPathRequest.ts
 src/models/TemperatureChannel.ts
@@ -40,6 +50,7 @@ src/models/WifiNetwork.ts
 src/models/WifiRequest.ts
 src/models/WifiScan.ts
 src/models/WifiState.ts
+src/models/YoctoWattConfiguration.ts
 src/models/index.ts
 src/runtime.ts
 tsconfig.esm.json

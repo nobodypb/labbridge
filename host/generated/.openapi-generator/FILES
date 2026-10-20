@@ -7,6 +7,7 @@ README.md
 git_push.sh
 labbridge_generated/__init__.py
 labbridge_generated/api/__init__.py
+labbridge_generated/api/components_api.py
 labbridge_generated/api/core_api.py
 labbridge_generated/api/dl24m_api.py
 labbridge_generated/api/ds18b20_api.py
@@ -17,8 +18,13 @@ labbridge_generated/api_response.py
 labbridge_generated/configuration.py
 labbridge_generated/exceptions.py
 labbridge_generated/models/__init__.py
+labbridge_generated/models/actuator_settings.py
+labbridge_generated/models/actuator_state.py
 labbridge_generated/models/cell_temperature_guard.py
+labbridge_generated/models/component.py
+labbridge_generated/models/component_list.py
 labbridge_generated/models/current_request.py
+labbridge_generated/models/cutoff_request.py
 labbridge_generated/models/device.py
 labbridge_generated/models/device_configuration.py
 labbridge_generated/models/device_list.py
@@ -27,6 +33,8 @@ labbridge_generated/models/dl24m_bank_target_request.py
 labbridge_generated/models/dl24m_register.py
 labbridge_generated/models/dl24m_registers.py
 labbridge_generated/models/dl24m_settings.py
+labbridge_generated/models/duration_request.py
+labbridge_generated/models/ina228_configuration.py
 labbridge_generated/models/interlock_configuration.py
 labbridge_generated/models/lease.py
 labbridge_generated/models/lease_request.py
@@ -38,6 +46,8 @@ labbridge_generated/models/operation.py
 labbridge_generated/models/output_request.py
 labbridge_generated/models/problem.py
 labbridge_generated/models/safety_limits.py
+labbridge_generated/models/sensor_reading.py
+labbridge_generated/models/sensor_readings.py
 labbridge_generated/models/stop_request.py
 labbridge_generated/models/switch_path_request.py
 labbridge_generated/models/temperature_channel.py
@@ -47,6 +57,7 @@ labbridge_generated/models/wifi_network.py
 labbridge_generated/models/wifi_request.py
 labbridge_generated/models/wifi_scan.py
 labbridge_generated/models/wifi_state.py
+labbridge_generated/models/yocto_watt_configuration.py
 labbridge_generated/py.typed
 labbridge_generated/rest.py
 pyproject.toml

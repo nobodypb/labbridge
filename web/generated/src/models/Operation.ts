@@ -99,6 +99,12 @@ export interface Operation {
      * @memberof Operation
      */
     error?: Problem;
+    /**
+     * 
+     * @type {string}
+     * @memberof Operation
+     */
+    componentId?: string;
 }
 
 
@@ -164,6 +170,7 @@ export function OperationFromJSONTyped(json: any, ignoreDiscriminator: boolean):
         'finalOutput': json['final_output'],
         'restorePending': json['restore_pending'],
         'error': json['error'] == null ? undefined : ProblemFromJSON(json['error']),
+        'componentId': json['component_id'] == null ? undefined : json['component_id'],
     };
 }
 
@@ -190,6 +197,7 @@ export function OperationToJSONTyped(value?: Operation | null, ignoreDiscriminat
         'final_output': value['finalOutput'],
         'restore_pending': value['restorePending'],
         'error': ProblemToJSON(value['error']),
+        'component_id': value['componentId'],
     };
 }
 

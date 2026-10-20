@@ -242,8 +242,9 @@ public:
         .set("identity", config_.text("endpoint"))
         .set("capabilities", a)
         .set("state", m.text("quality") == "valid" ? "ready" : "unavailable")
-        .set("output", "off")
-        .set("limits", limits(config_));
+        .set("output", "off");
+    if (config_.has("limits"))
+      j.set("limits", limits(config_));
     return j;
   }
   bool supports(const std::string &op) const {

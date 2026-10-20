@@ -53,4 +53,9 @@ int main() {
   emit("getMeasurements", "/api/v1/devices/load/measurements");
   emit("getDl24mSettings", "/api/v1/devices/load/dl24m/settings");
   emit("getDl24mRegisters", "/api/v1/devices/load/dl24m/registers");
+  emit("listComponents", "/api/v1/devices/load/components");
+  emit("getSensorReadings", "/api/v1/devices/load/readings");
+  emit("getComponentReading",
+       "/api/v1/devices/load/components/current/measurement");
+  emit("getActuatorState", "/api/v1/devices/load/components/sink/state");
 }

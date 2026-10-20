@@ -48,8 +48,13 @@ set(SRCS
     src/binary.c
     external/cJSON.c
     model/object.c
+    model/actuator_settings.c
+    model/actuator_state.c
     model/cell_temperature_guard.c
+    model/component.c
+    model/component_list.c
     model/current_request.c
+    model/cutoff_request.c
     model/device.c
     model/device_configuration.c
     model/device_list.c
@@ -58,6 +63,8 @@ set(SRCS
     model/dl24m_register.c
     model/dl24m_registers.c
     model/dl24m_settings.c
+    model/duration_request.c
+    model/ina228_configuration.c
     model/interlock_configuration.c
     model/lease.c
     model/lease_request.c
@@ -69,6 +76,8 @@ set(SRCS
     model/output_request.c
     model/problem.c
     model/safety_limits.c
+    model/sensor_reading.c
+    model/sensor_readings.c
     model/stop_request.c
     model/switch_path_request.c
     model/temperature_channel.c
@@ -78,6 +87,7 @@ set(SRCS
     model/wifi_request.c
     model/wifi_scan.c
     model/wifi_state.c
+    model/yocto_watt_configuration.c
 
 )
 
@@ -89,8 +99,13 @@ set(HDRS
     external/cJSON.h
     model/object.h
     model/any_type.h
+    model/actuator_settings.h
+    model/actuator_state.h
     model/cell_temperature_guard.h
+    model/component.h
+    model/component_list.h
     model/current_request.h
+    model/cutoff_request.h
     model/device.h
     model/device_configuration.h
     model/device_list.h
@@ -99,6 +114,8 @@ set(HDRS
     model/dl24m_register.h
     model/dl24m_registers.h
     model/dl24m_settings.h
+    model/duration_request.h
+    model/ina228_configuration.h
     model/interlock_configuration.h
     model/lease.h
     model/lease_request.h
@@ -110,6 +127,8 @@ set(HDRS
     model/output_request.h
     model/problem.h
     model/safety_limits.h
+    model/sensor_reading.h
+    model/sensor_readings.h
     model/stop_request.h
     model/switch_path_request.h
     model/temperature_channel.h
@@ -119,6 +138,7 @@ set(HDRS
     model/wifi_request.h
     model/wifi_scan.h
     model/wifi_state.h
+    model/yocto_watt_configuration.h
 
 )
 

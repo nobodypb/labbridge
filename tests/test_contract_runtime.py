@@ -12,7 +12,7 @@ class RuntimeContractTests(unittest.TestCase):
             [ROOT / ".build/host/contract_dump"], text=True
         )
         fixtures = [json.loads(line) for line in output.splitlines()]
-        self.assertGreaterEqual(len(fixtures), 5)
+        self.assertGreaterEqual(len(fixtures), 10)
         for fixture in fixtures:
             op = next(
                 v

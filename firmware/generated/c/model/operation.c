@@ -51,7 +51,8 @@ static operation_t *operation_create_internal(
     double confirmed_value,
     labbridge_api_operation_FINALOUTPUT_e final_output,
     int restore_pending,
-    problem_t *error
+    problem_t *error,
+    char *component_id
     ) {
     operation_t *operation_local_var = malloc(sizeof(operation_t));
     if (!operation_local_var) {
@@ -69,6 +70,7 @@ static operation_t *operation_create_internal(
     operation_local_var->final_output = final_output;
     operation_local_var->restore_pending = restore_pending;
     operation_local_var->error = error;
+    operation_local_var->component_id = component_id;
 
     operation_local_var->_library_owned = 1;
     return operation_local_var;
@@ -86,7 +88,8 @@ __attribute__((deprecated)) operation_t *operation_create(
     double confirmed_value,
     labbridge_api_operation_FINALOUTPUT_e final_output,
     int restore_pending,
-    problem_t *error
+    problem_t *error,
+    char *component_id
     ) {
     return operation_create_internal (
         id,
@@ -100,7 +103,8 @@ __attribute__((deprecated)) operation_t *operation_create(
         confirmed_value,
         final_output,
         restore_pending,
-        error
+        error,
+        component_id
         );
 }
 
@@ -128,6 +132,10 @@ void operation_free(operation_t *operation) {
     if (operation->error) {
         problem_free(operation->error);
         operation->error = NULL;
+    }
+    if (operation->component_id) {
+        free(operation->component_id);
+        operation->component_id = NULL;
     }
     free(operation);
 }
@@ -244,6 +252,14 @@ cJSON *operation_convertToJSON(operation_t *operation) {
     cJSON_AddItemToObject(item, "error", error_local_JSON);
     if(item->child == NULL) {
     goto fail;
+    }
+    }
+
+
+    // operation->component_id
+    if(operation->component_id) {
+    if(cJSON_AddStringToObject(item, "component_id", operation->component_id) == NULL) {
+    goto fail; //String
     }
     }
 
@@ -437,6 +453,18 @@ operation_t *operation_parseFromJSON(cJSON *operationJSON){
     error_local_nonprim = problem_parseFromJSON(error); //nonprimitive
     }
 
+    // operation->component_id
+    cJSON *component_id = cJSON_GetObjectItemCaseSensitive(operationJSON, "component_id");
+    if (cJSON_IsNull(component_id)) {
+        component_id = NULL;
+    }
+    if (component_id) { 
+    if(!cJSON_IsString(component_id) && !cJSON_IsNull(component_id))
+    {
+    goto end; //String
+    }
+    }
+
 
     operation_local_var = operation_create_internal (
         strdup(id->valuestring),
@@ -450,7 +478,8 @@ operation_t *operation_parseFromJSON(cJSON *operationJSON){
         confirmed_value ? confirmed_value->valuedouble : 0,
         final_outputVariable,
         restore_pending->valueint,
-        error ? error_local_nonprim : NULL
+        error ? error_local_nonprim : NULL,
+        component_id && !cJSON_IsNull(component_id) ? strdup(component_id->valuestring) : NULL
         );
 
     return operation_local_var;

@@ -185,7 +185,32 @@ bool Node::temperature_ok(const std::string &device, uint64_t now) const {
   if (it == cell_guards_.end())
     return true;
   const auto &g = it->second;
-  auto m = devices_.at(g.sensor)->measurements(now);
+  auto &sensor = *devices_.at(g.sensor);
+  try {
+    auto list = sensor.components(now);
+    for (auto p = list.get()->child; p; p = p->next) {
+      Json c(cJSON_Duplicate(p, true));
+      if (c.text("id") != g.channel &&
+          c.text("id") != "temperature-" + g.channel)
+        continue;
+      auto kind = c.text("temperature_kind");
+      if (c.text("kind") != "sensor" || c.text("quantity") != "temperature" ||
+          c.text("unit") != "degC" ||
+          (kind != "cell" && kind != "external_probe"))
+        return false;
+      auto r = sensor.component_reading(c.text("id"), now);
+      auto value = r.number("value", NAN),
+           received = r.number("received_ms", -1);
+      return r.text("quality") == "valid" && std::isfinite(value) &&
+             received >= 0 && received <= now &&
+             now - received <= g.max_age_ms &&
+             r.number("age_ms", g.max_age_ms + 1) <= g.max_age_ms &&
+             value >= g.minimum_c && value <= g.maximum_c;
+    }
+  } catch (const std::invalid_argument &) {
+    return false;
+  }
+  auto m = sensor.measurements(now);
   auto channels = m.at("temperature_channels");
   if (!cJSON_IsArray(channels))
     return false;
@@ -279,6 +304,12 @@ void Node::tick(uint64_t now) {
     if (result.has("status")) {
       auto id = it->second;
       result.set("id", id).set("device_id", it->first);
+      auto component = operations_.at(id).text("component_id");
+      if (!component.empty())
+        result.set("component_id", component)
+            .set("final_output", devices_.at(it->first)
+                                     ->actuator_state(component, now)
+                                     .text("output", "unknown"));
       operations_[id] = result;
       auto s = result.text("status");
       if (s != "pending" && s != "running") {
@@ -303,7 +334,7 @@ void Node::tick(uint64_t now) {
 Response Node::request(const std::string &method, const std::string &path,
                        const Json &body, const Headers &headers, uint64_t now) {
   tick(now);
-  std::string op, device, param;
+  std::string op, device, param, component;
   auto actual = split(path);
   for (auto &route : generated::routes) {
     if (method != route.method)
@@ -337,6 +368,77 @@ Response Node::request(const std::string &method, const std::string &path,
     return problem(404, "Unknown device");
   if (auto handler = handlers_.find(op); handler != handlers_.end())
     return handler->second(body, headers, now);
+  auto description = [&](const std::string &id) {
+    auto d = devices_.at(id)->describe(now), caps = d.item("capabilities");
+    caps.append(std::string("components"));
+    d.set("capabilities", caps)
+        .set("components", devices_.at(id)->components(now));
+    return d;
+  };
+  if (op == "listComponents") {
+    Json result;
+    result.set("components", devices_.at(device)->components(now));
+    return {200, result};
+  }
+  if (op == "getSensorReadings") {
+    auto &driver = *devices_.at(device);
+    auto samples = driver.sensor_readings(now), values = Json::array();
+    for (auto p = samples.get()->child; p; p = p->next) {
+      Json reading(cJSON_Duplicate(p, true));
+      reading.set("device_id", device).set("boot_id", boot_);
+      values.append(reading);
+    }
+    Json result;
+    result.set("device_id", device)
+        .set("boot_id", boot_)
+        .set("readings", values);
+    return {200, result};
+  }
+  if (op == "getComponentReading" || op == "getActuatorState" ||
+      op.rfind("setComponent", 0) == 0 || op == "stopComponent") {
+    auto &driver = *devices_.at(device);
+    auto list = driver.components(now);
+    Json c;
+    bool found = false;
+    for (auto p = list.get()->child; p; p = p->next) {
+      Json candidate(cJSON_Duplicate(p, true));
+      if (candidate.text("id") == param) {
+        c = candidate;
+        found = true;
+        break;
+      }
+    }
+    if (!found)
+      return problem(404, "Unknown component");
+    try {
+      if (op == "getComponentReading") {
+        if (c.text("kind") != "sensor")
+          return problem(422, "Component is not a sensor");
+        auto reading = driver.component_reading(param, now);
+        reading.set("device_id", device).set("boot_id", boot_);
+        return {200, reading};
+      }
+      if (op == "getActuatorState") {
+        if (c.text("kind") == "sensor")
+          return problem(422, "Component is not an actuator");
+        auto state = driver.actuator_state(param, now);
+        state.set("device_id", device).set("component_id", param);
+        return {200, state};
+      }
+      auto action =
+          op == "stopComponent" ? "stop" : op.substr(12); // setComponent
+      std::transform(action.begin(), action.end(), action.begin(),
+                     [](unsigned char v) { return std::tolower(v); });
+      component = param;
+      bool stopping = op == "stopComponent" ||
+                      (op == "setComponentOutput" && !body.boolean("enabled"));
+      op = driver.component_command(param, action, now);
+      if (stopping)
+        op = "stopDevice";
+    } catch (const std::invalid_argument &e) {
+      return problem(422, e.what());
+    }
+  }
   if (op == "getNode") {
     Json j;
     j.set("id", id_)
@@ -349,13 +451,13 @@ Response Node::request(const std::string &method, const std::string &path,
   if (op == "listDevices") {
     auto list = Json::array();
     for (auto &p : devices_)
-      list.append(p.second->describe(now));
+      list.append(description(p.first));
     Json j;
     j.set("devices", list);
     return {200, j};
   }
   if (op == "getDevice")
-    return {200, devices_.at(device)->describe(now)};
+    return {200, description(device)};
   if (op == "getMeasurements") {
     auto value = devices_.at(device)->measurements(now);
     value.set("boot_id", boot_);
@@ -474,7 +576,10 @@ Response Node::request(const std::string &method, const std::string &path,
     Json result;
     try {
       if (stop) {
-        driver.stop(now);
+        if (component.empty())
+          driver.stop(now);
+        else
+          driver.stop_component(component, now);
         result = driver.operation(now);
         if (!result.has("status"))
           result.set("status", "running")
@@ -492,6 +597,10 @@ Response Node::request(const std::string &method, const std::string &path,
     }
     auto id = next_id("o");
     result.set("id", id).set("device_id", device);
+    if (!component.empty())
+      result.set("component_id", component)
+          .set("final_output",
+               driver.actuator_state(component, now).text("output", "unknown"));
     operations_[id] = result;
     keys_.emplace(key, Saved{signature, id, device, now});
     if (result.text("status") == "running" ||
