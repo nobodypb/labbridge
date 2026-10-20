@@ -126,8 +126,8 @@ with no associated AP client. The operator still observed W01 without a server
 IP; no incoming RD TCP connection occurred. This is a failed pairing result, not
 RD commissioning or coexistence acceptance. An intermittent USB request timeout
 was also observed; later status remained available without a confirmed reset.
-The documented SmartConfig/open-network incompatibility requires a protected
-network comparison. Output actuation was not performed.
+A protected-network comparison was subsequently performed as recorded below.
+Output actuation was not performed.
 
 WPA2 comparison preparation on firmware `0.1.0+4af9dc4`: the USB API rejected a
 short passphrase with 422, then accepted an AP-only WPA2 configuration. LAN
@@ -137,6 +137,21 @@ and full-configuration responses. All original DL24M settings were re-read and
 unchanged; CC 0.100 A, output OFF and fresh BLE measurements were preserved.
 The protected-network server-address phase subsequently ran its full 120-second
 deadline with one associated client and 11,991 accepted UDP submissions. It
-timed out without a phase acknowledgement; the operator display observation is
-still pending, so this does not establish whether the server address was decoded.
-The AP remains protected for the unfinished comparison; no RD actuation occurred.
+timed out; the operator confirmed W01 still displayed Server IP placeholders
+without an address. WPA2 alone did not resolve AP-origin provisioning. The AP was
+restored explicitly to open through USB and station connectivity was preserved;
+DL24M remained OFF / 0.100 A. The operator confirmed the correct WiFi Config
+dialog with red Server IP placeholders and the skip button. No RD actuation
+occurred. The subsequent PC investigation found concrete packet-profile
+mismatches; correct these before another radio comparison.
+
+Offline PC-protocol acceptance: the manufacturer-linked v1.0.0.22 executable
+was decompiled and its protected strings resolved without running it. CRC-table
+values agree with a separate bitwise implementation for all 256 byte values;
+two synthetic packet sets decode to their original logical payloads and satisfy
+per-triple CRC and total XOR. The current sender differs in phase-one SSID,
+BSSID handling, multicast addressing and scheduling. The older v1.0.0.8 has
+matching visible framing/control flow, but its encrypted strings were not
+resolved. Public reference vectors contain synthetic inputs only. These checks
+validate the documented PC sender profile, not ESP RF delivery or W01 acceptance.
+No additional flashing or pairing attempt occurred during this investigation.
