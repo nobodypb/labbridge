@@ -5,6 +5,7 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "labbridge/captive_dns.hpp"
+#include "labbridge/wifi_security.hpp"
 #include "lwip/sockets.h"
 #include "mdns.h"
 #include "platform.hpp"
@@ -19,6 +20,20 @@ static esp_netif_t *sta, *ap;
 static std::atomic<bool> connected{false};
 static bool setup_enabled = true;
 static uint64_t apply_wifi_at = 0;
+static uint64_t apply_ap_at = 0;
+static void apply_ap_security() {
+  wifi_config_t c{};
+  auto ssid = configuration.text("ap_ssid", "LabBridge-Setup");
+  auto password = read_nvs("ap").text("psk");
+  memcpy(c.ap.ssid, ssid.data(), ssid.size());
+  c.ap.ssid_len = ssid.size();
+  c.ap.max_connection = 4;
+  c.ap.authmode = password.empty() ? WIFI_AUTH_OPEN : WIFI_AUTH_WPA2_PSK;
+  c.ap.pairwise_cipher = WIFI_CIPHER_TYPE_CCMP;
+  c.ap.pmf_cfg.required = false; // Original ESP8266 modules do not support PMF.
+  memcpy(c.ap.password, password.data(), password.size());
+  ESP_ERROR_CHECK(esp_wifi_set_config(WIFI_IF_AP, &c));
+}
 static std::mutex scan_mutex;
 static Json scan_cache;
 static std::atomic<bool> scan_requested{false}, scan_running{false};
@@ -70,6 +85,9 @@ static Json wifi_state() {
     snprintf(address, sizeof(address), IPSTR, IP2STR(&ip.ip));
     j.set("address", address);
   }
+  wifi_config_t ap_config{};
+  if (esp_wifi_get_config(WIFI_IF_AP, &ap_config) == ESP_OK)
+    j.set("ap_secured", ap_config.ap.authmode != WIFI_AUTH_OPEN);
   return j;
 }
 static void event(void *, esp_event_base_t base, int32_t id, void *) {
@@ -93,7 +111,8 @@ static void connect_station() {
   esp_wifi_connect();
 }
 bool wifi_network_busy() {
-  return scan_running || scan_requested || apply_wifi_at != 0;
+  return scan_running || scan_requested || apply_wifi_at != 0 ||
+         apply_ap_at != 0;
 }
 Response dispatch(const std::string &method, const std::string &path,
                   const Json &body, const Headers &headers, bool local) {
@@ -103,6 +122,9 @@ Response dispatch(const std::string &method, const std::string &path,
     j.set("token", read_nvs("auth").text("token"));
     return {200, j};
   }
+  if (apply_ap_at && method != "GET" &&
+      !(path.size() >= 5 && path.substr(path.size() - 5) == "/stop"))
+    return problem(409, "Wait for AP security change before other mutations");
   if (rd_provisioning_active() &&
       (path == "/api/v1/wifi/scan" ||
        (method != "GET" && path.rfind("/api/v1/rd60xx/provisioning", 0) != 0 &&
@@ -243,6 +265,10 @@ static void wifi_worker(void *) {
         apply_wifi_at = 0;
         connect_station();
       }
+      if (apply_ap_at && now_ms() >= apply_ap_at) {
+        apply_ap_at = 0;
+        apply_ap_security();
+      }
     }
     sleep_ms(100);
   }
@@ -258,13 +284,7 @@ void start_network() {
   esp_event_handler_register(WIFI_EVENT, ESP_EVENT_ANY_ID, event, nullptr);
   esp_event_handler_register(IP_EVENT, IP_EVENT_STA_GOT_IP, event, nullptr);
   ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_APSTA));
-  wifi_config_t c = {};
-  auto ssid = configuration.text("ap_ssid", "LabBridge-Setup");
-  memcpy(c.ap.ssid, ssid.data(), ssid.size());
-  c.ap.ssid_len = ssid.size();
-  c.ap.max_connection = 4;
-  c.ap.authmode = WIFI_AUTH_OPEN;
-  ESP_ERROR_CHECK(esp_wifi_set_config(WIFI_IF_AP, &c));
+  apply_ap_security();
   ESP_ERROR_CHECK(esp_wifi_start());
   esp_netif_dhcps_stop(ap);
   esp_netif_dns_info_t info = {};
@@ -287,6 +307,19 @@ void start_network() {
   mdns_instance_name_set("LabBridge");
   mdns_service_add(nullptr, "_http", "_tcp", 80, nullptr, 0);
   node->bind("getWifiState", [](const Json &, const Headers &, uint64_t) {
+    return Response{200, wifi_state()};
+  });
+  node->bind("configureAccessPoint", [](const Json &body, const Headers &,
+                                        uint64_t now) {
+    if (!valid_ap_passphrase(body.text("psk")))
+      return problem(
+          422,
+          "AP passphrase must be empty or 8..63 printable ASCII characters");
+    if (!node->quiescent(now) || wifi_network_busy())
+      return problem(409, "Stop/release instruments and finish network changes "
+                          "before changing AP security");
+    write_nvs("ap", body);
+    apply_ap_at = now + 300;
     return Response{200, wifi_state()};
   });
   node->bind("scanWifi", [](const Json &, const Headers &, uint64_t now) {
