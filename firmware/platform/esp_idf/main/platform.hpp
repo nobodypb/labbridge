@@ -24,6 +24,10 @@ void start_usb();
 std::shared_ptr<Endpoint> usb_endpoint(const std::string &serial);
 std::shared_ptr<Endpoint> uart_endpoint(const DeviceSpec &);
 void start_network();
+void start_rd_network();
+bool rd_provisioning_active();
+bool wifi_network_busy();
+std::shared_ptr<Endpoint> tcp_endpoint(const std::string &, unsigned model);
 Response dispatch(const std::string &, const std::string &, const Json &,
                   const Headers &, bool local = false);
 void start_console();

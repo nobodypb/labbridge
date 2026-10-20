@@ -9,7 +9,8 @@ static node_configuration_t *node_configuration_create_internal(
     long revision,
     char *node_id,
     char *board,
-    list_t *devices
+    list_t *devices,
+    char *ap_ssid
     ) {
     node_configuration_t *node_configuration_local_var = malloc(sizeof(node_configuration_t));
     if (!node_configuration_local_var) {
@@ -19,6 +20,7 @@ static node_configuration_t *node_configuration_create_internal(
     node_configuration_local_var->node_id = node_id;
     node_configuration_local_var->board = board;
     node_configuration_local_var->devices = devices;
+    node_configuration_local_var->ap_ssid = ap_ssid;
 
     node_configuration_local_var->_library_owned = 1;
     return node_configuration_local_var;
@@ -28,13 +30,15 @@ __attribute__((deprecated)) node_configuration_t *node_configuration_create(
     long revision,
     char *node_id,
     char *board,
-    list_t *devices
+    list_t *devices,
+    char *ap_ssid
     ) {
     return node_configuration_create_internal (
         revision,
         node_id,
         board,
-        devices
+        devices,
+        ap_ssid
         );
 }
 
@@ -61,6 +65,10 @@ void node_configuration_free(node_configuration_t *node_configuration) {
         }
         list_freeList(node_configuration->devices);
         node_configuration->devices = NULL;
+    }
+    if (node_configuration->ap_ssid) {
+        free(node_configuration->ap_ssid);
+        node_configuration->ap_ssid = NULL;
     }
     free(node_configuration);
 }
@@ -112,6 +120,14 @@ cJSON *node_configuration_convertToJSON(node_configuration_t *node_configuration
     goto fail;
     }
     cJSON_AddItemToArray(devices, itemLocal);
+    }
+    }
+
+
+    // node_configuration->ap_ssid
+    if(node_configuration->ap_ssid) {
+    if(cJSON_AddStringToObject(item, "ap_ssid", node_configuration->ap_ssid) == NULL) {
+    goto fail; //String
     }
     }
 
@@ -202,12 +218,25 @@ node_configuration_t *node_configuration_parseFromJSON(cJSON *node_configuration
         list_addElement(devicesList, devicesItem);
     }
 
+    // node_configuration->ap_ssid
+    cJSON *ap_ssid = cJSON_GetObjectItemCaseSensitive(node_configurationJSON, "ap_ssid");
+    if (cJSON_IsNull(ap_ssid)) {
+        ap_ssid = NULL;
+    }
+    if (ap_ssid) { 
+    if(!cJSON_IsString(ap_ssid) && !cJSON_IsNull(ap_ssid))
+    {
+    goto end; //String
+    }
+    }
+
 
     node_configuration_local_var = node_configuration_create_internal (
         revision->valuedouble,
         strdup(node_id->valuestring),
         strdup(board->valuestring),
-        devicesList
+        devicesList,
+        ap_ssid && !cJSON_IsNull(ap_ssid) ? strdup(ap_ssid->valuestring) : NULL
         );
 
     return node_configuration_local_var;

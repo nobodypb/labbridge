@@ -22,3 +22,19 @@ class CliTests(unittest.TestCase):
                 nodes = nodes_from(path, ["selected"])
                 self.assertEqual(list(nodes), ["selected"])
                 factory.assert_called_once_with("http://selected", "")
+
+    def test_usb_pair_emits_the_intended_plain_token_from_generated_secret_model(self):
+        from unittest.mock import MagicMock
+        from labbridge.cli import main
+        from labbridge_generated.models.management_token import ManagementToken
+
+        node = MagicMock()
+        node.client.configuration.host = "http://usb"
+        node.core.get_management_token.return_value = ManagementToken(
+            token="synthetic-test-token"
+        )
+        with patch("labbridge.cli.Node", return_value=node), patch(
+            "labbridge.cli.emit"
+        ) as emit:
+            self.assertEqual(main(["--endpoint", "serial:/synthetic", "pair"]), 0)
+        self.assertEqual(emit.call_args.args[0], {"token": "synthetic-test-token"})

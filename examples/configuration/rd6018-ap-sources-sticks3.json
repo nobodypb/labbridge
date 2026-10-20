@@ -1,0 +1,40 @@
+{
+  "revision": 0,
+  "node_id": "labbridge-sources",
+  "board": "m5stack-sticks3",
+  "devices": [
+    {
+      "id": "source-a",
+      "driver": "rd60xx",
+      "transport": "tcp",
+      "endpoint": "123",
+      "pins": [],
+      "rd60xx": {
+        "model": 6018
+      },
+      "limits": {
+        "voltage_v": 5,
+        "current_a": 0.2,
+        "power_w": 1,
+        "max_age_ms": 3000
+      }
+    },
+    {
+      "id": "source-b",
+      "driver": "rd60xx",
+      "transport": "tcp",
+      "endpoint": "456",
+      "pins": [],
+      "rd60xx": {
+        "model": 6018
+      },
+      "limits": {
+        "voltage_v": 5,
+        "current_a": 0.2,
+        "power_w": 1,
+        "max_age_ms": 3000
+      }
+    }
+  ],
+  "ap_ssid": "LabBridge-Sources"
+}

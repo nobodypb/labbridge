@@ -25,6 +25,8 @@ checks pass and its hardware claims match the evidence.
 | LB-017 | As an operator, I configure INA228 I²C and Yocto-Watt-V2-C measurement providers. | LB-015 | Implemented; hardware acceptance open |
 | LB-018 | As an API consumer, I understand operations, units, prerequisites and failure handling directly from OpenAPI and generated clients. | LB-002, LB-015 | Done |
 
+| LB-019 | As an operator, I provision and automate RD6018 sources on the ESP AP alongside DL24M BLE, with bounded recovery and measured coexistence acceptance. | LB-007, LB-011 | Software implemented; hardware acceptance open |
+
 ## Acceptance criteria
 
 - **LB-001:** reproducible tool versions; clean public-tree checks; preserved protocol and controller tests pass; CI builds documented boards; no secrets/manufacturer binaries.
@@ -57,6 +59,8 @@ commissioning, and the complete battery circuit in LB-014, remain open. There is
 no claim of a production-ready battery test system or of tested optional PSU BT.
 
 ## New acceptance criteria
+
+- **LB-019:** ordinary RD6018 and existing RD6024 profiles enforce identity/scaling/model ceilings before writes; up to two AP TCP sources use independent serial-bound streams; fragmented/corrupt/late replies cannot confirm the wrong command; reconnect requests verified OFF and never replays ON. Authenticated UI/generated USB CLI guide two-phase original-module provisioning with phase/session checks, deadlines and cancellation; explicit limits/ETag registration. First deploy AP+STA+DL24M BLE on one ESP, run 60-minute coexistence acceptance and fault tests, split onto a second ESP with the same firmware if unstable. Physical provisioning/bench/soak evidence remains open until performed; a simulated second source is not hardware acceptance.
 
 - **LB-018:** every operation, parameter, schema and inline field has useful English documentation (reference fields use the shared schema); asynchronous confirmation, leases, STOP, freshness, units and device limitations are explicit; generated clients retain documentation; firmware validation excludes prose while preserving constraints; generation and contract checks pass.
 - **LB-015:** discover multiple actor/sensor components per device; identical typed routes for sources/sinks and scalar readings; per-component routing validated; physical-device leases and priority STOP preserved; SDK/CLI/UI use the abstraction; hardware-specific routes remain optional compatibility APIs.

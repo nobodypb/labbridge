@@ -18,13 +18,13 @@ Json progress() {
 } // namespace
 Rd60xxDriver::Rd60xxDriver(std::string id, uint32_t serial, Endpoint &wire,
                            Limits lim, std::function<void(const Json &)> save,
-                           Json journal, std::string transport)
+                           Json journal, std::string transport, unsigned model)
     : id_(std::move(id)), transport_(std::move(transport)), serial_(serial),
-      wire_(wire), limits_(lim), persist_(std::move(save)),
+      model_(model), wire_(wire), limits_(lim), persist_(std::move(save)),
       journal_(std::move(journal)), result_(progress()) {
-  if (!serial_ || !limits_.valid() || limits_.voltage > 60 ||
-      limits_.current > 24 || limits_.power > 1440)
-    throw std::invalid_argument("RD6024 requires serial and positive limits");
+  if (!serial_)
+    throw std::invalid_argument("RD60xx requires a nonzero serial");
+  rd60xx::profile(model_).validate(limits_);
   active_duration_ms_ = limits_.max_duration_ms;
   if (!journal_.has("may_be_on"))
     journal_.set("may_be_on", journal_.boolean("stop_pending"));
@@ -107,11 +107,15 @@ void Rd60xxDriver::fail(const std::string &reason, uint64_t now) {
   have_ = false;
   need_stop_ = true;
   stopping_ = false;
+  stream_.clear();
+  if (transport_ == "tcp")
+    wire_.reset_connection();
   due_ = now + 1000;
 }
 void Rd60xxDriver::send_read(Phase phase, uint64_t now) {
   wire_.receive();
   rx_.clear();
+  stream_.clear();
   request_ = rd60xx::read(1, 0, 20);
   if (!wire_.send(request_)) {
     fail("send_failed", now);
@@ -125,6 +129,7 @@ void Rd60xxDriver::send_read(Phase phase, uint64_t now) {
 void Rd60xxDriver::send_write(uint64_t now) {
   wire_.receive();
   rx_.clear();
+  stream_.clear();
   request_ = rd60xx::write(1, reg_, value_);
   if (!wire_.send(request_)) {
     fail("send_failed", now);
@@ -142,7 +147,7 @@ bool Rd60xxDriver::consume_read(uint64_t now) {
   for (size_t i = 0; i < 20; ++i)
     r[i] = (uint16_t(rx_[3 + 2 * i]) << 8) | rx_[4 + 2 * i];
   try {
-    auto m = rd60xx::decode(r);
+    auto m = rd60xx::decode(r, model_);
     if (m.serial != serial_) {
       fail("identity_changed", now);
       return false;
@@ -206,7 +211,7 @@ Json Rd60xxDriver::execute(const std::string &op, const Json &body,
   if (!std::isfinite(v) || !std::isfinite(a) ||
       std::abs(v * 100 - std::round(v * 100)) > 1e-6 ||
       std::abs(a * 100 - std::round(a * 100)) > 1e-6)
-    throw std::invalid_argument("RD6024 setpoints require 0.01 V/A steps");
+    throw std::invalid_argument("RD60xx setpoints require 0.01 V/A steps");
   if (v < 0 || a < 0 || v > limits_.voltage || a > limits_.current ||
       v * a > limits_.power)
     throw std::invalid_argument("Source setpoint exceeds limits");
@@ -237,13 +242,23 @@ Json Rd60xxDriver::execute(const std::string &op, const Json &body,
   result_ = progress();
   return operation(now);
 }
+void Rd60xxDriver::recovery_stop(uint64_t now) {
+  auto previous = result_;
+  stop(now);
+  if (previous.text("status") == "failed")
+    result_ = previous;
+}
 void Rd60xxDriver::tick(uint64_t now) {
   if (generation_ != wire_.generation()) {
+    bool interrupted = user_ || stopping_;
     generation_ = wire_.generation();
     have_ = false;
     phase_ = Phase::idle;
-    stop(now);
-    result_.set("stage", "connection_changed");
+    stream_.clear();
+    rx_.clear();
+    if (interrupted)
+      result_.set("status", "failed").set("stage", "connection_changed");
+    recovery_stop(now);
   }
   if (have_ && measurement_.output && !need_stop_ &&
       (!fresh(now) || measurement_.voltage > limits_.voltage ||
@@ -263,26 +278,37 @@ void Rd60xxDriver::tick(uint64_t now) {
     if (now < due_ || !wire_.writable())
       return;
     if (need_stop_ && !stopping_)
-      stop(now);
+      recovery_stop(now);
     send_read(user_ || stopping_ ? Phase::identity : Phase::poll, now);
     return;
   }
-  auto b = wire_.receive();
-  rx_.insert(rx_.end(), b.begin(), b.end());
-  if (rx_.size() > 256) {
-    fail("rx_overflow", now);
-    return;
-  }
+  auto bytes = wire_.receive();
   if (phase_ == Phase::drain) {
+    rx_.insert(rx_.end(), bytes.begin(), bytes.end());
     bool complete =
         rx_.size() >= drain_size_ || (rx_.size() >= 5 && (rx_[1] & 0x80) &&
                                       rd60xx::crc(rx_.data(), rx_.size()) == 0);
     if (complete || now >= due_) {
       rx_.clear();
+      stream_.clear();
       phase_ = Phase::idle;
       due_ = now + (complete ? 20 : 250);
     }
     return;
+  }
+  auto frames = stream_.feed(bytes);
+  for (auto &frame : frames) {
+    if (frame[0] != 1)
+      continue;
+    if (frame[1] & 0x80) {
+      fail("modbus_exception", now);
+      return;
+    }
+    if ((phase_ == Phase::echo && frame[1] == 6) ||
+        (phase_ != Phase::echo && frame[1] == 3 && frame.size() == 45)) {
+      rx_ = std::move(frame);
+      break;
+    }
   }
   if (!wire_.writable())
     return;

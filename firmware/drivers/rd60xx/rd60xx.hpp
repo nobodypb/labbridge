@@ -1,4 +1,5 @@
 #pragma once
+#include "labbridge/guard.hpp"
 #include <array>
 #include <cstddef>
 #include <cstdint>
@@ -16,5 +17,12 @@ struct Measurement {
   bool output, cc;
   uint16_t protection;
 };
-Measurement decode(const std::array<uint16_t, 20> &);
+struct Profile {
+  unsigned model;
+  double max_current, max_power;
+  void validate(const Limits &) const;
+};
+Profile profile(unsigned model);
+Measurement decode(const std::array<uint16_t, 20> &,
+                   unsigned expected_model = 6024);
 } // namespace labbridge::rd60xx

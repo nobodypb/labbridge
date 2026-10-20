@@ -15,6 +15,9 @@ public:
   virtual uint64_t generation() const = 0;
   virtual bool writable() const { return true; }
   virtual void cancel_pending() {}
+  // Network transports discard a timed-out byte stream before accepting new
+  // work.
+  virtual void reset_connection() { cancel_pending(); }
   virtual bool send(const Bytes &) = 0;
   virtual Bytes receive() = 0;
 };

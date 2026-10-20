@@ -3,7 +3,7 @@
 """
     LabBridge API
 
-    Configure and automate laboratory instruments through one ESP32 bridge. Physical devices expose discoverable source, sink and scalar sensor components; prefer their common routes for portable scripts. Driver-specific routes remain available for specialized settings and compatibility.  ## Typical automation sequence 1. Read node identity/boot_id and discover devices, components, actions and limits. 2. Reserve all actor devices on this node with createLease and heartbeat at least once per second. Ownership is per physical device, not per component. 3. Send a setting/output mutation with X-Lab-Lease and a new Idempotency-Key. A 202 response is only acceptance: poll Location until a terminal Operation, checking final_output and restore_pending. 4. Use valid, fresh sensor readings; preserve sign and units. Integrate only across consecutive samples with unchanged boot_id/epoch and bounded gaps. 5. Request independent STOP when finished or uncertain, verify OFF, then release the lease. Output OFF is not electrical isolation.  ## Failure and retry contract The bridge performs bounded device retries, write/readback verification and recovery. Never infer hardware success from an ATT acknowledgement, an HTTP 202 or a saved setpoint. A terminal failure can still have changed hardware. Device/component STOP requires no lease. Reconnect/reboot never resumes ON. Leases, operation IDs and idempotency keys are boot-local; do not replay an uncertain mutation after a reboot. Monotonic timestamps are not Unix time and cannot be compared across nodes/boots.  ## Access and provisioning LAN HTTP uses Authorization: Bearer <token> on a trusted network. Obtain the secret using getManagementToken over physically trusted USB. The open LabBridge-Setup AP at 192.168.4.1 allows Wi-Fi setup/scan without bearer credentials; it does not grant laboratory control. The separate UI pages are /wifi and /devices. USB uses the same methods/paths with JSON-line requests {id, method, path, headers, body} and replies prefixed LABJSON; ignore other boot/log lines and correlate IDs. Target Wi-Fi PSKs are never returned.  ## Local safeguards and hardware scope Configured limits, lease expiry, measurement freshness, activation deadlines and optional external cell-temperature guards operate on the node. They supplement instrument protections and an explicit external battery test profile/wiring arrangement. Read-only sensors may omit actuator limits. Supported endpoint/pin combinations depend on the board. DL24M BLE behavior is commissioned on display Ver: 2.0; RD6024, INA228 and Yocto physical commissioning remains open. Native Yocto USB on ESP is not implemented (use native PC USB or HTTP VirtualHub/YoctoHub).
+    Configure and automate laboratory instruments through one ESP32 bridge. Physical devices expose discoverable source, sink and scalar sensor components; prefer their common routes for portable scripts. Driver-specific routes remain available for specialized settings and compatibility.  ## Typical automation sequence 1. Read node identity/boot_id and discover devices, components, actions and limits. 2. Reserve all actor devices on this node with createLease and heartbeat at least once per second. Ownership is per physical device, not per component. 3. Send a setting/output mutation with X-Lab-Lease and a new Idempotency-Key. A 202 response is only acceptance: poll Location until a terminal Operation, checking final_output and restore_pending. 4. Use valid, fresh sensor readings; preserve sign and units. Integrate only across consecutive samples with unchanged boot_id/epoch and bounded gaps. 5. Request independent STOP when finished or uncertain, verify OFF, then release the lease. Output OFF is not electrical isolation.  ## Failure and retry contract The bridge performs bounded device retries, write/readback verification and recovery. Never infer hardware success from an ATT acknowledgement, an HTTP 202 or a saved setpoint. A terminal failure can still have changed hardware. Device/component STOP requires no lease. Reconnect/reboot never resumes ON. Leases, operation IDs and idempotency keys are boot-local; do not replay an uncertain mutation after a reboot. Monotonic timestamps are not Unix time and cannot be compared across nodes/boots.  ## Access and provisioning LAN HTTP uses Authorization: Bearer <token> on a trusted network. Obtain the secret using getManagementToken over physically trusted USB. The open LabBridge-Setup AP at 192.168.4.1 allows Wi-Fi setup/scan without bearer credentials; it does not grant laboratory control. The separate UI pages are /wifi and /devices. USB uses the same methods/paths with JSON-line requests {id, method, path, headers, body} and replies prefixed LABJSON; ignore other boot/log lines and correlate IDs. Target Wi-Fi PSKs are never returned.  ## Local safeguards and hardware scope Configured limits, lease expiry, measurement freshness, activation deadlines and optional external cell-temperature guards operate on the node. They supplement instrument protections and an explicit external battery test profile/wiring arrangement. Read-only sensors may omit actuator limits. Supported endpoint/pin combinations depend on the board. DL24M BLE behavior is commissioned on display Ver: 2.0; RD6018/RD6024, INA228 and Yocto physical commissioning is tracked separately. RD6018 original Wi-Fi modules connect to the ESP AP using RTU-over-TCP; use the module provisioning operations to configure them. Native Yocto USB on ESP is not implemented (use native PC USB or HTTP VirtualHub/YoctoHub).
 
     The version of the OpenAPI document: 0.1.0
     Generated by OpenAPI Generator (https://openapi-generator.tech)
@@ -23,6 +23,7 @@ from typing_extensions import Annotated
 from labbridge_generated.models.cell_temperature_guard import CellTemperatureGuard
 from labbridge_generated.models.ina228_configuration import Ina228Configuration
 from labbridge_generated.models.interlock_configuration import InterlockConfiguration
+from labbridge_generated.models.rd60xx_configuration import Rd60xxConfiguration
 from labbridge_generated.models.safety_limits import SafetyLimits
 from labbridge_generated.models.yocto_watt_configuration import YoctoWattConfiguration
 from typing import Optional, Set
@@ -35,7 +36,7 @@ class DeviceConfiguration(BaseModel):
     id: Annotated[str, Field(strict=True)] = Field(description="Stable local name used in API paths, unique within the node.")
     driver: StrictStr = Field(description="Registered module: for example dl24m, rd60xx, gpio_interlock, ds18b20, ina228 or yocto_watt.")
     transport: StrictStr = Field(description="Transport supported by the driver and board; incompatible combinations are rejected.")
-    endpoint: StrictStr = Field(description="Stable physical endpoint. Examples: BLE address, serial endpoint, decimal I2C address 64..79 for INA228, or YWATMK2C-... hardware serial for Yocto.")
+    endpoint: StrictStr = Field(description="Stable physical identity. For RD60xx use the canonical decimal instrument serial from registers 1/2, including for TCP; never a DHCP address or USB path. DL24M uses a BLE address, INA228 a decimal I2C address 64..79, and Yocto a YWATMK2C-... hardware serial.")
     pins: Optional[List[Annotated[int, Field(le=48, strict=True, ge=0)]]] = Field(default=None, description="Ordered driver-specific GPIO list, explicitly allowed by the board configuration. INA228 uses [SDA, SCL]; all I2C0 instances must share the pair.")
     limits: Optional[SafetyLimits] = None
     cell_temperature: Optional[CellTemperatureGuard] = None
@@ -43,7 +44,8 @@ class DeviceConfiguration(BaseModel):
     ina228: Optional[Ina228Configuration] = None
     yocto_watt: Optional[YoctoWattConfiguration] = None
     sensor_max_age_ms: Optional[Annotated[int, Field(le=3000, strict=True, ge=100)]] = Field(default=1000, description="Read-only sensor freshness limit in milliseconds; defaults to 1000 and overrides the legacy limits.max_age_ms sensor setting.")
-    __properties: ClassVar[List[str]] = ["id", "driver", "transport", "endpoint", "pins", "limits", "cell_temperature", "interlock", "ina228", "yocto_watt", "sensor_max_age_ms"]
+    rd60xx: Optional[Rd60xxConfiguration] = None
+    __properties: ClassVar[List[str]] = ["id", "driver", "transport", "endpoint", "pins", "limits", "cell_temperature", "interlock", "ina228", "yocto_watt", "sensor_max_age_ms", "rd60xx"]
 
     @field_validator('id')
     def id_validate_regular_expression(cls, value):
@@ -107,6 +109,9 @@ class DeviceConfiguration(BaseModel):
         # override the default output from pydantic by calling `to_dict()` of yocto_watt
         if self.yocto_watt:
             _dict['yocto_watt'] = self.yocto_watt.to_dict()
+        # override the default output from pydantic by calling `to_dict()` of rd60xx
+        if self.rd60xx:
+            _dict['rd60xx'] = self.rd60xx.to_dict()
         return _dict
 
     @classmethod
@@ -129,7 +134,8 @@ class DeviceConfiguration(BaseModel):
             "interlock": InterlockConfiguration.from_dict(obj["interlock"]) if obj.get("interlock") is not None else None,
             "ina228": Ina228Configuration.from_dict(obj["ina228"]) if obj.get("ina228") is not None else None,
             "yocto_watt": YoctoWattConfiguration.from_dict(obj["yocto_watt"]) if obj.get("yocto_watt") is not None else None,
-            "sensor_max_age_ms": obj.get("sensor_max_age_ms") if obj.get("sensor_max_age_ms") is not None else 1000
+            "sensor_max_age_ms": obj.get("sensor_max_age_ms") if obj.get("sensor_max_age_ms") is not None else 1000,
+            "rd60xx": Rd60xxConfiguration.from_dict(obj["rd60xx"]) if obj.get("rd60xx") is not None else None
         })
         return _obj
 

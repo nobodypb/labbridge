@@ -7,7 +7,7 @@ and shutdown. The first workflow profiles **1S Li-ion and LiFePO4** cells. Sourc
 sensors share a typed component API; physical devices may expose several of each.
 A feedback interlock and independent meters are optional workflow bindings.
 
-The DL24M Ver 2.0 integration is bench-tested on a StickS3. RD6024, reference GPIO
+The DL24M Ver 2.0 integration is bench-tested on a StickS3. RD6018/RD6024 (USB/UART and original-module Wi-Fi), reference GPIO
 interlocks, DS18B20, INA228 and Yocto-Watt-V2-C have implementation and automated
 coverage, but await
 physical commissioning. No complete battery run has been validated on hardware.

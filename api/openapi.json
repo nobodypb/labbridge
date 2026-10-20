@@ -7,7 +7,7 @@
       "name": "MIT",
       "url": "https://opensource.org/licenses/MIT"
     },
-    "description": "Configure and automate laboratory instruments through one ESP32 bridge. Physical devices expose discoverable source, sink and scalar sensor components; prefer their common routes for portable scripts. Driver-specific routes remain available for specialized settings and compatibility.\n\n## Typical automation sequence\n1. Read node identity/boot_id and discover devices, components, actions and limits.\n2. Reserve all actor devices on this node with createLease and heartbeat at least once per second. Ownership is per physical device, not per component.\n3. Send a setting/output mutation with X-Lab-Lease and a new Idempotency-Key. A 202 response is only acceptance: poll Location until a terminal Operation, checking final_output and restore_pending.\n4. Use valid, fresh sensor readings; preserve sign and units. Integrate only across consecutive samples with unchanged boot_id/epoch and bounded gaps.\n5. Request independent STOP when finished or uncertain, verify OFF, then release the lease. Output OFF is not electrical isolation.\n\n## Failure and retry contract\nThe bridge performs bounded device retries, write/readback verification and recovery. Never infer hardware success from an ATT acknowledgement, an HTTP 202 or a saved setpoint. A terminal failure can still have changed hardware. Device/component STOP requires no lease. Reconnect/reboot never resumes ON. Leases, operation IDs and idempotency keys are boot-local; do not replay an uncertain mutation after a reboot. Monotonic timestamps are not Unix time and cannot be compared across nodes/boots.\n\n## Access and provisioning\nLAN HTTP uses Authorization: Bearer <token> on a trusted network. Obtain the secret using getManagementToken over physically trusted USB. The open LabBridge-Setup AP at 192.168.4.1 allows Wi-Fi setup/scan without bearer credentials; it does not grant laboratory control. The separate UI pages are /wifi and /devices. USB uses the same methods/paths with JSON-line requests {id, method, path, headers, body} and replies prefixed LABJSON; ignore other boot/log lines and correlate IDs. Target Wi-Fi PSKs are never returned.\n\n## Local safeguards and hardware scope\nConfigured limits, lease expiry, measurement freshness, activation deadlines and optional external cell-temperature guards operate on the node. They supplement instrument protections and an explicit external battery test profile/wiring arrangement. Read-only sensors may omit actuator limits. Supported endpoint/pin combinations depend on the board. DL24M BLE behavior is commissioned on display Ver: 2.0; RD6024, INA228 and Yocto physical commissioning remains open. Native Yocto USB on ESP is not implemented (use native PC USB or HTTP VirtualHub/YoctoHub)."
+    "description": "Configure and automate laboratory instruments through one ESP32 bridge. Physical devices expose discoverable source, sink and scalar sensor components; prefer their common routes for portable scripts. Driver-specific routes remain available for specialized settings and compatibility.\n\n## Typical automation sequence\n1. Read node identity/boot_id and discover devices, components, actions and limits.\n2. Reserve all actor devices on this node with createLease and heartbeat at least once per second. Ownership is per physical device, not per component.\n3. Send a setting/output mutation with X-Lab-Lease and a new Idempotency-Key. A 202 response is only acceptance: poll Location until a terminal Operation, checking final_output and restore_pending.\n4. Use valid, fresh sensor readings; preserve sign and units. Integrate only across consecutive samples with unchanged boot_id/epoch and bounded gaps.\n5. Request independent STOP when finished or uncertain, verify OFF, then release the lease. Output OFF is not electrical isolation.\n\n## Failure and retry contract\nThe bridge performs bounded device retries, write/readback verification and recovery. Never infer hardware success from an ATT acknowledgement, an HTTP 202 or a saved setpoint. A terminal failure can still have changed hardware. Device/component STOP requires no lease. Reconnect/reboot never resumes ON. Leases, operation IDs and idempotency keys are boot-local; do not replay an uncertain mutation after a reboot. Monotonic timestamps are not Unix time and cannot be compared across nodes/boots.\n\n## Access and provisioning\nLAN HTTP uses Authorization: Bearer <token> on a trusted network. Obtain the secret using getManagementToken over physically trusted USB. The open LabBridge-Setup AP at 192.168.4.1 allows Wi-Fi setup/scan without bearer credentials; it does not grant laboratory control. The separate UI pages are /wifi and /devices. USB uses the same methods/paths with JSON-line requests {id, method, path, headers, body} and replies prefixed LABJSON; ignore other boot/log lines and correlate IDs. Target Wi-Fi PSKs are never returned.\n\n## Local safeguards and hardware scope\nConfigured limits, lease expiry, measurement freshness, activation deadlines and optional external cell-temperature guards operate on the node. They supplement instrument protections and an explicit external battery test profile/wiring arrangement. Read-only sensors may omit actuator limits. Supported endpoint/pin combinations depend on the board. DL24M BLE behavior is commissioned on display Ver: 2.0; RD6018/RD6024, INA228 and Yocto physical commissioning is tracked separately. RD6018 original Wi-Fi modules connect to the ESP AP using RTU-over-TCP; use the module provisioning operations to configure them. Native Yocto USB on ESP is not implemented (use native PC USB or HTTP VirtualHub/YoctoHub)."
   },
   "servers": [
     {
@@ -2257,7 +2257,7 @@
           "description": "JSON request with the fields documented by the referenced schema. Unknown properties are rejected; use {} for an empty StopRequest."
         },
         "summary": "Set RD60xx current limit (compatibility)",
-        "description": "Set the source current limit in A without enabling output. The RD60xx driver uses Modbus RTU echo plus fresh register readback, verifies instrument identity and enforces 0.01 A steps and configured limits. Prefer setComponentCurrent for new scripts. Real RD6024 commissioning remains open; optional PSU Bluetooth is not an enabled runtime transport.\n\nReturns 202 with an Operation and Location, not an instrument acknowledgement. Keep the lease alive where required and poll until terminal. Bounded device retries/readback recovery run on the bridge; callers receive a terminal failure when recovery is exhausted. Do not automatically replay an uncertain mutation."
+        "description": "Set the source current limit in A without enabling output. The RD60xx driver uses Modbus RTU echo plus fresh register readback, verifies instrument identity and enforces 0.01 A steps and configured limits. Prefer setComponentCurrent for new scripts. Ordinary RD6018/RD6024 profiles are selected explicitly; physical commissioning is recorded separately; optional PSU Bluetooth is not an enabled runtime transport.\n\nReturns 202 with an Operation and Location, not an instrument acknowledgement. Keep the lease alive where required and poll until terminal. Bounded device retries/readback recovery run on the bridge; callers receive a terminal failure when recovery is exhausted. Do not automatically replay an uncertain mutation."
       }
     },
     "/api/v1/devices/{deviceId}/source/voltage": {
@@ -2341,6 +2341,165 @@
         },
         "summary": "Set RD60xx voltage target (compatibility)",
         "description": "Set the source voltage in V without enabling output. The RD60xx driver uses verified Modbus RTU register writes, 0.01 V steps and configured limits. Prefer setComponentVoltage for new scripts. Readback confirms the setpoint, not the actual terminal voltage under load. Real hardware commissioning remains open.\n\nReturns 202 with an Operation and Location, not an instrument acknowledgement. Keep the lease alive where required and poll until terminal. Bounded device retries/readback recovery run on the bridge; callers receive a terminal failure when recovery is exhausted. Do not automatically replay an uncertain mutation."
+      }
+    },
+    "/api/v1/rd60xx/provisioning": {
+      "get": {
+        "operationId": "getRdProvisioning",
+        "tags": [
+          "rd60xx"
+        ],
+        "summary": "Inspect RD Wi-Fi setup and connections",
+        "description": "Read the boot-local provisioning session, discovered hardware identities and transport counters. Does not start provisioning or command any output.",
+        "responses": {
+          "200": {
+            "description": "Current provisioning/transport status. Completion confirms identification, not device registration or output state.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RdProvisioning"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Request rejected or unavailable: 400 malformed/invalid request, 401 missing LAN credentials, 403 forbidden transport, 404 unknown resource, 409 state/ownership/idempotency conflict, 412 stale configuration ETag, 422 unsupported or unsafe setting, 423 missing/expired device lease, or 503 resource/transport unavailable, as applicable. An accepted operation can later fail through Operation.error; HTTP acceptance is not hardware success.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "operationId": "startRdProvisioning",
+        "tags": [
+          "rd60xx"
+        ],
+        "summary": "Provision an RD source onto the ESP AP",
+        "description": "Begin the two-stage original RIDEN pairing process. First reset/select WiFi on the target PSU with output OFF. The ESP sends its AP address as the server target; after checking the PSU display call advanceRdProvisioning. Stop/release existing devices and finish Wi-Fi scans/changes first (409 otherwise). Only one session is active. Does not save a device configuration or enable an output.",
+        "responses": {
+          "200": {
+            "description": "Current provisioning/transport status. Completion confirms identification, not device registration or output state.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RdProvisioning"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Request rejected or unavailable: 400 malformed/invalid request, 401 missing LAN credentials, 403 forbidden transport, 404 unknown resource, 409 state/ownership/idempotency conflict, 412 stale configuration ETag, 422 unsupported or unsafe setting, 423 missing/expired device lease, or 503 resource/transport unavailable, as applicable. An accepted operation can later fail through Operation.error; HTTP acceptance is not hardware success.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "description": "Typed provisioning request; unknown fields are rejected. Requires LAN bearer authentication or trusted USB, including when accessed through the open AP.",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RdProvisionStart"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/rd60xx/provisioning/advance": {
+      "post": {
+        "operationId": "advanceRdProvisioning",
+        "tags": [
+          "rd60xx"
+        ],
+        "summary": "Confirm the PSU display and advance pairing",
+        "description": "Advance only the named session and expected phase. Confirm server_address once the PSU displays the ESP address / Connecting WiFi, then confirm wifi once Connecting server appears. Each phase has a 120-second deadline. Repeated acknowledgements cannot skip steps. Wrong sessions/phases return 409.",
+        "responses": {
+          "200": {
+            "description": "Current provisioning/transport status. Completion confirms identification, not device registration or output state.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RdProvisioning"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Request rejected or unavailable: 400 malformed/invalid request, 401 missing LAN credentials, 403 forbidden transport, 404 unknown resource, 409 state/ownership/idempotency conflict, 412 stale configuration ETag, 422 unsupported or unsafe setting, 423 missing/expired device lease, or 503 resource/transport unavailable, as applicable. An accepted operation can later fail through Operation.error; HTTP acceptance is not hardware success.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "description": "Typed provisioning request; unknown fields are rejected. Requires LAN bearer authentication or trusted USB, including when accessed through the open AP.",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RdProvisionAdvance"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/rd60xx/provisioning/cancel": {
+      "post": {
+        "operationId": "cancelRdProvisioning",
+        "tags": [
+          "rd60xx"
+        ],
+        "summary": "Cancel RD Wi-Fi provisioning",
+        "description": "Stop the active session/transmission. Network settings already received by the PSU are not restored; cancellation sends no actuator commands. Wrong session IDs return 409. Independent instrument STOP remains available throughout provisioning.",
+        "responses": {
+          "200": {
+            "description": "Current provisioning/transport status. Completion confirms identification, not device registration or output state.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RdProvisioning"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Request rejected or unavailable: 400 malformed/invalid request, 401 missing LAN credentials, 403 forbidden transport, 404 unknown resource, 409 state/ownership/idempotency conflict, 412 stale configuration ETag, 422 unsupported or unsafe setting, 423 missing/expired device lease, or 503 resource/transport unavailable, as applicable. An accepted operation can later fail through Operation.error; HTTP acceptance is not hardware success.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "description": "Typed provisioning request; unknown fields are rejected. Requires LAN bearer authentication or trusted USB, including when accessed through the open AP.",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RdProvisionCancel"
+              }
+            }
+          }
+        }
       }
     }
   },
@@ -3017,7 +3176,7 @@
           },
           "endpoint": {
             "type": "string",
-            "description": "Stable physical endpoint. Examples: BLE address, serial endpoint, decimal I2C address 64..79 for INA228, or YWATMK2C-... hardware serial for Yocto."
+            "description": "Stable physical identity. For RD60xx use the canonical decimal instrument serial from registers 1/2, including for TCP; never a DHCP address or USB path. DL24M uses a BLE address, INA228 a decimal I2C address 64..79, and Yocto a YWATMK2C-... hardware serial."
           },
           "pins": {
             "type": "array",
@@ -3050,6 +3209,9 @@
             "maximum": 3000,
             "default": 1000,
             "description": "Read-only sensor freshness limit in milliseconds; defaults to 1000 and overrides the legacy limits.max_age_ms sensor setting."
+          },
+          "rd60xx": {
+            "$ref": "#/components/schemas/Rd60xxConfiguration"
           }
         },
         "required": [
@@ -3189,6 +3351,13 @@
               "$ref": "#/components/schemas/DeviceConfiguration"
             },
             "description": "Complete desired instrument list; replacement removes omitted entries. Resource and physical-identity conflicts are rejected."
+          },
+          "ap_ssid": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 32,
+            "default": "LabBridge-Setup",
+            "description": "Open ESP access-point SSID, default LabBridge-Setup. Use distinct SSIDs when splitting instruments across multiple ESPs. The AP remains password-free; its address is 192.168.4.1. The connected station LAN must use a different subnet."
           }
         },
         "required": [
@@ -3842,6 +4011,249 @@
           "adc_range": 1
         }
       },
+      "Rd60xxConfiguration": {
+        "type": "object",
+        "additionalProperties": false,
+        "description": "Expected ordinary RD60xx model. Existing configurations without this object retain RD6024 behavior. Unsupported models/P variants must not be used with this profile.",
+        "required": [
+          "model"
+        ],
+        "properties": {
+          "model": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Expected base model, checked against the identity register before every write. RD6018 supports 0.01 V/A steps and model ceilings of 60 V, 18 A and 1080 W; configured limits may be lower.",
+            "enum": [
+              6018,
+              6024
+            ],
+            "default": 6024
+          }
+        }
+      },
+      "RdProvisionStart": {
+        "type": "object",
+        "additionalProperties": false,
+        "description": "Begin two-stage ESPTouch provisioning from the ESP AP. Instruments must be stopped/unleased; no actuation is performed. The operator confirms that the target PSU output is OFF.",
+        "required": [
+          "confirm_outputs_off"
+        ],
+        "properties": {
+          "confirm_outputs_off": {
+            "type": "boolean",
+            "enum": [
+              true
+            ],
+            "description": "Must be true after physically checking that the target PSU output is OFF."
+          }
+        }
+      },
+      "RdProvisionAdvance": {
+        "type": "object",
+        "additionalProperties": false,
+        "description": "Acknowledge the target PSU display and advance this boot-local provisioning session. Repeating the same session/expected_phase is idempotent and never skips a phase.",
+        "required": [
+          "session_id",
+          "expected_phase"
+        ],
+        "properties": {
+          "session_id": {
+            "type": "string",
+            "description": "Opaque ID returned by startRdProvisioning; reject stale sessions.",
+            "minLength": 1,
+            "maxLength": 96
+          },
+          "expected_phase": {
+            "type": "string",
+            "description": "server_address: display shows the ESP IP / Connecting WiFi, so begin WLAN transmission. wifi: display shows Connecting server, so stop transmission and await identity.",
+            "enum": [
+              "server_address",
+              "wifi"
+            ]
+          }
+        }
+      },
+      "RdProvisionCancel": {
+        "type": "object",
+        "additionalProperties": false,
+        "description": "Stop transmission for this provisioning session. Previously delivered network settings cannot be undone by cancellation; no output command is sent.",
+        "required": [
+          "session_id"
+        ],
+        "properties": {
+          "session_id": {
+            "type": "string",
+            "description": "Opaque current session ID. Repeated cancellation is harmless.",
+            "minLength": 1,
+            "maxLength": 96
+          }
+        }
+      },
+      "RdWifiCandidate": {
+        "type": "object",
+        "additionalProperties": false,
+        "description": "Read-only identity discovered on an incoming AP connection. Discovery does not authorize writes; explicitly add the serial/model and positive operating limits to configuration.",
+        "required": [
+          "serial",
+          "model",
+          "model_id",
+          "firmware_version",
+          "connected",
+          "configured"
+        ],
+        "properties": {
+          "serial": {
+            "type": "string",
+            "description": "Instrument serial from registers 1/2, in canonical decimal notation."
+          },
+          "model": {
+            "type": "string",
+            "description": "Identified model label, RD6018 or RD6024."
+          },
+          "model_id": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Complete raw model/revision register, for example 60181."
+          },
+          "firmware_version": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Raw instrument firmware version register, for example 136 means 1.36."
+          },
+          "connected": {
+            "type": "boolean",
+            "description": "Whether the identified TCP connection is currently present; not an output-state confirmation."
+          },
+          "configured": {
+            "type": "boolean",
+            "description": "Whether a configured TCP endpoint matches both serial and model."
+          }
+        }
+      },
+      "RdWifiMetrics": {
+        "type": "object",
+        "additionalProperties": false,
+        "description": "Boot-local transport counters for commissioning. Unexpected disconnects/rejections and gaps in fresh measurements must be investigated; these counters do not prove output OFF.",
+        "required": [
+          "accepted",
+          "disconnects",
+          "rejected",
+          "rx_bytes",
+          "tx_bytes",
+          "provision_packets"
+        ],
+        "properties": {
+          "accepted": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Incoming TCP connections accepted by the bounded listener.",
+            "minimum": 0
+          },
+          "disconnects": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Connections closed, including commissioning or deliberate fault injection.",
+            "minimum": 0
+          },
+          "rejected": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Connections rejected because capacity or identity rules were violated.",
+            "minimum": 0
+          },
+          "rx_bytes": {
+            "type": "integer",
+            "format": "int64",
+            "description": "TCP bytes received across RD connections.",
+            "minimum": 0
+          },
+          "tx_bytes": {
+            "type": "integer",
+            "format": "int64",
+            "description": "TCP bytes transmitted, including read-only identity probes.",
+            "minimum": 0
+          },
+          "provision_packets": {
+            "type": "integer",
+            "format": "int64",
+            "description": "ESPTouch datagrams successfully submitted to the AP interface.",
+            "minimum": 0
+          }
+        }
+      },
+      "RdProvisioning": {
+        "type": "object",
+        "additionalProperties": false,
+        "description": "Provisioning and AP transport status. One session at a time; each sending phase and connection-wait phase expires after 120 seconds. The AP is open, server address 192.168.4.1, TCP port 8080. The original PSU initiates the connection; payloads are CRC-protected Modbus RTU, not MBAP-framed Modbus TCP. No NAT/Internet access is required.",
+        "required": [
+          "state",
+          "ap_ssid",
+          "ap_address",
+          "tcp_port",
+          "listener_running",
+          "candidates",
+          "metrics"
+        ],
+        "properties": {
+          "state": {
+            "type": "string",
+            "description": "idle, sending server_address, sending wifi, waiting_connection, complete (identity seen), cancelled, timed_out or failed. Completion never enables or auto-configures an output.",
+            "enum": [
+              "idle",
+              "server_address",
+              "wifi",
+              "waiting_connection",
+              "complete",
+              "cancelled",
+              "timed_out",
+              "failed"
+            ]
+          },
+          "session_id": {
+            "type": "string",
+            "description": "Boot-local session identifier, absent before the first session."
+          },
+          "deadline_ms": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Current phase deadline in node-monotonic milliseconds; not a Unix timestamp.",
+            "minimum": 0
+          },
+          "ap_ssid": {
+            "type": "string",
+            "description": "Configured open ESP device/setup AP name, default LabBridge-Setup; selected by NodeConfiguration.ap_ssid."
+          },
+          "ap_address": {
+            "type": "string",
+            "description": "ESP AP address advertised as the PSU server target; currently 192.168.4.1."
+          },
+          "tcp_port": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Incoming original-RIDEN RTU-over-TCP listener port, 8080.",
+            "minimum": 1,
+            "maximum": 65535
+          },
+          "listener_running": {
+            "type": "boolean",
+            "description": "Whether the AP-bound listener started successfully."
+          },
+          "candidates": {
+            "type": "array",
+            "description": "Up to eight recently identified serials; connected indicates current socket presence.",
+            "items": {
+              "$ref": "#/components/schemas/RdWifiCandidate"
+            }
+          },
+          "metrics": {
+            "$ref": "#/components/schemas/RdWifiMetrics"
+          },
+          "error": {
+            "type": "string",
+            "description": "Network service error when provisioning/listening cannot operate."
+          }
+        }
+      },
       "YoctoWattConfiguration": {
         "type": "object",
         "additionalProperties": false,
@@ -3951,7 +4363,8 @@
       "id": "rd60xx",
       "transports": [
         "usb",
-        "uart"
+        "uart",
+        "tcp"
       ],
       "capabilities": [
         "source.cc_cv",

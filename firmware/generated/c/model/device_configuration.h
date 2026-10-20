@@ -18,6 +18,7 @@ typedef struct device_configuration_t device_configuration_t;
 #include "cell_temperature_guard.h"
 #include "ina228_configuration.h"
 #include "interlock_configuration.h"
+#include "rd60xx_configuration.h"
 #include "safety_limits.h"
 #include "yocto_watt_configuration.h"
 
@@ -35,6 +36,7 @@ typedef struct device_configuration_t {
     struct ina228_configuration_t *ina228; //model
     struct yocto_watt_configuration_t *yocto_watt; //model
     int sensor_max_age_ms; //numeric
+    struct rd60xx_configuration_t *rd60xx; //model
 
     int _library_owned; // Is the library responsible for freeing this object?
 } device_configuration_t;
@@ -50,7 +52,8 @@ __attribute__((deprecated)) device_configuration_t *device_configuration_create(
     interlock_configuration_t *interlock,
     ina228_configuration_t *ina228,
     yocto_watt_configuration_t *yocto_watt,
-    int sensor_max_age_ms
+    int sensor_max_age_ms,
+    rd60xx_configuration_t *rd60xx
 );
 
 void device_configuration_free(device_configuration_t *device_configuration);

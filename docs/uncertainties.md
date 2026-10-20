@@ -48,3 +48,18 @@ bindings. It cannot verify actual wiring polarity; commission that on hardware
 using the preserved raw values. INA228 accumulation is epoch-relative from the
 first validated sample after initialization, avoiding historical counts under a
 different calibration without clearing hardware counters.
+
+
+The user's sources are RD6018, correcting the earlier RD6024 assumption. Ordinary
+RD6018 register scales/model selection are characterized in portable tests;
+actual USB/TCP identity/readback and original-module pairing still need physical
+acceptance. In particular, open-AP two-stage ESPTouch transmission originates on
+the ESP AP itself; packet vectors/state tests do not establish RF delivery to a
+particular module revision. The original app working does not prove all module
+revisions behave identically on reconnect. RD6018P is explicitly excluded.
+
+A 60-minute AP+STA+DL24M BLE soak and deliberate connection-loss/STOP checks are
+required. Espressif marks associated SoftAP plus BLE coexistence as potentially
+unstable. A source-only second ESP with a distinct SSID is the configured fallback,
+not an automatic in-run failover. The second PSU's future Wi-Fi module cannot be
+counted as physically accepted using a simulated connection.

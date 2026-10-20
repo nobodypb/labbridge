@@ -2,7 +2,7 @@
 /* eslint-disable */
 /**
  * LabBridge API
- * Configure and automate laboratory instruments through one ESP32 bridge. Physical devices expose discoverable source, sink and scalar sensor components; prefer their common routes for portable scripts. Driver-specific routes remain available for specialized settings and compatibility.  ## Typical automation sequence 1. Read node identity/boot_id and discover devices, components, actions and limits. 2. Reserve all actor devices on this node with createLease and heartbeat at least once per second. Ownership is per physical device, not per component. 3. Send a setting/output mutation with X-Lab-Lease and a new Idempotency-Key. A 202 response is only acceptance: poll Location until a terminal Operation, checking final_output and restore_pending. 4. Use valid, fresh sensor readings; preserve sign and units. Integrate only across consecutive samples with unchanged boot_id/epoch and bounded gaps. 5. Request independent STOP when finished or uncertain, verify OFF, then release the lease. Output OFF is not electrical isolation.  ## Failure and retry contract The bridge performs bounded device retries, write/readback verification and recovery. Never infer hardware success from an ATT acknowledgement, an HTTP 202 or a saved setpoint. A terminal failure can still have changed hardware. Device/component STOP requires no lease. Reconnect/reboot never resumes ON. Leases, operation IDs and idempotency keys are boot-local; do not replay an uncertain mutation after a reboot. Monotonic timestamps are not Unix time and cannot be compared across nodes/boots.  ## Access and provisioning LAN HTTP uses Authorization: Bearer <token> on a trusted network. Obtain the secret using getManagementToken over physically trusted USB. The open LabBridge-Setup AP at 192.168.4.1 allows Wi-Fi setup/scan without bearer credentials; it does not grant laboratory control. The separate UI pages are /wifi and /devices. USB uses the same methods/paths with JSON-line requests {id, method, path, headers, body} and replies prefixed LABJSON; ignore other boot/log lines and correlate IDs. Target Wi-Fi PSKs are never returned.  ## Local safeguards and hardware scope Configured limits, lease expiry, measurement freshness, activation deadlines and optional external cell-temperature guards operate on the node. They supplement instrument protections and an explicit external battery test profile/wiring arrangement. Read-only sensors may omit actuator limits. Supported endpoint/pin combinations depend on the board. DL24M BLE behavior is commissioned on display Ver: 2.0; RD6024, INA228 and Yocto physical commissioning remains open. Native Yocto USB on ESP is not implemented (use native PC USB or HTTP VirtualHub/YoctoHub).
+ * Configure and automate laboratory instruments through one ESP32 bridge. Physical devices expose discoverable source, sink and scalar sensor components; prefer their common routes for portable scripts. Driver-specific routes remain available for specialized settings and compatibility.  ## Typical automation sequence 1. Read node identity/boot_id and discover devices, components, actions and limits. 2. Reserve all actor devices on this node with createLease and heartbeat at least once per second. Ownership is per physical device, not per component. 3. Send a setting/output mutation with X-Lab-Lease and a new Idempotency-Key. A 202 response is only acceptance: poll Location until a terminal Operation, checking final_output and restore_pending. 4. Use valid, fresh sensor readings; preserve sign and units. Integrate only across consecutive samples with unchanged boot_id/epoch and bounded gaps. 5. Request independent STOP when finished or uncertain, verify OFF, then release the lease. Output OFF is not electrical isolation.  ## Failure and retry contract The bridge performs bounded device retries, write/readback verification and recovery. Never infer hardware success from an ATT acknowledgement, an HTTP 202 or a saved setpoint. A terminal failure can still have changed hardware. Device/component STOP requires no lease. Reconnect/reboot never resumes ON. Leases, operation IDs and idempotency keys are boot-local; do not replay an uncertain mutation after a reboot. Monotonic timestamps are not Unix time and cannot be compared across nodes/boots.  ## Access and provisioning LAN HTTP uses Authorization: Bearer <token> on a trusted network. Obtain the secret using getManagementToken over physically trusted USB. The open LabBridge-Setup AP at 192.168.4.1 allows Wi-Fi setup/scan without bearer credentials; it does not grant laboratory control. The separate UI pages are /wifi and /devices. USB uses the same methods/paths with JSON-line requests {id, method, path, headers, body} and replies prefixed LABJSON; ignore other boot/log lines and correlate IDs. Target Wi-Fi PSKs are never returned.  ## Local safeguards and hardware scope Configured limits, lease expiry, measurement freshness, activation deadlines and optional external cell-temperature guards operate on the node. They supplement instrument protections and an explicit external battery test profile/wiring arrangement. Read-only sensors may omit actuator limits. Supported endpoint/pin combinations depend on the board. DL24M BLE behavior is commissioned on display Ver: 2.0; RD6018/RD6024, INA228 and Yocto physical commissioning is tracked separately. RD6018 original Wi-Fi modules connect to the ESP AP using RTU-over-TCP; use the module provisioning operations to configure them. Native Yocto USB on ESP is not implemented (use native PC USB or HTTP VirtualHub/YoctoHub).
  *
  * The version of the OpenAPI document: 0.1.0
  * 
@@ -18,6 +18,10 @@ import type {
   CurrentRequest,
   Operation,
   Problem,
+  RdProvisionAdvance,
+  RdProvisionCancel,
+  RdProvisionStart,
+  RdProvisioning,
   VoltageRequest,
 } from '../models/index';
 import {
@@ -27,9 +31,25 @@ import {
     OperationToJSON,
     ProblemFromJSON,
     ProblemToJSON,
+    RdProvisionAdvanceFromJSON,
+    RdProvisionAdvanceToJSON,
+    RdProvisionCancelFromJSON,
+    RdProvisionCancelToJSON,
+    RdProvisionStartFromJSON,
+    RdProvisionStartToJSON,
+    RdProvisioningFromJSON,
+    RdProvisioningToJSON,
     VoltageRequestFromJSON,
     VoltageRequestToJSON,
 } from '../models/index';
+
+export interface AdvanceRdProvisioningRequest {
+    rdProvisionAdvance: RdProvisionAdvance;
+}
+
+export interface CancelRdProvisioningRequest {
+    rdProvisionCancel: RdProvisionCancel;
+}
 
 export interface SetSourceCurrentRequest {
     deviceId: string;
@@ -45,13 +65,145 @@ export interface SetSourceVoltageRequest {
     voltageRequest: VoltageRequest;
 }
 
+export interface StartRdProvisioningRequest {
+    rdProvisionStart: RdProvisionStart;
+}
+
 /**
  * 
  */
 export class Rd60xxApi extends runtime.BaseAPI {
 
     /**
-     * Set the source current limit in A without enabling output. The RD60xx driver uses Modbus RTU echo plus fresh register readback, verifies instrument identity and enforces 0.01 A steps and configured limits. Prefer setComponentCurrent for new scripts. Real RD6024 commissioning remains open; optional PSU Bluetooth is not an enabled runtime transport.  Returns 202 with an Operation and Location, not an instrument acknowledgement. Keep the lease alive where required and poll until terminal. Bounded device retries/readback recovery run on the bridge; callers receive a terminal failure when recovery is exhausted. Do not automatically replay an uncertain mutation.
+     * Advance only the named session and expected phase. Confirm server_address once the PSU displays the ESP address / Connecting WiFi, then confirm wifi once Connecting server appears. Each phase has a 120-second deadline. Repeated acknowledgements cannot skip steps. Wrong sessions/phases return 409.
+     * Confirm the PSU display and advance pairing
+     */
+    async advanceRdProvisioningRaw(requestParameters: AdvanceRdProvisioningRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<RdProvisioning>> {
+        if (requestParameters['rdProvisionAdvance'] == null) {
+            throw new runtime.RequiredError(
+                'rdProvisionAdvance',
+                'Required parameter "rdProvisionAdvance" was null or undefined when calling advanceRdProvisioning().'
+            );
+        }
+
+        const queryParameters: any = {};
+
+        const headerParameters: runtime.HTTPHeaders = {};
+
+        headerParameters['Content-Type'] = 'application/json';
+
+        if (this.configuration && this.configuration.accessToken) {
+            const token = this.configuration.accessToken;
+            const tokenString = await token("bearerAuth", []);
+
+            if (tokenString) {
+                headerParameters["Authorization"] = `Bearer ${tokenString}`;
+            }
+        }
+        const response = await this.request({
+            path: `/api/v1/rd60xx/provisioning/advance`,
+            method: 'POST',
+            headers: headerParameters,
+            query: queryParameters,
+            body: RdProvisionAdvanceToJSON(requestParameters['rdProvisionAdvance']),
+        }, initOverrides);
+
+        return new runtime.JSONApiResponse(response, (jsonValue) => RdProvisioningFromJSON(jsonValue));
+    }
+
+    /**
+     * Advance only the named session and expected phase. Confirm server_address once the PSU displays the ESP address / Connecting WiFi, then confirm wifi once Connecting server appears. Each phase has a 120-second deadline. Repeated acknowledgements cannot skip steps. Wrong sessions/phases return 409.
+     * Confirm the PSU display and advance pairing
+     */
+    async advanceRdProvisioning(requestParameters: AdvanceRdProvisioningRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<RdProvisioning> {
+        const response = await this.advanceRdProvisioningRaw(requestParameters, initOverrides);
+        return await response.value();
+    }
+
+    /**
+     * Stop the active session/transmission. Network settings already received by the PSU are not restored; cancellation sends no actuator commands. Wrong session IDs return 409. Independent instrument STOP remains available throughout provisioning.
+     * Cancel RD Wi-Fi provisioning
+     */
+    async cancelRdProvisioningRaw(requestParameters: CancelRdProvisioningRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<RdProvisioning>> {
+        if (requestParameters['rdProvisionCancel'] == null) {
+            throw new runtime.RequiredError(
+                'rdProvisionCancel',
+                'Required parameter "rdProvisionCancel" was null or undefined when calling cancelRdProvisioning().'
+            );
+        }
+
+        const queryParameters: any = {};
+
+        const headerParameters: runtime.HTTPHeaders = {};
+
+        headerParameters['Content-Type'] = 'application/json';
+
+        if (this.configuration && this.configuration.accessToken) {
+            const token = this.configuration.accessToken;
+            const tokenString = await token("bearerAuth", []);
+
+            if (tokenString) {
+                headerParameters["Authorization"] = `Bearer ${tokenString}`;
+            }
+        }
+        const response = await this.request({
+            path: `/api/v1/rd60xx/provisioning/cancel`,
+            method: 'POST',
+            headers: headerParameters,
+            query: queryParameters,
+            body: RdProvisionCancelToJSON(requestParameters['rdProvisionCancel']),
+        }, initOverrides);
+
+        return new runtime.JSONApiResponse(response, (jsonValue) => RdProvisioningFromJSON(jsonValue));
+    }
+
+    /**
+     * Stop the active session/transmission. Network settings already received by the PSU are not restored; cancellation sends no actuator commands. Wrong session IDs return 409. Independent instrument STOP remains available throughout provisioning.
+     * Cancel RD Wi-Fi provisioning
+     */
+    async cancelRdProvisioning(requestParameters: CancelRdProvisioningRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<RdProvisioning> {
+        const response = await this.cancelRdProvisioningRaw(requestParameters, initOverrides);
+        return await response.value();
+    }
+
+    /**
+     * Read the boot-local provisioning session, discovered hardware identities and transport counters. Does not start provisioning or command any output.
+     * Inspect RD Wi-Fi setup and connections
+     */
+    async getRdProvisioningRaw(initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<RdProvisioning>> {
+        const queryParameters: any = {};
+
+        const headerParameters: runtime.HTTPHeaders = {};
+
+        if (this.configuration && this.configuration.accessToken) {
+            const token = this.configuration.accessToken;
+            const tokenString = await token("bearerAuth", []);
+
+            if (tokenString) {
+                headerParameters["Authorization"] = `Bearer ${tokenString}`;
+            }
+        }
+        const response = await this.request({
+            path: `/api/v1/rd60xx/provisioning`,
+            method: 'GET',
+            headers: headerParameters,
+            query: queryParameters,
+        }, initOverrides);
+
+        return new runtime.JSONApiResponse(response, (jsonValue) => RdProvisioningFromJSON(jsonValue));
+    }
+
+    /**
+     * Read the boot-local provisioning session, discovered hardware identities and transport counters. Does not start provisioning or command any output.
+     * Inspect RD Wi-Fi setup and connections
+     */
+    async getRdProvisioning(initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<RdProvisioning> {
+        const response = await this.getRdProvisioningRaw(initOverrides);
+        return await response.value();
+    }
+
+    /**
+     * Set the source current limit in A without enabling output. The RD60xx driver uses Modbus RTU echo plus fresh register readback, verifies instrument identity and enforces 0.01 A steps and configured limits. Prefer setComponentCurrent for new scripts. Ordinary RD6018/RD6024 profiles are selected explicitly; physical commissioning is recorded separately; optional PSU Bluetooth is not an enabled runtime transport.  Returns 202 with an Operation and Location, not an instrument acknowledgement. Keep the lease alive where required and poll until terminal. Bounded device retries/readback recovery run on the bridge; callers receive a terminal failure when recovery is exhausted. Do not automatically replay an uncertain mutation.
      * Set RD60xx current limit (compatibility)
      */
     async setSourceCurrentRaw(requestParameters: SetSourceCurrentRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<Operation>> {
@@ -117,7 +269,7 @@ export class Rd60xxApi extends runtime.BaseAPI {
     }
 
     /**
-     * Set the source current limit in A without enabling output. The RD60xx driver uses Modbus RTU echo plus fresh register readback, verifies instrument identity and enforces 0.01 A steps and configured limits. Prefer setComponentCurrent for new scripts. Real RD6024 commissioning remains open; optional PSU Bluetooth is not an enabled runtime transport.  Returns 202 with an Operation and Location, not an instrument acknowledgement. Keep the lease alive where required and poll until terminal. Bounded device retries/readback recovery run on the bridge; callers receive a terminal failure when recovery is exhausted. Do not automatically replay an uncertain mutation.
+     * Set the source current limit in A without enabling output. The RD60xx driver uses Modbus RTU echo plus fresh register readback, verifies instrument identity and enforces 0.01 A steps and configured limits. Prefer setComponentCurrent for new scripts. Ordinary RD6018/RD6024 profiles are selected explicitly; physical commissioning is recorded separately; optional PSU Bluetooth is not an enabled runtime transport.  Returns 202 with an Operation and Location, not an instrument acknowledgement. Keep the lease alive where required and poll until terminal. Bounded device retries/readback recovery run on the bridge; callers receive a terminal failure when recovery is exhausted. Do not automatically replay an uncertain mutation.
      * Set RD60xx current limit (compatibility)
      */
     async setSourceCurrent(requestParameters: SetSourceCurrentRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<Operation> {
@@ -197,6 +349,52 @@ export class Rd60xxApi extends runtime.BaseAPI {
      */
     async setSourceVoltage(requestParameters: SetSourceVoltageRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<Operation> {
         const response = await this.setSourceVoltageRaw(requestParameters, initOverrides);
+        return await response.value();
+    }
+
+    /**
+     * Begin the two-stage original RIDEN pairing process. First reset/select WiFi on the target PSU with output OFF. The ESP sends its AP address as the server target; after checking the PSU display call advanceRdProvisioning. Stop/release existing devices and finish Wi-Fi scans/changes first (409 otherwise). Only one session is active. Does not save a device configuration or enable an output.
+     * Provision an RD source onto the ESP AP
+     */
+    async startRdProvisioningRaw(requestParameters: StartRdProvisioningRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<RdProvisioning>> {
+        if (requestParameters['rdProvisionStart'] == null) {
+            throw new runtime.RequiredError(
+                'rdProvisionStart',
+                'Required parameter "rdProvisionStart" was null or undefined when calling startRdProvisioning().'
+            );
+        }
+
+        const queryParameters: any = {};
+
+        const headerParameters: runtime.HTTPHeaders = {};
+
+        headerParameters['Content-Type'] = 'application/json';
+
+        if (this.configuration && this.configuration.accessToken) {
+            const token = this.configuration.accessToken;
+            const tokenString = await token("bearerAuth", []);
+
+            if (tokenString) {
+                headerParameters["Authorization"] = `Bearer ${tokenString}`;
+            }
+        }
+        const response = await this.request({
+            path: `/api/v1/rd60xx/provisioning`,
+            method: 'POST',
+            headers: headerParameters,
+            query: queryParameters,
+            body: RdProvisionStartToJSON(requestParameters['rdProvisionStart']),
+        }, initOverrides);
+
+        return new runtime.JSONApiResponse(response, (jsonValue) => RdProvisioningFromJSON(jsonValue));
+    }
+
+    /**
+     * Begin the two-stage original RIDEN pairing process. First reset/select WiFi on the target PSU with output OFF. The ESP sends its AP address as the server target; after checking the PSU display call advanceRdProvisioning. Stop/release existing devices and finish Wi-Fi scans/changes first (409 otherwise). Only one session is active. Does not save a device configuration or enable an output.
+     * Provision an RD source onto the ESP AP
+     */
+    async startRdProvisioning(requestParameters: StartRdProvisioningRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<RdProvisioning> {
+        const response = await this.startRdProvisioningRaw(requestParameters, initOverrides);
         return await response.value();
     }
 

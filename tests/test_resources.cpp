@@ -21,6 +21,16 @@ int main() {
     rejected = true;
   }
   assert(rejected);
+  Registry wifi(BoardProfile::stick_s3());
+  wifi.add({"wifi-a", "rd60xx", "tcp", "123", {}});
+  wifi.add({"wifi-b", "rd60xx", "tcp", "456", {}});
+  rejected = false;
+  try {
+    wifi.add({"wifi-c", "rd60xx", "tcp", "789", {}});
+  } catch (const ConfigurationError &) {
+    rejected = true;
+  }
+  assert(rejected && wifi.devices().size() == 2);
   Registry otg(BoardProfile::s3_usb_otg());
   otg.add({"psu-a", "rd60xx", "usb", "serial:123", {}});
   otg.add({"psu-b", "rd60xx", "usb", "serial:456", {}});

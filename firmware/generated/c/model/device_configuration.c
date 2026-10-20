@@ -16,7 +16,8 @@ static device_configuration_t *device_configuration_create_internal(
     interlock_configuration_t *interlock,
     ina228_configuration_t *ina228,
     yocto_watt_configuration_t *yocto_watt,
-    int sensor_max_age_ms
+    int sensor_max_age_ms,
+    rd60xx_configuration_t *rd60xx
     ) {
     device_configuration_t *device_configuration_local_var = malloc(sizeof(device_configuration_t));
     if (!device_configuration_local_var) {
@@ -33,6 +34,7 @@ static device_configuration_t *device_configuration_create_internal(
     device_configuration_local_var->ina228 = ina228;
     device_configuration_local_var->yocto_watt = yocto_watt;
     device_configuration_local_var->sensor_max_age_ms = sensor_max_age_ms;
+    device_configuration_local_var->rd60xx = rd60xx;
 
     device_configuration_local_var->_library_owned = 1;
     return device_configuration_local_var;
@@ -49,7 +51,8 @@ __attribute__((deprecated)) device_configuration_t *device_configuration_create(
     interlock_configuration_t *interlock,
     ina228_configuration_t *ina228,
     yocto_watt_configuration_t *yocto_watt,
-    int sensor_max_age_ms
+    int sensor_max_age_ms,
+    rd60xx_configuration_t *rd60xx
     ) {
     return device_configuration_create_internal (
         id,
@@ -62,7 +65,8 @@ __attribute__((deprecated)) device_configuration_t *device_configuration_create(
         interlock,
         ina228,
         yocto_watt,
-        sensor_max_age_ms
+        sensor_max_age_ms,
+        rd60xx
         );
 }
 
@@ -117,6 +121,10 @@ void device_configuration_free(device_configuration_t *device_configuration) {
     if (device_configuration->yocto_watt) {
         yocto_watt_configuration_free(device_configuration->yocto_watt);
         device_configuration->yocto_watt = NULL;
+    }
+    if (device_configuration->rd60xx) {
+        rd60xx_configuration_free(device_configuration->rd60xx);
+        device_configuration->rd60xx = NULL;
     }
     free(device_configuration);
 }
@@ -249,6 +257,19 @@ cJSON *device_configuration_convertToJSON(device_configuration_t *device_configu
     }
     }
 
+
+    // device_configuration->rd60xx
+    if(device_configuration->rd60xx) {
+    cJSON *rd60xx_local_JSON = rd60xx_configuration_convertToJSON(device_configuration->rd60xx);
+    if(rd60xx_local_JSON == NULL) {
+    goto fail; //model
+    }
+    cJSON_AddItemToObject(item, "rd60xx", rd60xx_local_JSON);
+    if(item->child == NULL) {
+    goto fail;
+    }
+    }
+
     return item;
 fail:
     if (item) {
@@ -278,6 +299,9 @@ device_configuration_t *device_configuration_parseFromJSON(cJSON *device_configu
 
     // define the local variable for device_configuration->yocto_watt
     yocto_watt_configuration_t *yocto_watt_local_nonprim = NULL;
+
+    // define the local variable for device_configuration->rd60xx
+    rd60xx_configuration_t *rd60xx_local_nonprim = NULL;
 
     // device_configuration->id
     cJSON *id = cJSON_GetObjectItemCaseSensitive(device_configurationJSON, "id");
@@ -424,6 +448,15 @@ device_configuration_t *device_configuration_parseFromJSON(cJSON *device_configu
     }
     }
 
+    // device_configuration->rd60xx
+    cJSON *rd60xx = cJSON_GetObjectItemCaseSensitive(device_configurationJSON, "rd60xx");
+    if (cJSON_IsNull(rd60xx)) {
+        rd60xx = NULL;
+    }
+    if (rd60xx) { 
+    rd60xx_local_nonprim = rd60xx_configuration_parseFromJSON(rd60xx); //nonprimitive
+    }
+
 
     device_configuration_local_var = device_configuration_create_internal (
         strdup(id->valuestring),
@@ -436,7 +469,8 @@ device_configuration_t *device_configuration_parseFromJSON(cJSON *device_configu
         interlock ? interlock_local_nonprim : NULL,
         ina228 ? ina228_local_nonprim : NULL,
         yocto_watt ? yocto_watt_local_nonprim : NULL,
-        sensor_max_age_ms ? sensor_max_age_ms->valuedouble : 0
+        sensor_max_age_ms ? sensor_max_age_ms->valuedouble : 0,
+        rd60xx ? rd60xx_local_nonprim : NULL
         );
 
     return device_configuration_local_var;
@@ -469,6 +503,10 @@ end:
     if (yocto_watt_local_nonprim) {
         yocto_watt_configuration_free(yocto_watt_local_nonprim);
         yocto_watt_local_nonprim = NULL;
+    }
+    if (rd60xx_local_nonprim) {
+        rd60xx_configuration_free(rd60xx_local_nonprim);
+        rd60xx_local_nonprim = NULL;
     }
     return NULL;
 
