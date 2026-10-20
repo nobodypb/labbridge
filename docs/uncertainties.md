@@ -42,3 +42,9 @@ supports uncalibrated/default user-calibration parameters only. Native Yocto USB
 on an ESP USB-host port is a separate, unimplemented transport. Direct-output
 routing relies on the commissioned off-state/reverse-current behavior of the
 selected source and load. It is not a claim of galvanic isolation.
+
+The deterministic simulator models the selected meter polarity conventions from
+bindings. It cannot verify actual wiring polarity; commission that on hardware
+using the preserved raw values. INA228 accumulation is epoch-relative from the
+first validated sample after initialization, avoiding historical counts under a
+different calibration without clearing hardware counters.

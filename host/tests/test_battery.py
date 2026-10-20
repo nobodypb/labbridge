@@ -63,6 +63,10 @@ class BatteryTests(unittest.TestCase):
         self.assertAlmostEqual(a.ah, 1 / 3600)
         a.add(12, 4.0, 1.0, True, 6, "charge")
         self.assertAlmostEqual(a.ah, 1 / 3600)
+        measured = Integrator(max_gap_s=2)
+        measured.add(0, 4, 1, True, 1, "discharge", power_w=3)
+        measured.add(1, 4, 1, True, 2, "discharge", power_w=3)
+        self.assertAlmostEqual(measured.wh, 3 / 3600)
 
 
 class WorkflowTests(unittest.TestCase):

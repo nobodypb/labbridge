@@ -70,3 +70,12 @@ INA228 tests cover identity, calibration, signed current/charge, conversion-read
 overflow and freshness. Five browser scenarios include a composite source and a
 read-only meter. Actual INA228 shunt accuracy, Yocto USB/network sampling and
 all new sensor wiring remain uncommissioned. No new battery hardware run occurred.
+
+
+The common component routes were also exercised on the physical StickS3/DL24M:
+discovery, actor state and scalar readings, then eight verified operations
+(current 0.150/0.100 A, cutoff 0.8/0.7 V, timer 60/0 s, bounded ON and independent
+component STOP). Confirmations use A/V/s with units. The pulse measured 23.990 V /
+0.100 A. All 14 original settings, CC 0.100 A and confirmed OFF were restored;
+22/22 audited registers remained valid. This extends the DL24M evidence and does
+not commission the optional new meter hardware.
