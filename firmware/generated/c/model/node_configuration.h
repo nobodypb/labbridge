@@ -24,6 +24,7 @@ typedef struct node_configuration_t {
     char *node_id; // string
     char *board; // string
     list_t *devices; //nonprimitive container
+    char *ap_ssid; // string
 
     int _library_owned; // Is the library responsible for freeing this object?
 } node_configuration_t;
@@ -32,7 +33,8 @@ __attribute__((deprecated)) node_configuration_t *node_configuration_create(
     long revision,
     char *node_id,
     char *board,
-    list_t *devices
+    list_t *devices,
+    char *ap_ssid
 );
 
 void node_configuration_free(node_configuration_t *node_configuration);

@@ -75,6 +75,13 @@ set(SRCS
     model/operation.c
     model/output_request.c
     model/problem.c
+    model/rd60xx_configuration.c
+    model/rd_provision_advance.c
+    model/rd_provision_cancel.c
+    model/rd_provision_start.c
+    model/rd_provisioning.c
+    model/rd_wifi_candidate.c
+    model/rd_wifi_metrics.c
     model/safety_limits.c
     model/sensor_reading.c
     model/sensor_readings.c
@@ -126,6 +133,13 @@ set(HDRS
     model/operation.h
     model/output_request.h
     model/problem.h
+    model/rd60xx_configuration.h
+    model/rd_provision_advance.h
+    model/rd_provision_cancel.h
+    model/rd_provision_start.h
+    model/rd_provisioning.h
+    model/rd_wifi_candidate.h
+    model/rd_wifi_metrics.h
     model/safety_limits.h
     model/sensor_reading.h
     model/sensor_readings.h

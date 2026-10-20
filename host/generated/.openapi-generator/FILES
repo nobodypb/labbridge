@@ -45,6 +45,13 @@ labbridge_generated/models/node_info.py
 labbridge_generated/models/operation.py
 labbridge_generated/models/output_request.py
 labbridge_generated/models/problem.py
+labbridge_generated/models/rd60xx_configuration.py
+labbridge_generated/models/rd_provision_advance.py
+labbridge_generated/models/rd_provision_cancel.py
+labbridge_generated/models/rd_provision_start.py
+labbridge_generated/models/rd_provisioning.py
+labbridge_generated/models/rd_wifi_candidate.py
+labbridge_generated/models/rd_wifi_metrics.py
 labbridge_generated/models/safety_limits.py
 labbridge_generated/models/sensor_reading.py
 labbridge_generated/models/sensor_readings.py

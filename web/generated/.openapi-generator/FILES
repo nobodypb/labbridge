@@ -38,6 +38,13 @@ src/models/NodeInfo.ts
 src/models/Operation.ts
 src/models/OutputRequest.ts
 src/models/Problem.ts
+src/models/Rd60xxConfiguration.ts
+src/models/RdProvisionAdvance.ts
+src/models/RdProvisionCancel.ts
+src/models/RdProvisionStart.ts
+src/models/RdProvisioning.ts
+src/models/RdWifiCandidate.ts
+src/models/RdWifiMetrics.ts
 src/models/SafetyLimits.ts
 src/models/SensorReading.ts
 src/models/SensorReadings.ts

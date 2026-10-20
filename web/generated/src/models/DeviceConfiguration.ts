@@ -2,7 +2,7 @@
 /* eslint-disable */
 /**
  * LabBridge API
- * Configure and automate laboratory instruments through one ESP32 bridge. Physical devices expose discoverable source, sink and scalar sensor components; prefer their common routes for portable scripts. Driver-specific routes remain available for specialized settings and compatibility.  ## Typical automation sequence 1. Read node identity/boot_id and discover devices, components, actions and limits. 2. Reserve all actor devices on this node with createLease and heartbeat at least once per second. Ownership is per physical device, not per component. 3. Send a setting/output mutation with X-Lab-Lease and a new Idempotency-Key. A 202 response is only acceptance: poll Location until a terminal Operation, checking final_output and restore_pending. 4. Use valid, fresh sensor readings; preserve sign and units. Integrate only across consecutive samples with unchanged boot_id/epoch and bounded gaps. 5. Request independent STOP when finished or uncertain, verify OFF, then release the lease. Output OFF is not electrical isolation.  ## Failure and retry contract The bridge performs bounded device retries, write/readback verification and recovery. Never infer hardware success from an ATT acknowledgement, an HTTP 202 or a saved setpoint. A terminal failure can still have changed hardware. Device/component STOP requires no lease. Reconnect/reboot never resumes ON. Leases, operation IDs and idempotency keys are boot-local; do not replay an uncertain mutation after a reboot. Monotonic timestamps are not Unix time and cannot be compared across nodes/boots.  ## Access and provisioning LAN HTTP uses Authorization: Bearer <token> on a trusted network. Obtain the secret using getManagementToken over physically trusted USB. The open LabBridge-Setup AP at 192.168.4.1 allows Wi-Fi setup/scan without bearer credentials; it does not grant laboratory control. The separate UI pages are /wifi and /devices. USB uses the same methods/paths with JSON-line requests {id, method, path, headers, body} and replies prefixed LABJSON; ignore other boot/log lines and correlate IDs. Target Wi-Fi PSKs are never returned.  ## Local safeguards and hardware scope Configured limits, lease expiry, measurement freshness, activation deadlines and optional external cell-temperature guards operate on the node. They supplement instrument protections and an explicit external battery test profile/wiring arrangement. Read-only sensors may omit actuator limits. Supported endpoint/pin combinations depend on the board. DL24M BLE behavior is commissioned on display Ver: 2.0; RD6024, INA228 and Yocto physical commissioning remains open. Native Yocto USB on ESP is not implemented (use native PC USB or HTTP VirtualHub/YoctoHub).
+ * Configure and automate laboratory instruments through one ESP32 bridge. Physical devices expose discoverable source, sink and scalar sensor components; prefer their common routes for portable scripts. Driver-specific routes remain available for specialized settings and compatibility.  ## Typical automation sequence 1. Read node identity/boot_id and discover devices, components, actions and limits. 2. Reserve all actor devices on this node with createLease and heartbeat at least once per second. Ownership is per physical device, not per component. 3. Send a setting/output mutation with X-Lab-Lease and a new Idempotency-Key. A 202 response is only acceptance: poll Location until a terminal Operation, checking final_output and restore_pending. 4. Use valid, fresh sensor readings; preserve sign and units. Integrate only across consecutive samples with unchanged boot_id/epoch and bounded gaps. 5. Request independent STOP when finished or uncertain, verify OFF, then release the lease. Output OFF is not electrical isolation.  ## Failure and retry contract The bridge performs bounded device retries, write/readback verification and recovery. Never infer hardware success from an ATT acknowledgement, an HTTP 202 or a saved setpoint. A terminal failure can still have changed hardware. Device/component STOP requires no lease. Reconnect/reboot never resumes ON. Leases, operation IDs and idempotency keys are boot-local; do not replay an uncertain mutation after a reboot. Monotonic timestamps are not Unix time and cannot be compared across nodes/boots.  ## Access and provisioning LAN HTTP uses Authorization: Bearer <token> on a trusted network. Obtain the secret using getManagementToken over physically trusted USB. The open LabBridge-Setup AP at 192.168.4.1 allows Wi-Fi setup/scan without bearer credentials; it does not grant laboratory control. The separate UI pages are /wifi and /devices. USB uses the same methods/paths with JSON-line requests {id, method, path, headers, body} and replies prefixed LABJSON; ignore other boot/log lines and correlate IDs. Target Wi-Fi PSKs are never returned.  ## Local safeguards and hardware scope Configured limits, lease expiry, measurement freshness, activation deadlines and optional external cell-temperature guards operate on the node. They supplement instrument protections and an explicit external battery test profile/wiring arrangement. Read-only sensors may omit actuator limits. Supported endpoint/pin combinations depend on the board. DL24M BLE behavior is commissioned on display Ver: 2.0; RD6018/RD6024, INA228 and Yocto physical commissioning is tracked separately. RD6018 original Wi-Fi modules connect to the ESP AP using RTU-over-TCP; use the module provisioning operations to configure them. Native Yocto USB on ESP is not implemented (use native PC USB or HTTP VirtualHub/YoctoHub).
  *
  * The version of the OpenAPI document: 0.1.0
  * 
@@ -41,6 +41,13 @@ import {
     Ina228ConfigurationToJSON,
     Ina228ConfigurationToJSONTyped,
 } from './Ina228Configuration';
+import type { Rd60xxConfiguration } from './Rd60xxConfiguration';
+import {
+    Rd60xxConfigurationFromJSON,
+    Rd60xxConfigurationFromJSONTyped,
+    Rd60xxConfigurationToJSON,
+    Rd60xxConfigurationToJSONTyped,
+} from './Rd60xxConfiguration';
 import type { YoctoWattConfiguration } from './YoctoWattConfiguration';
 import {
     YoctoWattConfigurationFromJSON,
@@ -74,7 +81,7 @@ export interface DeviceConfiguration {
      */
     transport: string;
     /**
-     * Stable physical endpoint. Examples: BLE address, serial endpoint, decimal I2C address 64..79 for INA228, or YWATMK2C-... hardware serial for Yocto.
+     * Stable physical identity. For RD60xx use the canonical decimal instrument serial from registers 1/2, including for TCP; never a DHCP address or USB path. DL24M uses a BLE address, INA228 a decimal I2C address 64..79, and Yocto a YWATMK2C-... hardware serial.
      * @type {string}
      * @memberof DeviceConfiguration
      */
@@ -121,6 +128,12 @@ export interface DeviceConfiguration {
      * @memberof DeviceConfiguration
      */
     sensorMaxAgeMs?: number;
+    /**
+     * 
+     * @type {Rd60xxConfiguration}
+     * @memberof DeviceConfiguration
+     */
+    rd60xx?: Rd60xxConfiguration;
 }
 
 /**
@@ -155,6 +168,7 @@ export function DeviceConfigurationFromJSONTyped(json: any, ignoreDiscriminator:
         'ina228': json['ina228'] == null ? undefined : Ina228ConfigurationFromJSON(json['ina228']),
         'yoctoWatt': json['yocto_watt'] == null ? undefined : YoctoWattConfigurationFromJSON(json['yocto_watt']),
         'sensorMaxAgeMs': json['sensor_max_age_ms'] == null ? undefined : json['sensor_max_age_ms'],
+        'rd60xx': json['rd60xx'] == null ? undefined : Rd60xxConfigurationFromJSON(json['rd60xx']),
     };
 }
 
@@ -180,6 +194,7 @@ export function DeviceConfigurationToJSONTyped(value?: DeviceConfiguration | nul
         'ina228': Ina228ConfigurationToJSON(value['ina228']),
         'yocto_watt': YoctoWattConfigurationToJSON(value['yoctoWatt']),
         'sensor_max_age_ms': value['sensorMaxAgeMs'],
+        'rd60xx': Rd60xxConfigurationToJSON(value['rd60xx']),
     };
 }
 
