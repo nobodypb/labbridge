@@ -109,3 +109,7 @@ an unexpected disconnect/rejection, stale sample or restart fails the run. Files
 contain hardware identities and remain ignored/private. Active bench writes and
 intentional fault injection are separate checks; this runner makes no mutations.
 
+Initial general-profile broadcasts did not establish W01 pairing. Radio
+submission/completion counts alone do not prove receiver acceptance. Switching
+to WPA2 alone did not resolve the general sender's protocol differences.
+
