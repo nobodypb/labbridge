@@ -507,14 +507,14 @@
         "provision_packets": {
           "type": "integer",
           "format": "int64",
-          "description": "ESPTouch frames accepted by the AP radio submission API. This is not a transmission-completion or receiver acknowledgement.",
+          "description": "ESPTouch packets accepted by the selected send API: UDP on a WPA2 AP, direct unencrypted frames on the open-AP diagnostic path. This is not a receiver acknowledgement.",
           "minimum": 0
         },
         "provision_tx_completed": {
           "type": "integer",
           "format": "int64",
           "minimum": 0,
-          "description": "ESPTouch AP frames for which the Wi-Fi driver reported successful transmission. Broadcasts have no receiver acknowledgement; this does not prove PSU reception."
+          "description": "ESPTouch AP frames for which the Wi-Fi driver reported successful transmission. Broadcasts have no receiver acknowledgement; this does not prove PSU reception. Populated only for the direct unencrypted diagnostic path; normal WPA2 UDP transmissions have no callback in this counter."
         },
         "provision_tx_failed": {
           "type": "integer",

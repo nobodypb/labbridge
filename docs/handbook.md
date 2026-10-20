@@ -187,7 +187,11 @@ requests OFF before allowing work; it never resumes ON.
 
 ### Pairing through LabBridge
 
-**Commissioning limitation:** the current AP is open, while Espressif documents that SmartConfig does not support open networks. The user's W01 module did not receive a server address in open-AP trials. Do not assume this pairing workflow is usable on W01 until a protected-network comparison resolves that incompatibility. See [compatibility notes](uncertainties.md).
+**Commissioning limitation:** Espressif documents that SmartConfig does not support open networks. The user's W01 module did not receive a server address in open-AP trials. Configure a WPA2 AP for the protected-network comparison below; successful W01 reception remains subject to hardware acceptance. See [compatibility notes](uncertainties.md).
+
+The AP is open by default. `core.configure_access_point` (`PUT /api/v1/wifi/ap`) accepts only `{"psk":"..."}`: 8..63 printable ASCII characters enable WPA2-PSK/CCMP; an explicit empty string restores the open AP. This requires quiescent instruments and authenticated HTTP or trusted USB, including when called through the open AP. The change disconnects AP clients after the response; use USB or the station address to retain management access. Station credentials and the configured AP SSID are unchanged. Secrets are never returned. `getWifiState.ap_secured` reports current authentication; poll after the delayed change. Supply secrets through a private CLI args file or stdin, not shell command history.
+
+For protected provisioning, connect a phone/client to the AP and keep it associated during transmission. WPA2 uses normal UDP so that the WLAN driver encrypts packets; direct raw transmission is only the unencrypted diagnostic path. Radio-completion counters apply only to that diagnostic path and are not WPA2 transmission counters. PMF is not required, for compatibility with the original ESP8266 module.
 
 Keep the target PSU output OFF and configure one module at a time. On the PSU,
 select WiFi/address 1, reset the previous Wi-Fi setup and restart. In `/devices`,

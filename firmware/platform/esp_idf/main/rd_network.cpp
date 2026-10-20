@@ -272,6 +272,27 @@ void worker(void *) {
   }
 }
 void touch_worker(void *) {
+  // Raw 802.11 TX cannot encrypt. A protected AP must use the network stack
+  // so that the driver applies WPA2/CCMP (including its group key).
+  int udp = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
+  int yes = 1;
+  sockaddr_in local{}, target{};
+  local.sin_family = target.sin_family = AF_INET;
+  local.sin_addr.s_addr = inet_addr(ap_address);
+  target.sin_addr.s_addr = inet_addr("192.168.4.255");
+  target.sin_port = htons(7001);
+  if (udp < 0 ||
+      setsockopt(udp, SOL_SOCKET, SO_BROADCAST, &yes, sizeof(yes)) < 0 ||
+      bind(udp, reinterpret_cast<sockaddr *>(&local), sizeof(local)) < 0) {
+    if (udp >= 0)
+      close(udp);
+    {
+      std::lock_guard<std::mutex> lock(management);
+      listener_error = "Provisioning UDP unavailable";
+    }
+    vTaskDelete(nullptr);
+    return;
+  }
   if (esp_wifi_register_80211_tx_cb(touch_tx_done) != ESP_OK) {
     {
       std::lock_guard<std::mutex> lock(management);
@@ -286,6 +307,9 @@ void touch_worker(void *) {
   size_t guide_index = 0, data_index = 0;
   rd60xx::TouchPackets packets;
   std::array<uint8_t, 6> mac{};
+  bool secured = false;
+  std::array<uint8_t, 515> payload;
+  payload.fill(1);
   for (;;) {
     std::string phase;
     {
@@ -304,8 +328,10 @@ void touch_worker(void *) {
         provisioning.fail();
         continue;
       }
+      auto password = read_nvs("ap").text("psk");
+      secured = !password.empty();
       packets = rd60xx::esptouch_lengths(
-          ap_ssid, phase == "server_address" ? ap_address : "",
+          ap_ssid, phase == "server_address" ? ap_address : password,
           {192, 168, 4, 1}, mac);
       previous = phase;
       cycle = now_ms();
@@ -314,15 +340,23 @@ void touch_worker(void *) {
     auto elapsed = (now_ms() - cycle) % 6000;
     auto &lengths = elapsed < 2000 ? packets.guide : packets.data;
     auto &index = elapsed < 2000 ? guide_index : data_index;
-    auto frame = rd60xx::esptouch_frame(lengths[index++ % lengths.size()], mac);
+    auto size = lengths[index++ % lengths.size()];
     // Bypass SoftAP broadcast buffering/suppression. SmartConfig needs the
     // exact frame-length sequence on air even before a station associates.
     // Driver-managed sequence numbers are required while AP+STA is connected.
-    auto result =
-        esp_wifi_80211_tx(WIFI_IF_AP, frame.data(), frame.size(), true);
+    bool submitted;
+    if (secured) {
+      submitted =
+          sendto(udp, payload.data(), size, 0,
+                 reinterpret_cast<sockaddr *>(&target), sizeof(target)) == size;
+    } else {
+      auto frame = rd60xx::esptouch_frame(size, mac);
+      submitted = esp_wifi_80211_tx(WIFI_IF_AP, frame.data(), frame.size(),
+                                    true) == ESP_OK;
+    }
     {
       std::lock_guard<std::mutex> lock(management);
-      if (result == ESP_OK)
+      if (submitted)
         ++provision_packets;
       else
         provisioning.fail();
