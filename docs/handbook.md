@@ -157,6 +157,13 @@ core and module fragments. `tools/generate.sh` produces Python, TypeScript and
 C models plus firmware routes and validation constraints. Changes belong in the
 fragments, not generated files. Modules declare transports and capabilities.
 
+The specification includes operation summaries, prerequisites, confirmation and
+failure behavior, parameter descriptions, units, continuity rules and examples.
+Import the assembled JSON into an OpenAPI viewer to browse this reference.
+Generated Python docstrings/model fields and TypeScript API/model comments carry
+the same descriptions. Referenced object fields use their shared schema's
+documentation; device-specific uncertainties are stated where they affect use.
+
 All instrument routes live below `/api/v1`. `GET /devices` lists local IDs and
 capabilities; `GET /devices/{id}/measurements` returns quality, sequence and age.
 An unavailable channel is absent or explicitly unavailable, never a plausible

@@ -18,7 +18,7 @@
         ],
         "responses": {
           "default": {
-            "description": "Structured error",
+            "description": "Request rejected or unavailable: 400 malformed/invalid request, 401 missing LAN credentials, 403 forbidden transport, 404 unknown resource, 409 state/ownership/idempotency conflict, 412 stale configuration ETag, 422 unsupported or unsafe setting, 423 missing/expired device lease, or 503 resource/transport unavailable, as applicable. An accepted operation can later fail through Operation.error; HTTP acceptance is not hardware success.",
             "content": {
               "application/problem+json": {
                 "schema": {
@@ -28,7 +28,7 @@
             }
           },
           "202": {
-            "description": "Operation accepted; poll Location until terminal",
+            "description": "Command accepted for asynchronous execution. Follow Location to getOperation until succeeded, failed or cancelled; inspect final_output and restore_pending.",
             "content": {
               "application/json": {
                 "schema": {
@@ -38,7 +38,7 @@
             },
             "headers": {
               "Location": {
-                "description": "Operation URL",
+                "description": "Relative URL /api/v1/operations/{operationId} for polling in this node boot.",
                 "schema": {
                   "type": "string"
                 }
@@ -54,7 +54,8 @@
             "schema": {
               "type": "string",
               "pattern": "^[A-Za-z0-9_-]{1,48}$"
-            }
+            },
+            "description": "Configured physical device ID on this node. Discover IDs with listDevices; do not use a model name unless it is the configured ID."
           },
           {
             "name": "X-Lab-Lease",
@@ -62,7 +63,8 @@
             "required": true,
             "schema": {
               "type": "string"
-            }
+            },
+            "description": "Active lease ID covering this physical device. Components share ownership; heartbeats must continue while commands are pending."
           },
           {
             "name": "Idempotency-Key",
@@ -72,7 +74,8 @@
               "type": "string",
               "minLength": 1,
               "maxLength": 96
-            }
+            },
+            "description": "Unique key per logical mutation (1..96 characters). Repeating the same method/path/semantic JSON body within this boot returns the existing operation; reusing it for different content returns 409. Retention is bounded. After an uncertain timeout or reboot, inspect state and STOP as needed instead of replaying ON."
           }
         ],
         "requestBody": {
@@ -83,8 +86,11 @@
                 "$ref": "#/components/schemas/SwitchPathRequest"
               }
             }
-          }
-        }
+          },
+          "description": "JSON request with the fields documented by the referenced schema. Unknown properties are rejected; use {} for an empty StopRequest."
+        },
+        "summary": "Select a feedback-verified circuit path",
+        "description": "Request isolated, charge or discharge on a configured interlock. Open both paths first, wait the configured break-before-make interval, then require feedback for the selected path. Feedback failure latches a fault and cancels the transition. STOP/boot requests both paths open. A relay is optional in external battery workflows; using output OFF alone requires suitable off-state/reverse-current behavior in the actual wiring.\n\nReturns 202 with an Operation and Location, not an instrument acknowledgement. Keep the lease alive where required and poll until terminal. Bounded device retries/readback recovery run on the bridge; callers receive a terminal failure when recovery is exhausted. Do not automatically replay an uncertain mutation."
       }
     }
   },
@@ -99,12 +105,14 @@
             "isolated",
             "charge",
             "discharge"
-          ]
+          ],
+          "description": "isolated opens both paths; charge or discharge selects that path after the break interval and verifies feedback."
         }
       },
       "required": [
         "path"
-      ]
+      ],
+      "description": "Desired circuit path for a feedback-verified interlock, with both paths opened before a direction change."
     }
   }
 }

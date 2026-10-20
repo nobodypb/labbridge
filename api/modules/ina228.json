@@ -26,19 +26,28 @@
           "type": "number",
           "exclusiveMinimum": true,
           "minimum": 0,
-          "maximum": 100
+          "maximum": 100,
+          "description": "Actual shunt resistance in ohms, positive and finite. Use the calibrated physical value; max_current_a * shunt_ohms must fit the selected ADC range."
         },
         "max_current_a": {
           "type": "number",
           "exclusiveMinimum": true,
           "minimum": 0,
-          "maximum": 100000
+          "maximum": 100000,
+          "description": "Positive calibration full-scale current in A, not an actuator current limit. The driver derives CURRENT_LSB/SHUNT_CAL, validates representability and uses the effective quantized calibration."
         },
         "adc_range": {
           "type": "integer",
           "minimum": 0,
-          "maximum": 1
+          "maximum": 1,
+          "description": "0: \u00b1163.84 mV shunt range; 1: \u00b140.96 mV range. max_current_a * shunt_ohms must not exceed the selected full scale."
         }
+      },
+      "description": "INA228 shunt calibration for direct ESP I2C. Use endpoint 64..79 (decimal address) and explicitly approved pins [SDA, SCL]; I2C0 instances share the same pin pair and need unique addresses. Voltage/current/power, epoch-relative energy/charge and internal die temperature use the common sensor API. Hardware accuracy commissioning remains open.",
+      "example": {
+        "shunt_ohms": 0.01,
+        "max_current_a": 3,
+        "adc_range": 1
       }
     }
   }

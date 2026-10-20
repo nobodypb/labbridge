@@ -17,6 +17,12 @@ This is a development baseline, not a fully commissioned battery-test system.
 - CI regenerates the API, checks drift, builds Python/TypeScript/C and firmware
   for StickS3, ESP32-S3-USB-OTG and classic ESP32. Board builds do not establish
   that every peripheral combination has been physically commissioned.
+- LB-018 documents all 38 operations, 40 schemas, parameters and inline fields;
+  shared reference fields use the referenced schema documentation. Generated
+  Python/TypeScript descriptions and deterministic regeneration were checked.
+  The annotation regression test preserves public prose and firmware property
+  names/constraints while excluding prose/examples from ESP validation data.
+  This documentation update required no hardware writes or flashing.
 
 ## DL24M bench acceptance
 

@@ -69,6 +69,14 @@ validation constraints are generated from request-reachable schemas. Do not
 hand-edit any generated route/model. `tests/vendor/cjson` is a separately licensed
 MIT test dependency for the preserved controller; see its license.
 
+Document operations, parameters, responses, schemas and inline fields in the API
+fragments, including units, prerequisites and known limitations. OpenAPI 3.0
+Reference Objects cannot carry description siblings; document shared object
+types in their referenced schema instead. Keep examples free of credentials.
+The assembler retains documentation in the public contract/clients and strips
+prose/examples from the ESP validation schemas, preserving constraints and
+property names. `tests/test_api_annotations.py` covers that boundary.
+
 
 Component contracts live in `api/modules/components.json`; meter configuration
 schemas and manifests live with their individual module fragments. A driver can

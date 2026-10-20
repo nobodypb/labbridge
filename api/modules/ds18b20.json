@@ -17,7 +17,7 @@
         ],
         "responses": {
           "200": {
-            "description": "Confirmed result",
+            "description": "Current TemperatureChannels result. Cached telemetry still requires per-value quality/freshness checks; a management result confirms only the documented management action.",
             "content": {
               "application/json": {
                 "schema": {
@@ -27,7 +27,7 @@
             }
           },
           "default": {
-            "description": "Structured error",
+            "description": "Request rejected or unavailable: 400 malformed/invalid request, 401 missing LAN credentials, 403 forbidden transport, 404 unknown resource, 409 state/ownership/idempotency conflict, 412 stale configuration ETag, 422 unsupported or unsafe setting, 423 missing/expired device lease, or 503 resource/transport unavailable, as applicable. An accepted operation can later fail through Operation.error; HTTP acceptance is not hardware success.",
             "content": {
               "application/problem+json": {
                 "schema": {
@@ -45,9 +45,12 @@
             "schema": {
               "type": "string",
               "pattern": "^[A-Za-z0-9_-]{1,48}$"
-            }
+            },
+            "description": "Configured physical device ID on this node. Discover IDs with listDevices; do not use a model name unless it is the configured ID."
           }
-        ]
+        ],
+        "summary": "Read typed temperature channels",
+        "description": "Return cached temperature channels in degrees Celsius, each with kind and freshness. A cell guard requires an external_probe or cell channel; internal electronics/die temperature is not cell temperature. The common component API also exposes these sensors and is preferred for new composite integrations."
       }
     }
   },

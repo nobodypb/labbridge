@@ -7,6 +7,24 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 
 
+def validation_schema(schema):
+    """Drop prose at schema nodes, preserving property names and constraints."""
+    if not isinstance(schema, dict):
+        return schema
+    result = {}
+    for key, value in schema.items():
+        if key in {"description", "title", "example", "examples", "externalDocs"}:
+            continue
+        if key == "properties":
+            value = {name: validation_schema(child) for name, child in value.items()}
+        elif key in {"items", "additionalProperties", "not"}:
+            value = validation_schema(value)
+        elif key in {"allOf", "anyOf", "oneOf"}:
+            value = [validation_schema(child) for child in value]
+        result[key] = value
+    return result
+
+
 def assemble():
     spec = json.loads((ROOT / "api/core.json").read_text())
     modules = []
@@ -64,7 +82,15 @@ def assemble():
                 pending.append(child)
     schemas = {name: spec["components"]["schemas"][name] for name in sorted(needed)}
     constraints = json.dumps(
-        {"schemas": schemas, "requests": requests}, separators=(",", ":")
+        {
+            "schemas": {
+                name: validation_schema(value) for name, value in schemas.items()
+            },
+            "requests": {
+                name: validation_schema(value) for name, value in requests.items()
+            },
+        },
+        separators=(",", ":"),
     )
     header += (
         'namespace labbridge::generated { inline constexpr const char* constraints=R"SCHEMA('
