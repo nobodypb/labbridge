@@ -507,7 +507,7 @@
         "provision_packets": {
           "type": "integer",
           "format": "int64",
-          "description": "ESPTouch packets accepted by the selected send API: UDP on a WPA2 AP, direct unencrypted frames on the open-AP diagnostic path. This is not a receiver acknowledgement.",
+          "description": "Zero-filled PC-profile multicast UDP packets accepted by sendto. This is not a radio completion or receiver acknowledgement.",
           "minimum": 0
         },
         "provision_tx_completed": {
@@ -521,13 +521,25 @@
           "format": "int64",
           "minimum": 0,
           "description": "ESPTouch frames for which the radio callback reported failed transmission. Immediate submission errors also fail the active provisioning session."
+        },
+        "provision_bursts": {
+          "type": "integer",
+          "format": "int64",
+          "minimum": 0,
+          "description": "Complete PC-profile bursts submitted: 39 guide groups followed by all data triples. The sender then waits one second. Counter is boot-local."
+        },
+        "provision_join_acks": {
+          "type": "integer",
+          "format": "int64",
+          "minimum": 0,
+          "description": "Distinct eleven-byte phase-two UDP results received on AP port 18266 with matching peer/embedded AP-subnet address. Stops credential transmission but does not prove instrument identity or authorize output."
         }
       }
     },
     "RdProvisioning": {
       "type": "object",
       "additionalProperties": false,
-      "description": "Provisioning and AP transport status. One session at a time; each sending phase and connection-wait phase expires after 120 seconds. The AP is open, server address 192.168.4.1, TCP port 8080. The original PSU initiates the connection; payloads are CRC-protected Modbus RTU, not MBAP-framed Modbus TCP. No NAT/Internet access is required.",
+      "description": "Provisioning and AP transport status. One session at a time; management phases expire after 120 seconds. Each PC-profile sender transmits for at most 60 seconds, with 39 guide groups and all data triples per burst followed by a one-second pause. Phase two starts after 300 ms. The AP defaults to open; WPA2 is configurable. Server address is 192.168.4.1, TCP port 8080. The original PSU initiates the connection; payloads are CRC-protected Modbus RTU, not MBAP-framed Modbus TCP. No NAT/Internet access is required.",
       "required": [
         "state",
         "ap_ssid",

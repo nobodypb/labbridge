@@ -31,6 +31,8 @@ class RecordingRest:
                 rx_bytes=0,
                 tx_bytes=0,
                 provision_packets=0,
+                provision_bursts=2,
+                provision_join_acks=1,
                 provision_tx_completed=4,
                 provision_tx_failed=1,
             ),
@@ -53,6 +55,8 @@ class ProvisioningTests(unittest.TestCase):
             self.assertEqual(status.ap_channel, 6)
             self.assertEqual(status.metrics.provision_tx_completed, 4)
             self.assertEqual(status.metrics.provision_tx_failed, 1)
+            self.assertEqual(status.metrics.provision_bursts, 2)
+            self.assertEqual(status.metrics.provision_join_acks, 1)
 
     def test_cli_uses_generated_provisioning_requests_without_operation_polling(self):
         rest = RecordingRest()

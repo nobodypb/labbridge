@@ -67,8 +67,9 @@ AP was restored to open; DL24M remained OFF / CC 0.100 A.
 Espressif documents that SmartConfig does not support open networks
 ([FAQ](https://docs.espressif.com/projects/esp-faq/en/latest/software-framework/wifi.html#connect-what-are-the-specifications-of-wi-fi-parameters-when-using-smartconfig)).
 That limitation alone does not explain the failed protected trial or establish
-what RIDEN's special server-address phase requires. Concrete PC-profile
-mismatches below must be corrected before attributing the failure to AP-origin
+what RIDEN's special server-address phase requires. The PC-profile
+mismatches below have now been corrected in software; hardware evidence from
+the corrected sender is still required before attributing failure to AP-origin
 transmission. No evidence currently proves that a second ESP is required for
 pairing. A conventional station-origin comparison remains useful if the exact
 profile still fails.
@@ -119,7 +120,7 @@ resolved in this comparison; exact equality of its SSID, fixed byte and address
 prefix is therefore not claimed. The byte-exact specification and fixtures are
 for v1.0.0.22.
 
-### Differences from the current bridge sender
+### Differences from the previous bridge sender
 
 | Item | LabBridge firmware the development build | RIDEN PC v1.0.0.22 |
 | --- | --- | --- |
@@ -138,11 +139,10 @@ are in those fixtures. This is offline consistency evidence, not a W01 pairing
 result. The previous general-profile tests remain valid for that profile but
 cannot establish compatibility with RIDEN's PC profile.
 
-Implement the profile as a separate driver codec and scheduler with fixture-based
-TDD before changing the ESP sender. Preserve bounded cancellation, deadlines and
+The separate PC-profile codec/scheduler was implemented with fixture-based TDD: the old general codec failed the payload-length assertion before the PC codec passed. Generated-client tests also failed on absent burst/join counters before API regeneration passed. The new ESP sender uses multicast UDP in both AP modes. No fixed packet delay is imposed; transient queue backpressure retries the same packet and has a one-second bound. Preserve bounded cancellation, deadlines and
 STOP responsiveness: the PC has weak ACK validation, OS-dependent adapter
 selection and potentially overlapping workers; those are not requirements to
-copy. After the data/profile correction, verify displayed phase-one IP first,
+copy. For hardware acceptance, verify displayed phase-one IP first,
 then join ACK, TCP identity, reconnect/STOP behavior and AP+STA+BLE coexistence.
-The source output must remain OFF during commissioning. No further radio trial
-or firmware flash was performed as part of this PC investigation.
+The source output must remain OFF during commissioning. No radio trial or firmware flash was performed as part of the original PC
+investigation; subsequent hardware results are recorded in acceptance.md.
