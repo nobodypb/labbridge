@@ -25,6 +25,8 @@ typedef struct rd_wifi_metrics_t {
     long rx_bytes; //numeric
     long tx_bytes; //numeric
     long provision_packets; //numeric
+    long provision_tx_completed; //numeric
+    long provision_tx_failed; //numeric
 
     int _library_owned; // Is the library responsible for freeing this object?
 } rd_wifi_metrics_t;
@@ -35,7 +37,9 @@ __attribute__((deprecated)) rd_wifi_metrics_t *rd_wifi_metrics_create(
     long rejected,
     long rx_bytes,
     long tx_bytes,
-    long provision_packets
+    long provision_packets,
+    long provision_tx_completed,
+    long provision_tx_failed
 );
 
 void rd_wifi_metrics_free(rd_wifi_metrics_t *rd_wifi_metrics);

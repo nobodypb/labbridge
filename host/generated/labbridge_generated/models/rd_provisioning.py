@@ -39,7 +39,9 @@ class RdProvisioning(BaseModel):
     candidates: List[RdWifiCandidate] = Field(description="Up to eight recently identified serials; connected indicates current socket presence.")
     metrics: RdWifiMetrics
     error: Optional[StrictStr] = Field(default=None, description="Network service error when provisioning/listening cannot operate.")
-    __properties: ClassVar[List[str]] = ["state", "session_id", "deadline_ms", "ap_ssid", "ap_address", "tcp_port", "listener_running", "candidates", "metrics", "error"]
+    ap_clients: Optional[Annotated[int, Field(le=4, strict=True, ge=0)]] = Field(default=None, description="Number of stations currently associated with the ESP AP. Diagnostic only; an association is not RD identity or protocol readiness.")
+    ap_channel: Optional[Annotated[int, Field(le=14, strict=True, ge=1)]] = Field(default=None, description="Current shared AP/STA primary Wi-Fi channel, for commissioning.")
+    __properties: ClassVar[List[str]] = ["state", "session_id", "deadline_ms", "ap_ssid", "ap_address", "tcp_port", "listener_running", "candidates", "metrics", "error", "ap_clients", "ap_channel"]
 
     @field_validator('state')
     def state_validate_enum(cls, value):
@@ -119,7 +121,9 @@ class RdProvisioning(BaseModel):
             "listener_running": obj.get("listener_running"),
             "candidates": [RdWifiCandidate.from_dict(_item) for _item in obj["candidates"]] if obj.get("candidates") is not None else None,
             "metrics": RdWifiMetrics.from_dict(obj["metrics"]) if obj.get("metrics") is not None else None,
-            "error": obj.get("error")
+            "error": obj.get("error"),
+            "ap_clients": obj.get("ap_clients"),
+            "ap_channel": obj.get("ap_channel")
         })
         return _obj
 

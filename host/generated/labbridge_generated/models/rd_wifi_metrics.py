@@ -18,7 +18,7 @@ import re  # noqa: F401
 import json
 
 from pydantic import BaseModel, ConfigDict, Field
-from typing import Any, ClassVar, Dict, List
+from typing import Any, ClassVar, Dict, List, Optional
 from typing_extensions import Annotated
 from typing import Optional, Set
 from typing_extensions import Self
@@ -32,8 +32,10 @@ class RdWifiMetrics(BaseModel):
     rejected: Annotated[int, Field(strict=True, ge=0)] = Field(description="Connections rejected because capacity or identity rules were violated.")
     rx_bytes: Annotated[int, Field(strict=True, ge=0)] = Field(description="TCP bytes received across RD connections.")
     tx_bytes: Annotated[int, Field(strict=True, ge=0)] = Field(description="TCP bytes transmitted, including read-only identity probes.")
-    provision_packets: Annotated[int, Field(strict=True, ge=0)] = Field(description="ESPTouch datagrams successfully submitted to the AP interface.")
-    __properties: ClassVar[List[str]] = ["accepted", "disconnects", "rejected", "rx_bytes", "tx_bytes", "provision_packets"]
+    provision_packets: Annotated[int, Field(strict=True, ge=0)] = Field(description="ESPTouch frames accepted by the AP radio submission API. This is not a transmission-completion or receiver acknowledgement.")
+    provision_tx_completed: Optional[Annotated[int, Field(strict=True, ge=0)]] = Field(default=None, description="ESPTouch AP frames for which the Wi-Fi driver reported successful transmission. Broadcasts have no receiver acknowledgement; this does not prove PSU reception.")
+    provision_tx_failed: Optional[Annotated[int, Field(strict=True, ge=0)]] = Field(default=None, description="ESPTouch frames for which the radio callback reported failed transmission. Immediate submission errors also fail the active provisioning session.")
+    __properties: ClassVar[List[str]] = ["accepted", "disconnects", "rejected", "rx_bytes", "tx_bytes", "provision_packets", "provision_tx_completed", "provision_tx_failed"]
 
     model_config = ConfigDict(
         extra='forbid',
@@ -92,7 +94,9 @@ class RdWifiMetrics(BaseModel):
             "rejected": obj.get("rejected"),
             "rx_bytes": obj.get("rx_bytes"),
             "tx_bytes": obj.get("tx_bytes"),
-            "provision_packets": obj.get("provision_packets")
+            "provision_packets": obj.get("provision_packets"),
+            "provision_tx_completed": obj.get("provision_tx_completed"),
+            "provision_tx_failed": obj.get("provision_tx_failed")
         })
         return _obj
 
