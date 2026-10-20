@@ -63,6 +63,7 @@ class Simulator:
         self.stale = False
         self.fail_next = False
         for role, identifier in roles.items():
+            role = role.split(":", 1)[0]
             d = dict(
                 role=role,
                 output=False,
@@ -128,7 +129,7 @@ class Simulator:
                 "load": "dl24m",
                 "interlock": "gpio_interlock",
                 "probe": "ds18b20",
-                "meter": "ina228",
+                "meter": "sim-meter",
             }[role],
             identity=f"sim-{self.name}-{identifier}",
             transport="sim",
@@ -218,7 +219,8 @@ class Simulator:
             quality="stale" if self.stale else "valid",
             voltage_v=self.cell.voltage,
             current_a=current,
-            power_w=self.cell.voltage * abs(current),
+            power_w=self.cell.voltage
+            * (current if d.get("signed_power") else abs(current)),
             set_voltage_v=d.get("voltage"),
             set_current_a=d.get("current"),
             regulation_mode="cc",
@@ -491,11 +493,20 @@ def simulated_cluster(bindings, profile):
     for ref in list(bindings.get("meters", {}).values()) + bindings.get("sensors", []):
         mapping = roles.setdefault(ref["node"], {})
         if ref["device"] not in mapping.values():
-            mapping["meter"] = ref["device"]
+            role = (
+                "probe"
+                if ref.get("component", "").startswith("temperature-")
+                and ref["component"] != "temperature-die"
+                else "meter"
+            )
+            mapping[role + ":" + ref["device"]] = ref["device"]
     transports = {
         name: Simulator(name, devices, clock, cell, profile)
         for name, devices in roles.items()
     }
+    for ref in bindings.get("meters", {}).values():
+        if ref.get("power_sign", 1) == -1:
+            transports[ref["node"]].devices[ref["device"]]["signed_power"] = True
     return (
         SimulatedCluster(
             {

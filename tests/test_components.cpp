@@ -84,7 +84,10 @@ int main() {
         Json::parse(R"({"current_a":0.1})"),
         {{"X-Lab-Lease", lease.body.text("id")}, {"Idempotency-Key", key}}, 10);
   };
-  assert(put("source", "a").status == 202 && d->command == "setSourceCurrent");
+  auto source_result = put("source", "a");
+  assert(source_result.status == 202 && d->command == "setSourceCurrent");
+  assert(source_result.body.number("confirmed_value") == .1 &&
+         source_result.body.text("confirmed_unit") == "A");
   assert(put("sink", "b").status == 202 && d->command == "setLoadCurrent");
   assert(put("current", "c").status >= 400); // A sensor is never writable.
   auto multi = std::make_shared<Multi>();

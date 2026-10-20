@@ -49,6 +49,9 @@ typedef struct operation_t {
     int restore_pending; //boolean
     struct problem_t *error; //model
     char *component_id; // string
+    char *confirmed_unit; // string
+    char *requested_unit; // string
+    double requested_value; //numeric
 
     int _library_owned; // Is the library responsible for freeing this object?
 } operation_t;
@@ -66,7 +69,10 @@ __attribute__((deprecated)) operation_t *operation_create(
     labbridge_api_operation_FINALOUTPUT_e final_output,
     int restore_pending,
     problem_t *error,
-    char *component_id
+    char *component_id,
+    char *confirmed_unit,
+    char *requested_unit,
+    double requested_value
 );
 
 void operation_free(operation_t *operation);

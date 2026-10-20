@@ -22,7 +22,8 @@ struct Sample {
 class Reader {
   RegisterIo &io_;
   Calibration calibration_;
-  bool configured_ = false;
+  bool configured_ = false, have_baseline_ = false;
+  uint64_t energy_base_ = 0, charge_base_ = 0;
   bool read(uint8_t reg, size_t size, uint64_t &value);
 
 public:

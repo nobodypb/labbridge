@@ -5,6 +5,21 @@
 #include <set>
 namespace labbridge {
 namespace {
+void component_confirmation(Json &result, const Json &intent) {
+  if (!intent.has("component_id"))
+    return;
+  auto component = intent.text("component_id"),
+       unit = intent.text("requested_unit");
+  bool has_value = intent.has("requested_value");
+  double value = intent.number("requested_value");
+  result.set("component_id", component);
+  if (has_value)
+    result.set("requested_value", value).set("requested_unit", unit);
+  cJSON_DeleteItemFromObjectCaseSensitive(result.get(), "confirmed_value");
+  cJSON_DeleteItemFromObjectCaseSensitive(result.get(), "confirmed_unit");
+  if (result.text("status") == "succeeded" && has_value)
+    result.set("confirmed_value", value).set("confirmed_unit", unit);
+}
 const cJSON *field(const cJSON *j, const char *k) {
   return cJSON_GetObjectItemCaseSensitive(j, k);
 }
@@ -304,7 +319,9 @@ void Node::tick(uint64_t now) {
     if (result.has("status")) {
       auto id = it->second;
       result.set("id", id).set("device_id", it->first);
-      auto component = operations_.at(id).text("component_id");
+      auto intent = operations_.at(id);
+      component_confirmation(result, intent);
+      auto component = intent.text("component_id");
       if (!component.empty())
         result.set("component_id", component)
             .set("final_output", devices_.at(it->first)
@@ -601,6 +618,19 @@ Response Node::request(const std::string &method, const std::string &path,
       result.set("component_id", component)
           .set("final_output",
                driver.actuator_state(component, now).text("output", "unknown"));
+    if (!component.empty()) {
+      for (auto entry :
+           {std::make_pair("current_a", "A"), std::make_pair("voltage_v", "V"),
+            std::make_pair("cutoff_voltage_v", "V"),
+            std::make_pair("time_limit_s", "s")})
+        if (body.has(entry.first))
+          result.set("requested_value", body.number(entry.first))
+              .set("requested_unit", entry.second);
+      if (body.has("enabled") || stop)
+        result.set("requested_value", body.boolean("enabled") ? 1. : 0.)
+            .set("requested_unit", "1");
+      component_confirmation(result, result);
+    }
     operations_[id] = result;
     keys_.emplace(key, Saved{signature, id, device, now});
     if (result.text("status") == "running" ||

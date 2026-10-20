@@ -302,3 +302,29 @@ class WorkflowTests(unittest.TestCase):
                 not d["output"] for t in transports.values() for d in t.devices.values()
             )
         )
+
+    def test_signed_power_and_two_meters_on_one_node_are_supported(self):
+        import tempfile, pathlib
+        from labbridge.battery import Runner
+        from labbridge.simulator import simulated_cluster
+
+        bindings = self.bindings()
+        bindings.pop("interlock")
+        bindings["meters"] = {
+            "charge": dict(node="meter-node", device="first"),
+            "discharge": dict(
+                node="meter-node", device="second", current_sign=-1, power_sign=-1
+            ),
+        }
+        p = Profile(**FIELDS)
+        cluster, clock, transports = simulated_cluster(bindings, p)
+        with tempfile.TemporaryDirectory() as directory:
+            result = Runner(
+                cluster,
+                bindings,
+                p,
+                pathlib.Path(directory) / "run",
+                clock=clock,
+                sleep=clock.sleep,
+            ).run()
+            self.assertEqual(result["status"], "succeeded")

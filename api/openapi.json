@@ -2569,6 +2569,16 @@
           },
           "component_id": {
             "type": "string"
+          },
+          "confirmed_unit": {
+            "type": "string"
+          },
+          "requested_unit": {
+            "type": "string"
+          },
+          "requested_value": {
+            "type": "number",
+            "format": "double"
           }
         },
         "required": [

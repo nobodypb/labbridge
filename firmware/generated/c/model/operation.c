@@ -52,7 +52,10 @@ static operation_t *operation_create_internal(
     labbridge_api_operation_FINALOUTPUT_e final_output,
     int restore_pending,
     problem_t *error,
-    char *component_id
+    char *component_id,
+    char *confirmed_unit,
+    char *requested_unit,
+    double requested_value
     ) {
     operation_t *operation_local_var = malloc(sizeof(operation_t));
     if (!operation_local_var) {
@@ -71,6 +74,9 @@ static operation_t *operation_create_internal(
     operation_local_var->restore_pending = restore_pending;
     operation_local_var->error = error;
     operation_local_var->component_id = component_id;
+    operation_local_var->confirmed_unit = confirmed_unit;
+    operation_local_var->requested_unit = requested_unit;
+    operation_local_var->requested_value = requested_value;
 
     operation_local_var->_library_owned = 1;
     return operation_local_var;
@@ -89,7 +95,10 @@ __attribute__((deprecated)) operation_t *operation_create(
     labbridge_api_operation_FINALOUTPUT_e final_output,
     int restore_pending,
     problem_t *error,
-    char *component_id
+    char *component_id,
+    char *confirmed_unit,
+    char *requested_unit,
+    double requested_value
     ) {
     return operation_create_internal (
         id,
@@ -104,7 +113,10 @@ __attribute__((deprecated)) operation_t *operation_create(
         final_output,
         restore_pending,
         error,
-        component_id
+        component_id,
+        confirmed_unit,
+        requested_unit,
+        requested_value
         );
 }
 
@@ -136,6 +148,14 @@ void operation_free(operation_t *operation) {
     if (operation->component_id) {
         free(operation->component_id);
         operation->component_id = NULL;
+    }
+    if (operation->confirmed_unit) {
+        free(operation->confirmed_unit);
+        operation->confirmed_unit = NULL;
+    }
+    if (operation->requested_unit) {
+        free(operation->requested_unit);
+        operation->requested_unit = NULL;
     }
     free(operation);
 }
@@ -260,6 +280,30 @@ cJSON *operation_convertToJSON(operation_t *operation) {
     if(operation->component_id) {
     if(cJSON_AddStringToObject(item, "component_id", operation->component_id) == NULL) {
     goto fail; //String
+    }
+    }
+
+
+    // operation->confirmed_unit
+    if(operation->confirmed_unit) {
+    if(cJSON_AddStringToObject(item, "confirmed_unit", operation->confirmed_unit) == NULL) {
+    goto fail; //String
+    }
+    }
+
+
+    // operation->requested_unit
+    if(operation->requested_unit) {
+    if(cJSON_AddStringToObject(item, "requested_unit", operation->requested_unit) == NULL) {
+    goto fail; //String
+    }
+    }
+
+
+    // operation->requested_value
+    if(operation->requested_value) {
+    if(cJSON_AddNumberToObject(item, "requested_value", operation->requested_value) == NULL) {
+    goto fail; //Numeric
     }
     }
 
@@ -465,6 +509,42 @@ operation_t *operation_parseFromJSON(cJSON *operationJSON){
     }
     }
 
+    // operation->confirmed_unit
+    cJSON *confirmed_unit = cJSON_GetObjectItemCaseSensitive(operationJSON, "confirmed_unit");
+    if (cJSON_IsNull(confirmed_unit)) {
+        confirmed_unit = NULL;
+    }
+    if (confirmed_unit) { 
+    if(!cJSON_IsString(confirmed_unit) && !cJSON_IsNull(confirmed_unit))
+    {
+    goto end; //String
+    }
+    }
+
+    // operation->requested_unit
+    cJSON *requested_unit = cJSON_GetObjectItemCaseSensitive(operationJSON, "requested_unit");
+    if (cJSON_IsNull(requested_unit)) {
+        requested_unit = NULL;
+    }
+    if (requested_unit) { 
+    if(!cJSON_IsString(requested_unit) && !cJSON_IsNull(requested_unit))
+    {
+    goto end; //String
+    }
+    }
+
+    // operation->requested_value
+    cJSON *requested_value = cJSON_GetObjectItemCaseSensitive(operationJSON, "requested_value");
+    if (cJSON_IsNull(requested_value)) {
+        requested_value = NULL;
+    }
+    if (requested_value) { 
+    if(!cJSON_IsNumber(requested_value))
+    {
+    goto end; //Numeric
+    }
+    }
+
 
     operation_local_var = operation_create_internal (
         strdup(id->valuestring),
@@ -479,7 +559,10 @@ operation_t *operation_parseFromJSON(cJSON *operationJSON){
         final_outputVariable,
         restore_pending->valueint,
         error ? error_local_nonprim : NULL,
-        component_id && !cJSON_IsNull(component_id) ? strdup(component_id->valuestring) : NULL
+        component_id && !cJSON_IsNull(component_id) ? strdup(component_id->valuestring) : NULL,
+        confirmed_unit && !cJSON_IsNull(confirmed_unit) ? strdup(confirmed_unit->valuestring) : NULL,
+        requested_unit && !cJSON_IsNull(requested_unit) ? strdup(requested_unit->valuestring) : NULL,
+        requested_value ? requested_value->valuedouble : 0
         );
 
     return operation_local_var;

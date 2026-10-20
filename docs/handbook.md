@@ -389,6 +389,9 @@ and sensor quantity/unit. Do not infer purpose from the model name.
 
 Writes keep the same lease, idempotency, operation polling and readback rules.
 `Operation.component_id` identifies the target when a component route was used.
+Component operations report `requested_value/unit` and, on success,
+`confirmed_value/unit` in the common interface units. Compatibility operations
+retain their earlier raw confirmation behavior.
 Leases and in-flight protocol operations are currently serialized per physical
 device. Component STOP defaults to whole-device STOP; multi-channel drivers may
 implement a confirmed narrower stop. Lease expiry/device STOP always stops all
@@ -452,7 +455,9 @@ The monitor exposes bus V, signed A, unsigned W, accumulated Wh, signed Ah and
 internal die temperature. Calibration is quantized to the actual programmed
 register. Continuous conversion with averaging is used; conversion-ready,
 identity/configuration checks, saturation and overflow prevent false fresh
-values. Counter overflow suppresses the affected counter channel. Reinitializing
+values. Counters are relative to the first validated sample of the sensor epoch, so
+prior calibration cannot corrupt their scale; hardware counters are not reset.
+Counter overflow suppresses the affected counter channel. Reinitializing
 the monitor advances its sensor epoch. Register conversions follow the
 [TI INA228 datasheet](https://www.ti.com/lit/ds/symlink/ina228.pdf).
 Hardware/shunt calibration and absolute accuracy have not been commissioned.

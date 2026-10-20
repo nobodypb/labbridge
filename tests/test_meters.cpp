@@ -32,6 +32,11 @@ int main() {
   Registers io;
   ina228::Reader reader(io, {.01, 2, 0});
   assert(reader.initialize());
+  auto baseline = reader.sample();
+  assert(baseline.values.at("energy") == 0 &&
+         baseline.values.at("charge") == 0);
+  io.r[9] += 100;
+  io.r[10] -= 1;
   auto frame = reader.sample();
   assert(frame.status == ina228::Status::valid);
   assert(std::abs(frame.values.at("voltage") - 4) < 1e-9);

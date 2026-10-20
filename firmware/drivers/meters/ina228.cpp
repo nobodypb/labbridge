@@ -31,6 +31,7 @@ bool Reader::read(uint8_t reg, size_t size, uint64_t &value) {
 }
 bool Reader::initialize() {
   configured_ = false;
+  have_baseline_ = false;
   uint64_t manufacturer = 0, id = 0;
   if (!read(0x3e, 2, manufacturer) || manufacturer != 0x5449 ||
       !read(0x3f, 2, id) || (id >> 4) != 0x228)
@@ -87,10 +88,18 @@ Sample Reader::sample() {
                    {"current", signed_bits(current >> 4, 20) * lsb},
                    {"power", power * 3.2 * lsb},
                    {"temperature-die", signed_bits(temp, 16) * .0078125}};
+  if (!have_baseline_) {
+    energy_base_ = energy;
+    charge_base_ = charge;
+    have_baseline_ = true;
+  }
+  constexpr uint64_t mask = (uint64_t(1) << 40) - 1;
   if (!(status & 0x800))
-    result.values["energy"] = energy * 51.2 * lsb / 3600.;
+    result.values["energy"] =
+        ((energy - energy_base_) & mask) * 51.2 * lsb / 3600.;
   if (!(status & 0x400))
-    result.values["charge"] = signed_bits(charge, 40) * lsb / 3600.;
+    result.values["charge"] =
+        signed_bits((charge - charge_base_) & mask, 40) * lsb / 3600.;
   result.status = Status::valid;
   return result;
 }
