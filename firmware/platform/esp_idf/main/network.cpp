@@ -12,6 +12,7 @@
 #include <atomic>
 #include <cstring>
 namespace labbridge::esp {
+void start_stream(httpd_handle_t);
 extern const char page_start[] asm("_binary_index_html_start");
 extern const char page_end[] asm("_binary_index_html_end");
 extern const char js_start[] asm("_binary_app_js_start");
@@ -192,25 +193,32 @@ static esp_err_t route(httpd_req_t *r) {
       {"/wifi", "text/html; charset=utf-8", page_start, page_end, false},
       {"/devices", "text/html; charset=utf-8", page_start, page_end, false},
       {"/app.js", "text/javascript", js_start, js_end, false},
-      {"/dl24", "text/html; charset=utf-8", bench_html_start, bench_html_end, false},
-      {"/dl24/", "text/html; charset=utf-8", bench_html_start, bench_html_end, false},
+      {"/dl24", "text/html; charset=utf-8", bench_html_start, bench_html_end,
+       false},
+      {"/dl24/", "text/html; charset=utf-8", bench_html_start, bench_html_end,
+       false},
       {"/dl24.css", "text/css", bench_css_start, bench_css_end, false},
       {"/dl24.js", "text/javascript", bench_js_start, bench_js_end, false},
-      {"/dl24-license.txt", "text/plain; charset=utf-8", bench_license_start, bench_license_end, false},
-      {"/dl24-source.tar.gz", "application/gzip", bench_source_start, bench_source_end, true}};
+      {"/dl24-license.txt", "text/plain; charset=utf-8", bench_license_start,
+       bench_license_end, false},
+      {"/dl24-source.tar.gz", "application/gzip", bench_source_start,
+       bench_source_end, true}};
   if (r->method == HTTP_GET) {
     for (const auto &asset : assets) {
       if (path != asset.path)
         continue;
       httpd_resp_set_hdr(r, "Cache-Control", "no-store");
       httpd_resp_set_hdr(r, "X-Frame-Options", "DENY");
-      httpd_resp_set_hdr(r, "Content-Security-Policy",
-                         "default-src 'self'; style-src 'self' 'unsafe-inline'; "
-                         "script-src 'self'; frame-ancestors 'none'");
+      httpd_resp_set_hdr(
+          r, "Content-Security-Policy",
+          "default-src 'self'; style-src 'self' 'unsafe-inline'; "
+          "script-src 'self'; frame-ancestors 'none'");
       if (asset.binary)
-        httpd_resp_set_hdr(r, "Content-Disposition", "attachment; filename=dl24-source.tar.gz");
+        httpd_resp_set_hdr(r, "Content-Disposition",
+                           "attachment; filename=dl24-source.tar.gz");
       httpd_resp_set_type(r, asset.type);
-      return httpd_resp_send(r, asset.begin, asset.end - asset.begin - (asset.binary ? 0 : 1));
+      return httpd_resp_send(r, asset.begin,
+                             asset.end - asset.begin - (asset.binary ? 0 : 1));
     }
   }
   if (path.rfind("/api/", 0) != 0 && path != "/management/token" && via_ap(r)) {
@@ -382,8 +390,11 @@ void start_network() {
   hc.uri_match_fn = httpd_uri_match_wildcard;
   hc.max_uri_handlers = 8;
   hc.stack_size = 12288;
+  hc.send_wait_timeout = 1;
+  hc.recv_wait_timeout = 1;
   httpd_handle_t server;
   ESP_ERROR_CHECK(httpd_start(&server, &hc));
+  start_stream(server);
   for (auto method : {HTTP_GET, HTTP_POST, HTTP_PUT, HTTP_DELETE}) {
     httpd_uri_t u = {};
     u.uri = "/*";

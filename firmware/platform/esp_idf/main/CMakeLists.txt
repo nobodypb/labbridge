@@ -7,7 +7,7 @@ set(REQUIRES nvs_flash esp_wifi esp_event esp_netif esp_http_server json bt esp_
 if(IDF_TARGET STREQUAL "esp32s3")
  list(APPEND REQUIRES usb)
 endif()
-idf_component_register(SRCS "main.cpp" "network.cpp" "rd_network.cpp" "console.cpp" "ble.cpp" "usb.cpp" "gpio.cpp" "meters.cpp" ${METERS} ${CORE} ${DL} ${RD}
+idf_component_register(SRCS "main.cpp" "network.cpp" "stream.cpp" "rd_network.cpp" "console.cpp" "ble.cpp" "usb.cpp" "gpio.cpp" "meters.cpp" ${METERS} ${CORE} ${DL} ${RD}
  INCLUDE_DIRS "." "${ROOT}/core/include" "${ROOT}/drivers/dl24m" "${ROOT}/drivers/meters" "${ROOT}/drivers/rd60xx" "${ROOT}/generated"
  REQUIRES ${REQUIRES}
  EMBED_TXTFILES "../../../../web/dist/index.html" "../../../../web/dist/app.js"

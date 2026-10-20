@@ -32,7 +32,7 @@ static void console(void *) {
           for (auto &p : response.headers)
             rh.set(p.first, p.second);
           reply.set("status", double(response.status))
-              .set("body", response.body)
+              .set("body", std::move(response.body))
               .set("headers", rh);
         } catch (const std::exception &e) {
           reply.set("status", 400.).set("body", problem(400, e.what()).body);
