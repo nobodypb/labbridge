@@ -132,6 +132,13 @@ Native ESP USB line-control behavior was verified through symbolic paths;
 UART adapters retain their reset wait. Tests use synthetic aliases and USB
 metadata. Physical setup details and installed host rules are not published.
 
+Automatic host provisioning tests cover both phase advances without an operator
+callback, a fresh TCP identity, rejection of cached-candidate/ACK-only success,
+initial OFF confirmation, timeout, cancellation and foreign-session isolation.
+The default first-stage window is 60 seconds. This is orchestration acceptance;
+the automatic timing still needs a fresh physical pairing trial. Previous manual
+handoff trials establish PC-profile RF compatibility, not this new timing.
+
 A target-SSID trial displayed the server address but produced no new join
 result or TCP identity. Its late management transition prevents a clean
 end-to-end comparison.

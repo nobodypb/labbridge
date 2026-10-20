@@ -219,6 +219,24 @@ are blocked while pairing; independent STOP remains available.
 
 The same operations are generated for HTTP and USB CLI:
 
+For unattended phase handoff, use the host workflow after confirming physical
+OFF, entering the PSU's Wi-Fi setup and connecting a client to the ESP AP:
+
+```sh
+PYTHONPATH=host/src:host/generated python tools/rd_wifi_pair.py --endpoint "$BRIDGE_ENDPOINT" --confirm-outputs-off
+```
+
+`BRIDGE_ENDPOINT` accepts `serial:` or HTTP; HTTP reads its bearer token from
+`LABBRIDGE_TOKEN`. The helper uses the PC-compatible profile, sends the server
+address for its 60-second window and then sends stored AP credentials
+automatically. It never waits for a display confirmation or reads the PSK onto
+the host. It exits successfully only when the firmware confirms a new TCP
+instrument identity. Cancellation and a bounded overall timeout stop only the
+session it started. `labbridge.provisioning.pair_rd_wifi(node,
+confirm_outputs_off=True)` exposes the same workflow to scripts.
+
+Individual operations remain available for protocol diagnostics:
+
 ```sh
 labbridge --endpoint serial:/dev/ttyACM0 call rd60xx.get_rd_provisioning
 labbridge --endpoint serial:/dev/ttyACM0 call rd60xx.start_rd_provisioning --args-file examples/commands/rd-pair-start.json
