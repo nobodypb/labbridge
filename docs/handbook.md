@@ -460,6 +460,12 @@ Experimental version-one/600,000-round records require `ui-password` recovery
 over trusted USB. Firmware rejects them promptly and never treats their hashes
 as lower-cost verifiers. Recovery preserves the API bearer token and other
 settings; it does not open LAN password setup.
+The isolated 160 MHz StickS3 measured 0.817–0.984 s for API login and at most
+1.207 s from browser submission to signed-in controls across all user pages.
+Cookie sessions are independent of TCP connections: the HTTP server keeps at
+most four connections, reclaims idle ones and uses a 16-socket platform budget.
+This permits eight authenticated sessions without exhausting the shared sockets.
+
 
 `/api/v1/auth/status`, `/setup`, `/login`, `/session` and `/password` describe
 this lifecycle in OpenAPI. Cookie-authenticated mutations require the session's

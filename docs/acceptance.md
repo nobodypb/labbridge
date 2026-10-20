@@ -212,8 +212,8 @@ the cookie session; a failed shutdown still ends login and reports uncertainty.
 The unchanged upstream snapshot and corresponding-source delivery remain intact.
 
 Software acceptance: `tools/check.sh` passes (23 portable C++ executables,
-three contract tests, 27 host tests and the reference suites), as do 11 Web unit
-tests, TypeScript/Webbuild and all 38 browser scenarios (24 for Bench). Black,
+three contract tests, 31 host tests and the reference suites), as do 11 Web unit
+tests, TypeScript/Webbuild and all 45 browser scenarios (24 for Bench). Black,
 public-tree checks and generation drift pass. ESP-IDF 5.5.2 builds pass for
 StickS3, USB-OTG and classic ESP32 with the updated embedded frontend.
 
@@ -289,8 +289,8 @@ device recheck and AP first-password setup were consequently left open. One
 earlier real-browser scan wait timed out without sufficient diagnostics; the
 instrumented repeat above passed. Repeated/soak behavior remains open.
 
-`tools/check.sh` passes (23 C++ executables, three contract tests, 27 host tests
-and 13 reference tests); all 38 browser scenarios pass on an isolated local
+`tools/check.sh` passes (23 C++ executables, three contract tests, 31 host tests
+and 13 reference tests); all 45 browser scenarios pass on an isolated local
 test server. ESP-IDF 5.5.2 builds for StickS3, classic ESP32 and USB-OTG pass.
 The 282 generated files still match the deterministic regeneration snapshot.
 The roughly two-minute version-one calculation was rejected for usability and
@@ -314,3 +314,54 @@ acceptance. Physical timing uses a fully backed-up isolated bridge with zero
 configured laboratory devices; no device connection or actuation is part of
 this commissioning. Deployment-specific connection details, credentials, raw
 logs and backups remain in ignored local notes.
+
+The real eight-client regression initially exhausted the default shared socket
+pool after three accepted logins. The platform now reserves 16 sockets and
+bounds HTTP to four connections with idle connection reclamation. All eight
+sessions then logged in, the ninth was rejected, and an older cookie still
+worked after its TCP connection was reclaimed. Session state is never evicted
+by TCP cleanup. A real-browser submission initially stalled; two controlled
+regressions reproduced a delayed pre-login scan clearing password-manager input
+or a newly established login. Request/session tracking and disposal of obsolete
+scan views fix both cases; the final real-browser run succeeds without delays
+inserted to hide the race.
+
+Final version-two commissioning used the actual embedded assets from source
+`2d11b24` (application SHA-256 prefix `c9ca3960940abd7d`), with zero configured
+instruments throughout:
+
+| Check | Observed result |
+| --- | --- |
+| Browser login on `/` | 0.945 s; cookie reload and CSRF logout pass |
+| Browser login on `/wifi` | 1.207 s; cookie reload and CSRF logout pass |
+| Browser login on `/devices` | 1.055 s; cookie reload and CSRF logout pass |
+| Browser login on `/dl24` | 0.987 s; cookie reload and CSRF logout pass |
+| Browser login on `/dl24/` | 0.932 s; cookie reload and CSRF logout pass |
+| 17 correct API logins | 0.817–0.984 s; all below 3 s |
+| 6 incorrect passwords | `401`, maximum 0.868 s; sixth attempt limited with `429` |
+| 128 Unicode code points / 512 UTF-8 bytes | Correct password succeeds; altered final character rejected |
+| Password change with current password | 1.678 s; previous sessions invalidated |
+| Session cap and recovery | Eight valid sessions, ninth rejected, existing cookie retained; USB recovery revokes sessions |
+| STOP route during an active password job | HTTP 31.4 ms / USB 41.4 ms |
+| ESP reboot | Old session rejected; persisted password logs in again in 0.861 s |
+
+The STOP probes deliberately address an unconfigured synthetic ID and receive
+`404`; they establish route/authorization/dispatch responsiveness, **not** a new
+physical shutdown result. Portable actor tests exercise actual STOP dispatch;
+the earlier version-one physical OFF-only STOP evidence remains separately
+recorded above. No instrument was configured, connected, reserved or actuated
+during version-two hardware commissioning. Bearer access, USB-only token
+retrieval, LAN bootstrap denial, CSRF and foreign-origin denial also pass on the
+isolated bridge.
+
+The original complete 8 MiB test image, including all NVS and firmware, was
+restored and checked against the device's full-flash digest. Its original
+firmware did not provide a correlated USB JSON status response before or after
+testing; restoration evidence is the complete image comparison, not an invented
+post-restore API readback. Credentials, deployment identity, backups and raw
+logs remain private. The final software checks pass: 23 C++ executables, three
+contract tests, 31 host tests, the reference suites, 11 Web unit tests and 45
+browser scenarios. Generation drift, Black and public-tree checks pass, and
+ESP-IDF 5.5.2 builds fit StickS3, USB-OTG and ESP32 with the final frontend and
+socket policy. Remaining AP-first-setup and laboratory commissioning limits are
+still explicit; the three-second user-login requirement is now satisfied.

@@ -25,9 +25,9 @@ checks pass and its hardware claims match the evidence.
 | LB-017 | As an operator, I configure INA228 I²C and Yocto-Watt-V2-C measurement providers. | LB-015 | Implemented; hardware acceptance open |
 | LB-018 | As an API consumer, I understand operations, units, prerequisites and failure handling directly from OpenAPI and generated clients. | LB-002, LB-015 | Done |
 | LB-019 | As an operator, I provision and automate RD6018 sources on the ESP AP alongside DL24M BLE, with bounded recovery and measured coexistence acceptance. | LB-007, LB-011 | PC provisioning and discovery recovery validated; source/coexistence acceptance open |
-| LB-020 | As an operator, I sign in to the UI with a password and configure LAN Wi-Fi after login. | LB-002, LB-010, LB-011 | Implemented; fast-login commissioning in progress; remaining hardware acceptance open |
+| LB-020 | As an operator, I sign in to the UI with a password and configure LAN Wi-Fi after login. | LB-002, LB-010, LB-011 | Implemented; <3 s UI login hardware-verified; remaining commissioning open |
 | LB-021 | As an operator or API client, I optionally authenticate with a client certificate over HTTPS. | LB-020 | Planned |
-| LB-022 | As a DL24M operator, I use the complete Bench interface on the ESP with confirmed backend control and retained future features. | LB-005, LB-011, LB-020 | Implemented; password UI browser acceptance; physical password flow open |
+| LB-022 | As a DL24M operator, I use the complete Bench interface on the ESP with confirmed backend control and retained future features. | LB-005, LB-011, LB-020 | Implemented; password UI hardware-verified without instruments; loaded commissioning open |
 
 ## Acceptance criteria
 
@@ -126,13 +126,17 @@ the existing physical limitations in LB-014 remain open.
   transport regression test. Operator acceptance now requires the complete
   password login response within **3 seconds**, including password verification,
   on the target StickS3 while STOP remains responsive. The original 114–116 s
-  version-one implementation failed that requirement. The operator-approved policy prioritizes usability over maximum offline
-  resistance: version-two verifiers use 6,000 iterations while retaining random
-  salts, password length rules, five-failure/minute throttling, CSRF and session
-  limits. Legacy experimental 600,000-round records require trusted USB password
-  recovery and are never silently reinterpreted or verified slowly. Measure
-  every published UI entry point on the test ESP without laboratory connections. AP first setup,
-  repeated/soak behavior and the final device recheck remain open. Further
-  hardware work is restricted to the dedicated test bridge, with no laboratory
-  connections until the operator resumes them; see `docs/acceptance.md`.
+  version-one implementation failed that requirement. The operator-approved
+  policy prioritizes usability over maximum offline resistance: version-two
+  verifiers use 6,000 iterations while retaining random salts, password length
+  rules, five-failure/minute throttling, CSRF and session limits. Experimental
+  600,000-round records require trusted USB recovery and are never silently
+  reinterpreted or verified slowly. All five published entry URLs now pass real
+  browser login/reload/logout on an isolated bridge: maximum 1.207 s. Seventeen
+  API logins stay below 0.985 s, including the maximum-length Unicode password;
+  eight sessions survive HTTP connection reclamation. The original full test
+  image was restored and device-verified. No laboratory devices were connected.
+  AP first-password setup and broader device/coexistence commissioning remain
+  open; further hardware work uses only the dedicated test bridge without
+  laboratory connections until the operator resumes them. See acceptance.md.
 - **LB-021:** HTTPS with optional mTLS as an alternative login for both browser and API clients; valid client certificates authenticate directly. Password and bearer alternatives remain available. Define trust-anchor provisioning, certificate renewal/revocation and Secure cookies; no certificate requirement is introduced by LB-020.

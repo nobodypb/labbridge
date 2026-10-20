@@ -178,8 +178,10 @@ failure was reproduced, corrected and covered by a shared transport test.
 
 The original version-one verifier took approximately 114–116 seconds for setup,
 login and USB recovery on a 160 MHz StickS3. Version two uses 6,000 rounds under
-the operator-approved basic-protection policy; repeated hardware login timing
-is being rechecked against the three-second limit. STOP
+the operator-approved basic-protection policy. Seventeen API logins measured
+0.817–0.984 s and all five real browser entry points stayed below 1.208 s on an
+isolated StickS3. Eight sessions retain valid cookies when idle HTTP connections
+are reclaimed. The original full flash was restored and device-verified. STOP
 acceptance remained below 100 ms in the final HTTP-login run, with the load
 already OFF. Shutdown from ON under hashing was not exercised. One earlier real
 browser scan wait timed out without a captured cause; an instrumented repeat
@@ -190,9 +192,10 @@ connections while other tests continue. AP first-
 password setup and final live-device verification after NVS restoration remain
 open. Original DL24M-stick NVS and the additional test ESP32's overwritten flash
 were restored and hash-verified; temporary passwords and raw backups/logs remain
-private. Hardware expiry/session-capacity, post-reboot session revocation and
-UI old-password replacement were not separately commissioned; their
-deterministic portable checks pass.
+private. Absolute twelve-hour expiry remains covered by deterministic clock tests.
+Session capacity, reboot revocation and HTTP old-password replacement now have
+isolated hardware evidence; full Bench actuation with cookie login remains
+uncommissioned because laboratory connections are paused.
 
 HTTPS/mTLS remains a separate planned story (LB-021); HTTP credentials and
 cookies are currently unencrypted. mTLS is intended as optional alternative
