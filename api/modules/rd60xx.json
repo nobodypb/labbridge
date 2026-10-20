@@ -507,8 +507,20 @@
         "provision_packets": {
           "type": "integer",
           "format": "int64",
-          "description": "ESPTouch datagrams successfully submitted to the AP interface.",
+          "description": "ESPTouch frames accepted by the AP radio submission API. This is not a transmission-completion or receiver acknowledgement.",
           "minimum": 0
+        },
+        "provision_tx_completed": {
+          "type": "integer",
+          "format": "int64",
+          "minimum": 0,
+          "description": "ESPTouch AP frames for which the Wi-Fi driver reported successful transmission. Broadcasts have no receiver acknowledgement; this does not prove PSU reception."
+        },
+        "provision_tx_failed": {
+          "type": "integer",
+          "format": "int64",
+          "minimum": 0,
+          "description": "ESPTouch frames for which the radio callback reported failed transmission. Immediate submission errors also fail the active provisioning session."
         }
       }
     },
@@ -582,6 +594,20 @@
         "error": {
           "type": "string",
           "description": "Network service error when provisioning/listening cannot operate."
+        },
+        "ap_clients": {
+          "type": "integer",
+          "format": "int64",
+          "minimum": 0,
+          "maximum": 4,
+          "description": "Number of stations currently associated with the ESP AP. Diagnostic only; an association is not RD identity or protocol readiness."
+        },
+        "ap_channel": {
+          "type": "integer",
+          "format": "int64",
+          "minimum": 1,
+          "maximum": 14,
+          "description": "Current shared AP/STA primary Wi-Fi channel, for commissioning."
         }
       }
     }

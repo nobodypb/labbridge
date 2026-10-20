@@ -202,7 +202,7 @@ are blocked while pairing; independent STOP remains available.
    the PSU shows **Connecting server**, acknowledge **Connecting server shown**.
 3. `waiting_connection` completes when a supported incoming identity has been
    seen. Each phase has a 120-second deadline. Cancellation stops transmission;
-   settings already received by the PSU are not undone. Old session IDs are
+   settings already received by the PSU are not undone. Status includes AP client count/channel and separate radio submissions, successful transmission completions and failed completions. Successful broadcast transmission does not confirm PSU reception; use the display and eventual TCP identity. Old session IDs are
    rejected and repeated phase acknowledgements never skip a step.
 4. Check the displayed model/serial. Enter a device ID and explicit voltage,
    current and power limits, then select **Add RD source and restart**. This

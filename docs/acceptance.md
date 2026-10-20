@@ -43,9 +43,6 @@ New asynchronous runtime on StickS3; actual display firmware Ver 2.0. Bench sour
   temporarily raised from its original 21 V to 25 V for the 24 V pulse, then
   restored to 21 V. Counter reset was explicitly authorized.
 
-The old NVS namespace and source application are preserved. The rollback image
-and private pre-migration backup remain outside the public repository.
-
 ## Remaining physical acceptance
 
 - Local lease expiry confirmed OFF on the final runtime. Reset during ON returned
@@ -112,10 +109,3 @@ an unexpected disconnect/rejection, stale sample or restart fails the run. Files
 contain hardware identities and remain ignored/private. Active bench writes and
 intentional fault injection are separate checks; this runner makes no mutations.
 
-StickS3 bench smoke acceptance on firmware `0.1.0+026063a`: AP listener starts,
-status/invalid-session handling works over USB and authenticated LAN, the updated
-UI asset is served, and port 8080 is not reachable through the station address.
-The original DL24M settings matched the pre-flash snapshot; CC 0.100 A, fresh
-measurements and confirmed output OFF were preserved. A private system/application
-backup was taken before flashing. No RD source was paired or actuated in these
-checks, and no AP-client/BLE coexistence result is claimed from them.
