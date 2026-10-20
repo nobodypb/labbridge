@@ -9,3 +9,4 @@
 - Keep deployment-specific metadata in ignored local notes: physical USB identities and assignments, installed host rules/aliases, configured network/node names, VM details, backups and cross-session hardware coordination. Public docs and tests use generic instructions and synthetic examples; retain sanitized protocol findings and acceptance limits only.
 - Use small story branches and reviewable PRs. Do not merge code with failing required checks. Record real limitations in the backlog; do not replace hardware evidence with simulation.
 - No multi-agent delegation unless the user explicitly requests it. Keep generated and vendored changes isolated from hand-written implementation.
+- For RIDEN commissioning, use the automatic two-stage host workflow. Do not wait for an operator/display confirmation between sending the server address and Wi-Fi credentials. Display feedback is diagnostic; success still requires a fresh TCP instrument identity.

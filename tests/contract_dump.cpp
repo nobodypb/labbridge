@@ -1,6 +1,7 @@
 #include "dl24m_driver.hpp"
 #include "labbridge/auth.hpp"
 #include "labbridge/node.hpp"
+#include "rd60xx_driver.hpp"
 #include <iostream>
 using namespace labbridge;
 struct Instrument : Endpoint {
@@ -31,6 +32,45 @@ struct Instrument : Endpoint {
     return b;
   }
 };
+struct SourceInstrument : Endpoint {
+  Bytes rx;
+  std::array<uint16_t, 42> regs{};
+  SourceInstrument() {
+    regs[0] = 60181;
+    regs[2] = 321;
+    regs[8] = 500;
+    regs[9] = 10;
+    regs[14] = 6500;
+    regs[34] = 1;
+    regs[35] = 89;
+    regs[39] = 1250;
+    regs[41] = 6250;
+  }
+  bool connected() const override { return true; }
+  uint64_t generation() const override { return 1; }
+  bool send(const Bytes &b) override {
+    if (b[1] == 3) {
+      unsigned count = (b[4] << 8) | b[5];
+      rx = {1, 3, uint8_t(2 * count)};
+      for (unsigned i = 0; i < count; ++i) {
+        rx.push_back(regs[i] >> 8);
+        rx.push_back(regs[i] & 255);
+      }
+      auto c = rd60xx::crc(rx.data(), rx.size());
+      rx.push_back(c & 255);
+      rx.push_back(c >> 8);
+    } else {
+      regs[(b[2] << 8) | b[3]] = (b[4] << 8) | b[5];
+      rx = b;
+    }
+    return true;
+  }
+  Bytes receive() override {
+    Bytes b;
+    b.swap(rx);
+    return b;
+  }
+};
 int main() {
   Auth auth(
       "synthetic", Json(), [] { return std::string(64, 'a'); },
@@ -46,11 +86,15 @@ int main() {
       .set("body", auth_response.body);
   std::cout << auth_fixture.dump() << '\n';
   Instrument wire;
+  SourceInstrument source_wire;
   Node n("fixture", "boot", "sim");
   auto d = std::make_shared<Dl24mDriver>(
       "load", "synthetic", wire, Limits{25, .2, 5, 3000, 0},
       [](const Json &) {}, Json());
   n.add("load", d);
+  n.add("source", std::make_shared<Rd60xxDriver>(
+                      "source", 321, source_wire, Limits{5, 1, 5, 3000, 0},
+                      [](const Json &) {}, Json(), "tcp", 6018));
   for (uint64_t t = 0; t < 15000; t += 5)
     n.tick(t);
   auto emit = [&](const std::string &operation, const std::string &path) {
@@ -72,4 +116,11 @@ int main() {
   emit("getComponentReading",
        "/api/v1/devices/load/components/current/measurement");
   emit("getActuatorState", "/api/v1/devices/load/components/sink/state");
+  emit("getMeasurements", "/api/v1/devices/source/measurements");
+  emit("listComponents", "/api/v1/devices/source/components");
+  emit("getSensorReadings", "/api/v1/devices/source/readings");
+  emit("getComponentReading",
+       "/api/v1/devices/source/components/input-voltage/measurement");
+  emit("getComponentReading",
+       "/api/v1/devices/source/components/temperature-external/measurement");
 }

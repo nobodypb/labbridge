@@ -1477,6 +1477,20 @@
           "boot_id": {
             "type": "string",
             "description": "Opaque identifier for this node boot. A change invalidates prior monotonic timestamps, leases and operation IDs."
+          },
+          "input_voltage_v": {
+            "type": "number",
+            "format": "double",
+            "description": "Source input supply voltage in V when supported. This is distinct from output voltage and its operating limit."
+          },
+          "battery_voltage_v": {
+            "type": "number",
+            "format": "double",
+            "description": "Voltage in V reported by a dedicated battery-sensing input when supported. Do not infer electrical isolation or a valid battery wiring arrangement from this value."
+          },
+          "battery_detected": {
+            "type": "boolean",
+            "description": "Instrument-reported battery presence, when supported. This is telemetry, not authorization for a battery operation or proof of correct wiring."
           }
         },
         "required": [

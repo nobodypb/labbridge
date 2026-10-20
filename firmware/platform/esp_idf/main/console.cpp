@@ -3,6 +3,10 @@
 #include "freertos/task.h"
 #include "platform.hpp"
 #include <cstdio>
+#if CONFIG_ESP_CONSOLE_USB_SERIAL_JTAG_ENABLED
+#include "driver/usb_serial_jtag.h"
+#include "driver/usb_serial_jtag_vfs.h"
+#endif
 namespace labbridge::esp {
 void console_respond(const std::string &id, Response response) {
   Json reply, headers;
@@ -61,6 +65,16 @@ static void console(void *) {
   }
 }
 void start_console() {
+#if CONFIG_ESP_CONSOLE_USB_SERIAL_JTAG_ENABLED
+  // The default polling VFS can discard bytes when the hardware FIFO fills.
+  // API replies require interrupt-driven buffering, including during host
+  // stalls.
+  usb_serial_jtag_driver_config_t config = {};
+  config.tx_buffer_size = 4096;
+  config.rx_buffer_size = 2048;
+  ESP_ERROR_CHECK(usb_serial_jtag_driver_install(&config));
+  usb_serial_jtag_vfs_use_driver();
+#endif
   xTaskCreate(console, "usb_api", 12288, nullptr, 4, nullptr);
 }
 } // namespace labbridge::esp
