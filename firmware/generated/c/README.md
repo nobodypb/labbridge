@@ -69,8 +69,13 @@ Category | Method | HTTP request | Description
 
 ## Documentation for Models
 
+ - [actuator_settings_t](docs/actuator_settings.md)
+ - [actuator_state_t](docs/actuator_state.md)
  - [cell_temperature_guard_t](docs/cell_temperature_guard.md)
+ - [component_t](docs/component.md)
+ - [component_list_t](docs/component_list.md)
  - [current_request_t](docs/current_request.md)
+ - [cutoff_request_t](docs/cutoff_request.md)
  - [device_t](docs/device.md)
  - [device_configuration_t](docs/device_configuration.md)
  - [device_list_t](docs/device_list.md)
@@ -79,6 +84,8 @@ Category | Method | HTTP request | Description
  - [dl24m_register_t](docs/dl24m_register.md)
  - [dl24m_registers_t](docs/dl24m_registers.md)
  - [dl24m_settings_t](docs/dl24m_settings.md)
+ - [duration_request_t](docs/duration_request.md)
+ - [ina228_configuration_t](docs/ina228_configuration.md)
  - [interlock_configuration_t](docs/interlock_configuration.md)
  - [lease_t](docs/lease.md)
  - [lease_request_t](docs/lease_request.md)
@@ -90,6 +97,8 @@ Category | Method | HTTP request | Description
  - [output_request_t](docs/output_request.md)
  - [problem_t](docs/problem.md)
  - [safety_limits_t](docs/safety_limits.md)
+ - [sensor_reading_t](docs/sensor_reading.md)
+ - [sensor_readings_t](docs/sensor_readings.md)
  - [stop_request_t](docs/stop_request.md)
  - [switch_path_request_t](docs/switch_path_request.md)
  - [temperature_channel_t](docs/temperature_channel.md)
@@ -99,6 +108,7 @@ Category | Method | HTTP request | Description
  - [wifi_request_t](docs/wifi_request.md)
  - [wifi_scan_t](docs/wifi_scan.md)
  - [wifi_state_t](docs/wifi_state.md)
+ - [yocto_watt_configuration_t](docs/yocto_watt_configuration.md)
 
 
 ## Documentation for Authorization

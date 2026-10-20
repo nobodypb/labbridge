@@ -36,6 +36,22 @@ struct Device : Driver {
     return Json::parse(R"({"status":"succeeded"})");
   }
 };
+struct ComponentSensor : Device {
+  ComponentSensor() : Device("component-sensor") {}
+  Json measurements(uint64_t) override { return Json(); }
+  Json components(uint64_t) override {
+    return Json::parse(
+        R"([{"id":"cell-a","kind":"sensor","quantity":"temperature","unit":"degC","temperature_kind":"external_probe","actions":[]}])");
+  }
+  Json component_reading(const std::string &, uint64_t now) override {
+    Json r;
+    r.set("quality", fresh ? "valid" : "stale")
+        .set("value", 25.)
+        .set("received_ms", double(now))
+        .set("age_ms", 0.);
+    return r;
+  }
+};
 int main() {
   Node n("n", "boot", "sim");
   auto source = std::make_shared<Device>("source"),
@@ -58,4 +74,22 @@ int main() {
   sensor->fresh = false;
   n.tick(3);
   assert(!source->on && source->stopped == 1);
+  Node abstract("n", "boot", "sim");
+  auto actor = std::make_shared<Device>("actor");
+  auto external = std::make_shared<ComponentSensor>();
+  abstract.add("actor", actor);
+  abstract.add("probe", external);
+  abstract.cell_guard("actor", {"probe", "cell-a", 0, 45, 1000});
+  auto lease =
+      abstract.request("POST", "/api/v1/leases",
+                       Json::parse(R"({"device_ids":["actor"]})"), {}, 0);
+  auto enabled = abstract.request("PUT", "/api/v1/devices/actor/output",
+                                  Json::parse(R"({"enabled":true})"),
+                                  {{"X-Lab-Lease", lease.body.text("id")},
+                                   {"Idempotency-Key", "abstract-on"}},
+                                  1);
+  assert(enabled.status == 202 && actor->on);
+  external->fresh = false;
+  abstract.tick(2);
+  assert(!actor->on);
 }

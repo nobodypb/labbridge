@@ -4,7 +4,7 @@ This is a development baseline, not a fully commissioned battery-test system.
 
 ## Automated acceptance
 
-- 18 portable C++ behavior executables cover framing, queued transactions,
+- 20 portable C++ behavior executables cover framing, queued transactions,
   connection changes, resource validation, driver identity, leases, idempotency,
   local guards, per-activation deadlines, interlock feedback and temperature.
 - Python tests validate actual runtime responses against OpenAPI, generated
@@ -12,7 +12,7 @@ This is a development baseline, not a fully commissioned battery-test system.
   propagation. Host tests include both chemistries through complete simulated
   cycles, cleanup and reboot rejection, plus the CLI.
 - The frozen baseline's codec/controller and 13 Python tests remain mandatory.
-- Three UI policy tests and four browser scenarios cover Wi-Fi scan/select/PSK,
+- Three UI policy tests and five browser scenarios cover Wi-Fi scan/select/PSK,
   operation polling, lease/output behavior, unknown-state STOP and mixed modules.
 - CI regenerates the API, checks drift, builds Python/TypeScript/C and firmware
   for StickS3, ESP32-S3-USB-OTG and classic ESP32. Board builds do not establish
@@ -55,3 +55,27 @@ and private pre-migration backup remain outside the public repository.
   source reverse-current protection and external cell probe before any battery run.
 
 Hardware acceptance stays open in LB-014; no simulated result closes it.
+
+
+## Component and optional-meter extension
+
+Portable checks cover source/sink routing, multiple actors on one physical
+device, independently addressed STOP/state, signed scalar readings and common
+external-temperature guards. Both chemistries complete direct-output and feedback
+routing scenarios. An inline signed meter contributes capacity/energy; additional
+temperature logging, stale-meter cleanup and reboot boundaries are checked.
+Native Yocto USB is exercised through the generated API with injected SDK data;
+the installed official SDK imports and the offline path returns unavailable.
+INA228 tests cover identity, calibration, signed current/charge, conversion-ready,
+overflow and freshness. Five browser scenarios include a composite source and a
+read-only meter. Actual INA228 shunt accuracy, Yocto USB/network sampling and
+all new sensor wiring remain uncommissioned. No new battery hardware run occurred.
+
+
+The common component routes were also exercised on the physical StickS3/DL24M:
+discovery, actor state and scalar readings, then eight verified operations
+(current 0.150/0.100 A, cutoff 0.8/0.7 V, timer 60/0 s, bounded ON and independent
+component STOP). Confirmations use A/V/s with units. The pulse measured 23.990 V /
+0.100 A. All 14 original settings, CC 0.100 A and confirmed OFF were restored;
+22/22 audited registers remained valid. This extends the DL24M evidence and does
+not commission the optional new meter hardware.

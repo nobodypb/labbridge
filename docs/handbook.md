@@ -201,7 +201,8 @@ power/temperature limits, charge termination, discharge cutoff, durations, rest
 and pulse settings. Support begins with **1S Li-ion and 1S LiFePO4**. Example
 profiles are commissioning templates, not universal cell specifications. Use
 limits from the actual cell manufacturer. Require a fresh external cell probe,
-a feedback interlock, a source and load with confirmed OFF before transitions.
+a source and load with confirmed OFF before transitions. A feedback interlock
+is optional; when configured its feedback and break-before-make checks apply.
 Internal temperatures are useful device-health measurements only.
 
 Charge uses source CC/CV and termination current plus a timeout; discharge uses
@@ -224,12 +225,12 @@ from labbridge_generated.models.output_request import OutputRequest
 with Node("serial:/dev/ttyACM0") as node:
     with Cluster({"bench": node}).lease({"bench": ["load"]}) as session:
         args = dict(device_id="load", x_lab_lease=session.token("bench"))
-        node.wait(node.dl24m.set_load_current(
-            **args, idempotency_key=uuid.uuid4().hex,
+        node.wait(node.components.set_component_current(
+            **args, component_id="sink", idempotency_key=uuid.uuid4().hex,
             current_request=CurrentRequest(current_a=0.1)))
         # Optional bounded enable, after commissioning the connected circuit:
-        # node.wait(node.core.set_output(
-        #     **args, idempotency_key=uuid.uuid4().hex,
+        # node.wait(node.components.set_component_output(
+        #     **args, component_id="sink", idempotency_key=uuid.uuid4().hex,
         #     output_request=OutputRequest(enabled=True, max_duration_ms=1000)))
         node.stop("load")
 ```
@@ -261,7 +262,9 @@ switched current paths, so rest measurements remain meaningful. Commission this
 wiring against a meter before running. A source path must use a verified battery
 connection and reverse-current protection suitable for the source; an isolated
 or powered-down ordinary PSU output is not automatically safe to backfeed.
-Switch feedback must represent the actual current path, not just an output pin.
+When a switch is installed, its feedback must represent the actual current path,
+not just an output pin. Without one, confirmed instrument OFF is the transition
+mechanism; it does not imply galvanic isolation or reverse-current blocking.
 
 Every controlled node needs a local temperature guard and cell-sized voltage,
 current and power limits. Host profile ceilings are separate from requested
@@ -273,8 +276,8 @@ with nonblocking node access to a conversion worker and explicit probe identity.
 
 The Python runner performs preflight, snapshots original source/load settings,
 reserves nodes, charges in CC/CV to termination, rests, pulses and discharges to
-cutoff for each cycle. It keeps the source path isolated until the source is
-configured and enabled. Voltage changes first reduce the source current setting
+cutoff for each cycle. With a feedback switch it keeps the source path isolated until the source is
+configured and enabled. Direct routing starts with both instrument outputs OFF. Voltage changes first reduce the source current setting
 to zero, so intermediate setpoints stay within the local power limit. STOP requests to source, load and interlock are attempted
 independently. Active phases supply local duration caps. Host/lease failures do
 not start another phase. There is no distributed atomic transaction across nodes.
@@ -360,3 +363,122 @@ Their voltage/current fields are coarser than numeric replies; capacity/energy
 scales remain uncalibrated. Use the audited numeric registers and host V/I
 integration for quantitative automation. Numeric replies may be interleaved
 with these notifications and must be parsed as an independent frame stream.
+
+
+## Device components: the common integration API
+
+A physical device owns its transport identity, leases and recovery. It exposes
+any number of components: `source`, `sink` or `sensor`. A source/load combination,
+a multi-channel source, and a monitor with several electrical/temperature channels
+therefore use the same public interfaces. `Device.components` and
+`GET /devices/{id}/components` describe component IDs, kind, supported actions,
+and sensor quantity/unit. Do not infer purpose from the model name.
+
+| Route below `/api/v1/devices/{deviceId}` | Purpose |
+|---|---|
+| `GET /components` | Component discovery |
+| `GET /readings` | One sensor snapshot with per-channel freshness |
+| `GET /components/{componentId}/measurement` | Scalar reading in its declared unit |
+| `GET /components/{componentId}/state` | Actor state and typed settings |
+| `PUT /components/{componentId}/current` | Source current limit or sink CC target |
+| `PUT /components/{componentId}/voltage` | Source voltage target |
+| `PUT /components/{componentId}/cutoff` | Sink cutoff, when advertised |
+| `PUT /components/{componentId}/duration` | Instrument timer, when advertised |
+| `PUT /components/{componentId}/output` | Bounded actor enable/disable |
+| `POST /components/{componentId}/stop` | Priority stop, no lease required |
+
+Writes keep the same lease, idempotency, operation polling and readback rules.
+`Operation.component_id` identifies the target when a component route was used.
+Component operations report `requested_value/unit` and, on success,
+`confirmed_value/unit` in the common interface units. Compatibility operations
+retain their earlier raw confirmation behavior.
+Leases and in-flight protocol operations are currently serialized per physical
+device. Component STOP defaults to whole-device STOP; multi-channel drivers may
+implement a confirmed narrower stop. Lease expiry/device STOP always stops all
+actors on that device. Never assume sibling channels remain enabled after STOP
+unless the provider documents that guarantee.
+
+Use the generated `ComponentsApi`, `node.components`, or the CLI's `call
+components.<method>`. These APIs do not require a model-specific command. The
+old DL24M/RD60xx routes remain compatibility/specialized interfaces. Supported
+precision is enforced by the driver; targets are never silently rounded.
+
+Sensor values preserve sign and state their quantity/unit (`V`, `A`, `W`, `Wh`,
+`Ah`, `degC`, or dimensionless `1`). A valid value must also have acceptable age;
+an unavailable value is never a fabricated zero. Pair sequence and `boot_id` with
+an optional sensor `epoch`: an upstream monitor can restart while its ESP stays
+running. Do not integrate across either boundary. Internal temperatures remain
+explicitly distinct from external/cell probes. Local cell guards accept both
+component IDs and the earlier native temperature channel IDs.
+
+## Optional meters and direct-output battery routing
+
+Omit `interlock` from workflow bindings to switch direction using confirmed
+source/load OFF. Keep it to use the existing feedback switch module. OFF and
+settings cleanup still apply independently to each physical device. A direct
+layout must be commissioned for the actual instruments' off-state behavior and
+reverse current; the workflow cannot turn an unsuitable output circuit into an
+isolating switch. Maintain continuous cell-voltage sensing during rest.
+
+Actors are bound with `{node, device, component}`. Existing bindings without
+`component` use `source` and `sink` defaults. Optional `meters` bindings select a
+measurement provider for `charge`, `discharge` and `rest`. Each selects voltage,
+current and power component IDs (defaults `voltage/current/power`) and explicit
+`current_sign` / `power_sign` of +1 or -1. Verify orientation with known current;
+no absolute-value conversion hides a reversed connection. INA228 power is
+unsigned, so its power sign stays +1 even when current changes direction.
+
+CSV retains raw and normalized I/P plus measurement and actor identities.
+Integration uses selected current and measured power, rather than recomputing
+power when an independent meter is selected. Actor telemetry and local safeguards
+remain active. Stale/missing/mixed-sequence data, a changed sensor epoch or reboot
+aborts the run. Additional `sensors` bindings select any sensor component and a
+label, with optional `minimum`/`maximum`; they are recorded in `sensors.csv`.
+Additional internal temperatures are useful for diagnostics and do not replace
+the mandatory external cell probe.
+
+The direct INA228 and Yocto binding examples are under `examples/battery/`.
+Both are optional: omitting meters uses instrument telemetry, and omitting extra
+sensors leaves only the cell-temperature channel. Both chemistries support either
+routing arrangement. These remain commissioning templates.
+
+## INA228
+
+The ESP driver uses I²C0 with an explicitly approved SDA/SCL pair and decimal
+address 64–79. Multiple addresses may share that same pair; other pin conflicts
+and duplicate addresses are rejected. External pull-ups and suitable voltage
+levels are part of the wiring. `ina228` configuration requires `shunt_ohms`,
+`max_current_a` and `adc_range`; full-scale and calibration representability are
+validated before allocation.
+
+The monitor exposes bus V, signed A, unsigned W, accumulated Wh, signed Ah and
+internal die temperature. Calibration is quantized to the actual programmed
+register. Continuous conversion with averaging is used; conversion-ready,
+identity/configuration checks, saturation and overflow prevent false fresh
+values. Counters are relative to the first validated sample of the sensor epoch, so
+prior calibration cannot corrupt their scale; hardware counters are not reset.
+Counter overflow suppresses the affected counter channel. Reinitializing
+the monitor advances its sensor epoch. Register conversions follow the
+[TI INA228 datasheet](https://www.ti.com/lit/ds/symlink/ina228.pdf).
+Hardware/shunt calibration and absolute accuracy have not been commissioned.
+
+## Yocto-Watt-V2-C
+
+For native USB on the automation PC, install `host[yocto]` and configure a named
+node endpoint `yocto+usb://YWATMK2C-<serial>`. The SDK provider exposes a read-only
+device `meter` through the same generated discovery/sensor API. The official
+Yoctopuce library handles USB and user calibration. Multiple serials can share
+its USB session. Ensure the OS grants USB access to the application; only one
+native USB owner may hold a device at a time.
+
+For ESP access, the `yocto_watt` HTTP provider reads a serial-bound module from
+VirtualHub/YoctoHub; use a reachable plain HTTP hub URL without credentials/path.
+It validates identity/status/units and decodes fixed-point values. Custom user
+calibration requires the native SDK provider. This ESP backend does not implement
+the vendor's native USB protocol; the USB serial-adapter driver is unrelated.
+
+Channels are DC V/A, active W, optional AC RMS V/A and power factor. Current is
+normalized from mA to A while preserving direction. Disabled/unavailable channels
+remain unavailable. The implementation follows the manufacturer's
+[user guide](https://www.yoctopuce.com/EN/products/yocto-watt-v2-c/doc/YWATMK2C.usermanual.html).
+No physical Yocto-Watt has yet been exercised in this project.

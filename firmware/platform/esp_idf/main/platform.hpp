@@ -32,4 +32,7 @@ namespace labbridge::esp {
 std::vector<int> pins(const Json &);
 std::shared_ptr<Driver> switch_driver(const Json &);
 std::shared_ptr<Driver> probe_driver(const Json &);
+std::shared_ptr<Driver> ina228_driver(const Json &);
+std::shared_ptr<Driver> yocto_watt_driver(const Json &);
+bool valid_hub_url(const std::string &);
 } // namespace labbridge::esp

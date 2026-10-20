@@ -34,6 +34,20 @@ import {
     InterlockConfigurationToJSON,
     InterlockConfigurationToJSONTyped,
 } from './InterlockConfiguration';
+import type { Ina228Configuration } from './Ina228Configuration';
+import {
+    Ina228ConfigurationFromJSON,
+    Ina228ConfigurationFromJSONTyped,
+    Ina228ConfigurationToJSON,
+    Ina228ConfigurationToJSONTyped,
+} from './Ina228Configuration';
+import type { YoctoWattConfiguration } from './YoctoWattConfiguration';
+import {
+    YoctoWattConfigurationFromJSON,
+    YoctoWattConfigurationFromJSONTyped,
+    YoctoWattConfigurationToJSON,
+    YoctoWattConfigurationToJSONTyped,
+} from './YoctoWattConfiguration';
 
 /**
  * 
@@ -76,7 +90,7 @@ export interface DeviceConfiguration {
      * @type {SafetyLimits}
      * @memberof DeviceConfiguration
      */
-    limits: SafetyLimits;
+    limits?: SafetyLimits;
     /**
      * 
      * @type {CellTemperatureGuard}
@@ -89,6 +103,24 @@ export interface DeviceConfiguration {
      * @memberof DeviceConfiguration
      */
     interlock?: InterlockConfiguration;
+    /**
+     * 
+     * @type {Ina228Configuration}
+     * @memberof DeviceConfiguration
+     */
+    ina228?: Ina228Configuration;
+    /**
+     * 
+     * @type {YoctoWattConfiguration}
+     * @memberof DeviceConfiguration
+     */
+    yoctoWatt?: YoctoWattConfiguration;
+    /**
+     * 
+     * @type {number}
+     * @memberof DeviceConfiguration
+     */
+    sensorMaxAgeMs?: number;
 }
 
 /**
@@ -99,7 +131,6 @@ export function instanceOfDeviceConfiguration(value: object): value is DeviceCon
     if (!('driver' in value) || value['driver'] === undefined) return false;
     if (!('transport' in value) || value['transport'] === undefined) return false;
     if (!('endpoint' in value) || value['endpoint'] === undefined) return false;
-    if (!('limits' in value) || value['limits'] === undefined) return false;
     return true;
 }
 
@@ -118,9 +149,12 @@ export function DeviceConfigurationFromJSONTyped(json: any, ignoreDiscriminator:
         'transport': json['transport'],
         'endpoint': json['endpoint'],
         'pins': json['pins'] == null ? undefined : json['pins'],
-        'limits': SafetyLimitsFromJSON(json['limits']),
+        'limits': json['limits'] == null ? undefined : SafetyLimitsFromJSON(json['limits']),
         'cellTemperature': json['cell_temperature'] == null ? undefined : CellTemperatureGuardFromJSON(json['cell_temperature']),
         'interlock': json['interlock'] == null ? undefined : InterlockConfigurationFromJSON(json['interlock']),
+        'ina228': json['ina228'] == null ? undefined : Ina228ConfigurationFromJSON(json['ina228']),
+        'yoctoWatt': json['yocto_watt'] == null ? undefined : YoctoWattConfigurationFromJSON(json['yocto_watt']),
+        'sensorMaxAgeMs': json['sensor_max_age_ms'] == null ? undefined : json['sensor_max_age_ms'],
     };
 }
 
@@ -143,6 +177,9 @@ export function DeviceConfigurationToJSONTyped(value?: DeviceConfiguration | nul
         'limits': SafetyLimitsToJSON(value['limits']),
         'cell_temperature': CellTemperatureGuardToJSON(value['cellTemperature']),
         'interlock': InterlockConfigurationToJSON(value['interlock']),
+        'ina228': Ina228ConfigurationToJSON(value['ina228']),
+        'yocto_watt': YoctoWattConfigurationToJSON(value['yoctoWatt']),
+        'sensor_max_age_ms': value['sensorMaxAgeMs'],
     };
 }
 

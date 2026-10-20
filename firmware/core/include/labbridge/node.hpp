@@ -21,6 +21,15 @@ public:
   virtual void stop(uint64_t) = 0;
   virtual Json execute(const std::string &, const Json &, uint64_t) = 0;
   virtual Json operation(uint64_t) { return Json(); }
+  virtual Json components(uint64_t now);
+  virtual Json sensor_readings(uint64_t now);
+  virtual Json component_reading(const std::string &id, uint64_t now);
+  virtual Json actuator_state(const std::string &id, uint64_t now);
+  virtual void stop_component(const std::string &, uint64_t now) { stop(now); }
+  virtual Json actuator_settings(const std::string &id, uint64_t now);
+  virtual std::string component_command(const std::string &id,
+                                        const std::string &action,
+                                        uint64_t now);
   virtual bool safe_to_reconfigure(uint64_t now) {
     auto d = describe(now);
     return d.text("output") == "off" && d.text("state") == "ready";

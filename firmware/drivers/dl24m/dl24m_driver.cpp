@@ -133,7 +133,8 @@ int Dl24mDriver::output(uint64_t now) const {
   return fresh(0x10, now) && i->second.first <= 1 ? int(i->second.first) : -1;
 }
 bool Dl24mDriver::supports(const std::string &op) const {
-  return op == "setOutput" || op == "setLoadCurrent" ||
+  return op == "setSinkCutoff" || op == "setSinkDuration" ||
+         op == "setOutput" || op == "setLoadCurrent" ||
          op == "getDl24mSettings" || op == "getDl24mRegisters" ||
          op == "setDl24mBankTarget" || op == "readDl24mBankTarget" ||
          op == "setDl24mSettings" || op == "resetDl24mCounters";
@@ -169,6 +170,14 @@ Json Dl24mDriver::describe(uint64_t now) {
                                 : "unknown")
       .set("limits", lim);
   return j;
+}
+Json Dl24mDriver::actuator_settings(const std::string &id, uint64_t now) {
+  auto s = Driver::actuator_settings(id, now),
+       settings = execute("getDl24mSettings", Json(), now);
+  for (auto key : {"cutoff_voltage_v", "time_limit_s"})
+    if (settings.has(key))
+      s.set(key, settings.number(key));
+  return s;
 }
 Json Dl24mDriver::measurements(uint64_t now) {
   Json j;
@@ -434,6 +443,9 @@ void Dl24mDriver::tick(uint64_t now) {
 }
 Json Dl24mDriver::execute(const std::string &op, const Json &body,
                           uint64_t now) {
+  if (op == "setSinkCutoff" || op == "setSinkDuration")
+    return execute("setDl24mSettings", body, now);
+
   if (op == "getDl24mRegisters") {
     auto a = Json::array();
     for (auto &r : dl24m::dl24m_reads) {

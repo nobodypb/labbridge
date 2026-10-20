@@ -42,6 +42,16 @@ int main() {
     duplicate = true;
   }
   assert(duplicate);
+  Registry bus({"i2c-board", {{"i2c", 16}, {"gpio", 2}}, {4, 5, 6}});
+  bus.add({"meter-a", "ina228", "i2c", "64", {4, 5}});
+  bus.add({"meter-b", "ina228", "i2c", "65", {4, 5}});
+  bool crossed = false;
+  try {
+    bus.add({"bad", "ina228", "i2c", "66", {4, 6}});
+  } catch (const ConfigurationError &) {
+    crossed = true;
+  }
+  assert(crossed && bus.devices().size() == 2);
   auto classic = BoardProfile::esp32_devkit();
   assert(classic.capacity.at("ble") == 2 && classic.capacity.at("spp") == 0);
 }

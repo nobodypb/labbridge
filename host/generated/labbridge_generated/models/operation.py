@@ -40,7 +40,11 @@ class Operation(BaseModel):
     final_output: StrictStr
     restore_pending: StrictBool
     error: Optional[Problem] = None
-    __properties: ClassVar[List[str]] = ["id", "device_id", "status", "stage", "read_attempts", "write_attempts", "reconnects", "duration_ms", "confirmed_value", "final_output", "restore_pending", "error"]
+    component_id: Optional[StrictStr] = None
+    confirmed_unit: Optional[StrictStr] = None
+    requested_unit: Optional[StrictStr] = None
+    requested_value: Optional[Union[StrictFloat, StrictInt]] = None
+    __properties: ClassVar[List[str]] = ["id", "device_id", "status", "stage", "read_attempts", "write_attempts", "reconnects", "duration_ms", "confirmed_value", "final_output", "restore_pending", "error", "component_id", "confirmed_unit", "requested_unit", "requested_value"]
 
     @field_validator('status')
     def status_validate_enum(cls, value):
@@ -122,7 +126,11 @@ class Operation(BaseModel):
             "confirmed_value": obj.get("confirmed_value"),
             "final_output": obj.get("final_output"),
             "restore_pending": obj.get("restore_pending"),
-            "error": Problem.from_dict(obj["error"]) if obj.get("error") is not None else None
+            "error": Problem.from_dict(obj["error"]) if obj.get("error") is not None else None,
+            "component_id": obj.get("component_id"),
+            "confirmed_unit": obj.get("confirmed_unit"),
+            "requested_unit": obj.get("requested_unit"),
+            "requested_value": obj.get("requested_value")
         })
         return _obj
 

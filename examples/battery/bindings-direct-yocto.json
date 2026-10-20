@@ -1,0 +1,37 @@
+{
+  "source": {
+    "node": "source-node",
+    "device": "supply",
+    "component": "source"
+  },
+  "load": {
+    "node": "load-node",
+    "device": "load",
+    "component": "sink"
+  },
+  "cell_probe": {
+    "node": "switch-node",
+    "device": "probe",
+    "component": "temperature-cell"
+  },
+  "meters": {
+    "charge": {
+      "node": "yocto-meter",
+      "device": "meter",
+      "current_sign": 1,
+      "power_sign": 1
+    },
+    "discharge": {
+      "node": "yocto-meter",
+      "device": "meter",
+      "current_sign": -1,
+      "power_sign": -1
+    },
+    "rest": {
+      "node": "yocto-meter",
+      "device": "meter",
+      "current_sign": 1,
+      "power_sign": 1
+    }
+  }
+}

@@ -47,7 +47,8 @@ static device_t *device_create_internal(
     list_t *capabilities,
     labbridge_api_device_STATE_e state,
     labbridge_api_device_OUTPUT_e output,
-    safety_limits_t *limits
+    safety_limits_t *limits,
+    list_t *components
     ) {
     device_t *device_local_var = malloc(sizeof(device_t));
     if (!device_local_var) {
@@ -61,6 +62,7 @@ static device_t *device_create_internal(
     device_local_var->state = state;
     device_local_var->output = output;
     device_local_var->limits = limits;
+    device_local_var->components = components;
 
     device_local_var->_library_owned = 1;
     return device_local_var;
@@ -74,7 +76,8 @@ __attribute__((deprecated)) device_t *device_create(
     list_t *capabilities,
     labbridge_api_device_STATE_e state,
     labbridge_api_device_OUTPUT_e output,
-    safety_limits_t *limits
+    safety_limits_t *limits,
+    list_t *components
     ) {
     return device_create_internal (
         id,
@@ -84,7 +87,8 @@ __attribute__((deprecated)) device_t *device_create(
         capabilities,
         state,
         output,
-        limits
+        limits,
+        components
         );
 }
 
@@ -123,6 +127,13 @@ void device_free(device_t *device) {
     if (device->limits) {
         safety_limits_free(device->limits);
         device->limits = NULL;
+    }
+    if (device->components) {
+        list_ForEach(listEntry, device->components) {
+            component_free(listEntry->data);
+        }
+        list_freeList(device->components);
+        device->components = NULL;
     }
     free(device);
 }
@@ -205,9 +216,7 @@ cJSON *device_convertToJSON(device_t *device) {
 
 
     // device->limits
-    if (!device->limits) {
-        goto fail;
-    }
+    if(device->limits) {
     cJSON *limits_local_JSON = safety_limits_convertToJSON(device->limits);
     if(limits_local_JSON == NULL) {
     goto fail; //model
@@ -215,6 +224,27 @@ cJSON *device_convertToJSON(device_t *device) {
     cJSON_AddItemToObject(item, "limits", limits_local_JSON);
     if(item->child == NULL) {
     goto fail;
+    }
+    }
+
+
+    // device->components
+    if(device->components) {
+    cJSON *components = cJSON_AddArrayToObject(item, "components");
+    if(components == NULL) {
+    goto fail; //nonprimitive container
+    }
+
+    listEntry_t *componentsListEntry;
+    if (device->components) {
+    list_ForEach(componentsListEntry, device->components) {
+    cJSON *itemLocal = component_convertToJSON(componentsListEntry->data);
+    if(itemLocal == NULL) {
+    goto fail;
+    }
+    cJSON_AddItemToArray(components, itemLocal);
+    }
+    }
     }
 
     return item;
@@ -234,6 +264,9 @@ device_t *device_parseFromJSON(cJSON *deviceJSON){
 
     // define the local variable for device->limits
     safety_limits_t *limits_local_nonprim = NULL;
+
+    // define the local list for device->components
+    list_t *componentsList = NULL;
 
     // device->id
     cJSON *id = cJSON_GetObjectItemCaseSensitive(deviceJSON, "id");
@@ -359,12 +392,33 @@ device_t *device_parseFromJSON(cJSON *deviceJSON){
     if (cJSON_IsNull(limits)) {
         limits = NULL;
     }
-    if (!limits) {
-        goto end;
+    if (limits) { 
+    limits_local_nonprim = safety_limits_parseFromJSON(limits); //nonprimitive
     }
 
-    
-    limits_local_nonprim = safety_limits_parseFromJSON(limits); //nonprimitive
+    // device->components
+    cJSON *components = cJSON_GetObjectItemCaseSensitive(deviceJSON, "components");
+    if (cJSON_IsNull(components)) {
+        components = NULL;
+    }
+    if (components) { 
+    cJSON *components_local_nonprimitive = NULL;
+    if(!cJSON_IsArray(components)){
+        goto end; //nonprimitive container
+    }
+
+    componentsList = list_createList();
+
+    cJSON_ArrayForEach(components_local_nonprimitive,components )
+    {
+        if(!cJSON_IsObject(components_local_nonprimitive)){
+            goto end;
+        }
+        component_t *componentsItem = component_parseFromJSON(components_local_nonprimitive);
+
+        list_addElement(componentsList, componentsItem);
+    }
+    }
 
 
     device_local_var = device_create_internal (
@@ -375,7 +429,8 @@ device_t *device_parseFromJSON(cJSON *deviceJSON){
         capabilitiesList,
         stateVariable,
         outputVariable,
-        limits_local_nonprim
+        limits ? limits_local_nonprim : NULL,
+        components ? componentsList : NULL
         );
 
     return device_local_var;
@@ -392,6 +447,15 @@ end:
     if (limits_local_nonprim) {
         safety_limits_free(limits_local_nonprim);
         limits_local_nonprim = NULL;
+    }
+    if (componentsList) {
+        listEntry_t *listEntry = NULL;
+        list_ForEach(listEntry, componentsList) {
+            component_free(listEntry->data);
+            listEntry->data = NULL;
+        }
+        list_freeList(componentsList);
+        componentsList = NULL;
     }
     return NULL;
 

@@ -18,7 +18,8 @@ import re  # noqa: F401
 import json
 
 from pydantic import BaseModel, ConfigDict, StrictStr, field_validator
-from typing import Any, ClassVar, Dict, List
+from typing import Any, ClassVar, Dict, List, Optional
+from labbridge_generated.models.component import Component
 from labbridge_generated.models.safety_limits import SafetyLimits
 from typing import Optional, Set
 from typing_extensions import Self
@@ -34,8 +35,9 @@ class Device(BaseModel):
     capabilities: List[StrictStr]
     state: StrictStr
     output: StrictStr
-    limits: SafetyLimits
-    __properties: ClassVar[List[str]] = ["id", "driver", "identity", "transport", "capabilities", "state", "output", "limits"]
+    limits: Optional[SafetyLimits] = None
+    components: Optional[List[Component]] = None
+    __properties: ClassVar[List[str]] = ["id", "driver", "identity", "transport", "capabilities", "state", "output", "limits", "components"]
 
     @field_validator('state')
     def state_validate_enum(cls, value):
@@ -94,6 +96,13 @@ class Device(BaseModel):
         # override the default output from pydantic by calling `to_dict()` of limits
         if self.limits:
             _dict['limits'] = self.limits.to_dict()
+        # override the default output from pydantic by calling `to_dict()` of each item in components (list)
+        _items = []
+        if self.components:
+            for _item_components in self.components:
+                if _item_components:
+                    _items.append(_item_components.to_dict())
+            _dict['components'] = _items
         return _dict
 
     @classmethod
@@ -113,7 +122,8 @@ class Device(BaseModel):
             "capabilities": obj.get("capabilities"),
             "state": obj.get("state"),
             "output": obj.get("output"),
-            "limits": SafetyLimits.from_dict(obj["limits"]) if obj.get("limits") is not None else None
+            "limits": SafetyLimits.from_dict(obj["limits"]) if obj.get("limits") is not None else None,
+            "components": [Component.from_dict(_item) for _item in obj["components"]] if obj.get("components") is not None else None
         })
         return _obj
 

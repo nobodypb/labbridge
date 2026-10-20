@@ -13,7 +13,8 @@ from pathlib import Path
 from labbridge_generated.models.current_request import CurrentRequest
 from labbridge_generated.models.voltage_request import VoltageRequest
 from labbridge_generated.models.output_request import OutputRequest
-from labbridge_generated.models.dl24m_settings import Dl24mSettings
+from labbridge_generated.models.cutoff_request import CutoffRequest
+from labbridge_generated.models.duration_request import DurationRequest
 from labbridge_generated.models.switch_path_request import SwitchPathRequest
 
 
@@ -120,11 +121,6 @@ class Profile:
             > self.max_power_w
         ):
             raise ValueError("Profile power limit is too low")
-        if (
-            abs(self.discharge_cutoff_v * 10 - round(self.discharge_cutoff_v * 10))
-            > 1e-6
-        ):
-            raise ValueError("DL24M cutoff requires 0.1 V steps")
 
 
 class Integrator:
@@ -134,27 +130,44 @@ class Integrator:
         self.ah = self.wh = 0.0
         self.accepted_s = self.excluded_s = 0.0
 
-    def add(self, t, v, a, valid, sequence, stage):
+    def add(self, t, v, a, valid, sequence, stage, power_w=None):
         if not valid or not all(math.isfinite(x) for x in (t, v, a)) or v < 0 or a < 0:
             self.previous = None
             return
-        current = (t, v, a, sequence, stage)
+        power = v * a if power_w is None else power_w
+        if not math.isfinite(power) or power < 0:
+            self.previous = None
+            return
+        current = (t, v, a, sequence, stage, power)
         if self.previous:
-            pt, pv, pa, ps, pstage = self.previous
+            pt, pv, pa, ps, pstage, pp = self.previous
             dt = t - pt
             if 0 < dt <= self.max_gap_s and sequence != ps and stage == pstage:
                 self.ah += (pa + a) * dt / 7200
-                self.wh += (pv * pa + v * a) * dt / 7200
+                self.wh += (pp + power) * dt / 7200
                 self.accepted_s += dt
             elif dt > 0:
                 self.excluded_s += dt
         self.previous = current
 
 
+def binding_nodes(bindings):
+    refs = [
+        bindings[k]
+        for k in ("source", "load", "interlock", "cell_probe")
+        if k in bindings
+    ]
+    refs += list(bindings.get("meters", {}).values()) + list(
+        bindings.get("sensors", [])
+    )
+    return {ref["node"] for ref in refs}
+
+
 @dataclasses.dataclass(frozen=True)
 class Ref:
     node: str
     device: str
+    component: str = ""
 
 
 class Runner:
@@ -171,15 +184,36 @@ class Runner:
         profile.validate()
         self.cluster, self.profile = cluster, profile
         self.refs = {
-            k: Ref(**v)
+            k: Ref(
+                **{
+                    **v,
+                    "component": v.get(
+                        "component",
+                        "sink" if k == "load" else "source" if k == "source" else "",
+                    ),
+                }
+            )
             for k, v in bindings.items()
             if k in ("source", "load", "interlock")
         }
-        if set(self.refs) != set(("source", "load", "interlock")):
-            raise ValueError("Source, load and interlock bindings required")
-        if len(set(self.refs.values())) != 3:
-            raise ValueError("Roles must use distinct devices")
+        if not {"source", "load"}.issubset(self.refs):
+            raise ValueError("Source and load bindings required; interlock is optional")
+        if len(set(self.refs.values())) != len(self.refs):
+            raise ValueError("Roles must use distinct components")
         self.probe = bindings["cell_probe"]
+        self.meters = bindings.get("meters", {})
+        if set(self.meters) - {"charge", "discharge", "rest"}:
+            raise ValueError("Meter phases are charge, discharge and rest")
+        for meter in self.meters.values():
+            if meter.get("current_sign", 1) not in (-1, 1) or meter.get(
+                "power_sign", 1
+            ) not in (-1, 1):
+                raise ValueError("Meter current_sign/power_sign must be +1 or -1")
+        self.extra_sensors = bindings.get("sensors", [])
+        self.sensor_epochs = {}
+        self.actor_actions = {}
+        self.sensor_writer = None
+        self.probe_component = None
         self.clock, self.sleep = clock, sleep
         self.directory = Path(output_dir)
         self.directory.mkdir(parents=True, exist_ok=False)
@@ -191,6 +225,9 @@ class Runner:
             "started_at": datetime.datetime.now(datetime.timezone.utc).isoformat(),
             "nodes": {},
             "status": "preflight",
+            "routing": (
+                "feedback-interlock" if "interlock" in self.refs else "direct-outputs"
+            ),
         }
         self.original = {}
         self.session = None
@@ -204,6 +241,11 @@ class Runner:
 
     def arguments(self, role):
         return dict(
+            **(
+                {"component_id": self.refs[role].component}
+                if role in ("source", "load")
+                else {}
+            ),
             device_id=self.device(role),
             x_lab_lease=self.session.token(self.refs[role].node),
             idempotency_key=uuid.uuid4().hex,
@@ -214,31 +256,61 @@ class Runner:
         node = self.node(role)
         return node.wait(method(**self.arguments(role), **kwargs))
 
+    def read_sensor(self, ref, component):
+        node = self.cluster.nodes[ref["node"]]
+        sample = node.components.get_component_reading(
+            ref["device"], component, _request_timeout=2.0
+        )
+        self.check_sensor_boot(ref["node"], sample.boot_id)
+        key = (ref["node"], ref["device"], component)
+        epoch = getattr(sample, "epoch", None)
+        if key in self.sensor_epochs and self.sensor_epochs[key] != epoch:
+            raise RuntimeError("Sensor restarted; measurement continuity lost")
+        self.sensor_epochs[key] = epoch
+        if (
+            sample.quality != "valid"
+            or sample.age_ms > 3000
+            or sample.value is None
+            or not math.isfinite(sample.value)
+        ):
+            raise RuntimeError("Fresh sensor reading required")
+        return sample
+
+    def check_sensor_boot(self, name, boot_id):
+        expected = self.metadata["nodes"][name]["info"]["boot_id"]
+        if boot_id != expected:
+            raise RuntimeError(
+                "Node reboot detected; samples cannot be integrated across boots"
+            )
+
     def temperature(self):
         probe = self.probe
-        reading = self.cluster.nodes[probe["node"]].core.get_measurements(
-            probe["device"], _request_timeout=2.0
+        component = probe.get(
+            "component", "temperature-" + probe.get("channel", "cell")
         )
-        channel = next(
-            (c for c in reading.temperature_channels if c.id == probe["channel"]), None
-        )
+        if self.probe_component is None:
+            descriptors = (
+                self.cluster.nodes[probe["node"]]
+                .components.list_components(probe["device"])
+                .components
+            )
+            channel = next((c for c in descriptors if c.id == component), None)
+            if (
+                channel is None
+                or channel.quantity != "temperature"
+                or channel.temperature_kind not in ("cell", "external_probe")
+            ):
+                raise RuntimeError("External cell-temperature component required")
+            self.probe_component = component
+        sample = self.read_sensor(probe, component)
         if (
-            channel is None
-            or channel.kind not in ("cell", "external_probe")
-            or channel.quality != "valid"
-            or channel.age_ms > 3000
-            or channel.value_c is None
-        ):
-            raise RuntimeError("Fresh external cell-temperature channel required")
-        value = channel.value_c
-        if (
-            not math.isfinite(value)
+            sample.unit != "degC"
             or not self.profile.minimum_temperature_c
-            <= value
+            <= sample.value
             <= self.profile.maximum_temperature_c
         ):
             raise RuntimeError("Cell temperature outside profile")
-        return value
+        return sample.value
 
     def preflight(self):
         p = self.profile
@@ -247,7 +319,7 @@ class Runner:
             "load": "load.cc",
             "interlock": "switch.feedback",
         }
-        required_nodes = {ref.node for ref in self.refs.values()} | {self.probe["node"]}
+        required_nodes = binding_nodes(self.metadata["bindings"])
         for name in sorted(required_nodes):
             node = self.cluster.nodes[name]
             info = node.core.get_node()
@@ -257,23 +329,50 @@ class Runner:
                 "configuration": config.to_dict(),
             }
         identities = set()
+        owners = {}
         for role, ref in self.refs.items():
             node = self.node(role)
             d = node.core.get_device(ref.device)
-            identity = (d.driver, d.identity)
+            physical = (d.driver, d.identity)
+            if physical in owners and owners[physical] != (ref.node, ref.device):
+                raise RuntimeError("A physical actuator device requires one owner node")
+            owners[physical] = (ref.node, ref.device)
+            identity = (d.driver, d.identity, ref.component)
             if identity in identities:
                 raise RuntimeError(
-                    "Duplicate physical instrument identity across workflow roles"
+                    "Duplicate physical component identity across workflow roles"
                 )
             identities.add(identity)
             if (
                 d.state != "ready"
                 or d.output != "off"
-                or capabilities[role] not in d.capabilities
+                or (role == "interlock" and capabilities[role] not in d.capabilities)
             ):
                 raise RuntimeError(
                     f"{role}: confirmed OFF and required capabilities needed"
                 )
+            actor_state = None
+            if role in ("source", "load"):
+                descriptors = node.components.list_components(ref.device).components
+                component = next(
+                    (c for c in descriptors if c.id == ref.component), None
+                )
+                if component is None or component.kind != (
+                    "source" if role == "source" else "sink"
+                ):
+                    raise RuntimeError("Configured actor component unavailable")
+                self.actor_actions[role] = set(component.actions)
+                actor_state = node.components.get_actuator_state(
+                    ref.device, ref.component
+                )
+                if (
+                    actor_state.output != "off"
+                    or actor_state.state != "ready"
+                    or d.limits is None
+                ):
+                    raise RuntimeError(
+                        "Ready actor with confirmed OFF and local limits required"
+                    )
             cfg = self.metadata["nodes"][ref.node]["configuration"]
             configured = next(x for x in cfg["devices"] if x["id"] == ref.device)
             guard = configured.get("cell_temperature")
@@ -319,9 +418,15 @@ class Runner:
                     )
             sample = node.core.get_measurements(ref.device)
             if role == "source":
-                if sample.set_voltage_v is None or sample.set_current_a is None:
+                if (
+                    actor_state.settings.voltage_v is None
+                    or actor_state.settings.current_a is None
+                ):
                     raise RuntimeError("Source setpoint snapshot unavailable")
-                self.original["source"] = (sample.set_voltage_v, sample.set_current_a)
+                self.original["source"] = (
+                    actor_state.settings.voltage_v,
+                    actor_state.settings.current_a,
+                )
             elif role == "load":
                 if (
                     sample.quality != "valid"
@@ -334,16 +439,20 @@ class Runner:
                     raise RuntimeError(
                         "Commission the Kelvin cell-voltage sense connection before running"
                     )
-                settings = node.dl24m.get_dl24m_settings(ref.device)
+                settings = actor_state.settings
                 if (
-                    sample.set_current_a is None
-                    or settings.mode != 0
+                    settings.current_a is None
+                    or settings.regulation_mode != "cc"
                     or settings.cutoff_voltage_v is None
-                    or settings.time_limit_s is None
+                    or "cutoff" not in self.actor_actions[role]
                 ):
                     raise RuntimeError("CC load/settings snapshot unavailable")
-                self.original["load"] = (sample.set_current_a, settings)
+                self.original["load"] = (settings.current_a, settings)
         self.temperature()
+        for meter in self.meters.values():
+            self.meter_sample(meter)
+        for extra in self.extra_sensors:
+            self.extra_sensor_sample(extra)
         source_v, source_a = self.original["source"]
         load_a, settings = self.original["load"]
         self.metadata["original_settings"] = {
@@ -356,55 +465,172 @@ class Runner:
         path.write_text(json.dumps(self.metadata, indent=2) + "\n")
         path.replace(self.directory / "run.json")
 
+    def remember_epoch(self, node, device, reading):
+        self.check_sensor_boot(node, reading.boot_id)
+        key = (node, device, reading.component_id)
+        epoch = getattr(reading, "epoch", None)
+        if key in self.sensor_epochs and self.sensor_epochs[key] != epoch:
+            raise RuntimeError("Sensor restarted; measurement continuity lost")
+        self.sensor_epochs[key] = epoch
+
+    def meter_sample(self, ref):
+        result = self.cluster.nodes[ref["node"]].components.get_sensor_readings(
+            ref["device"], _request_timeout=2.0
+        )
+        self.check_sensor_boot(ref["node"], result.boot_id)
+        by_id = {r.component_id: r for r in result.readings}
+        values = {}
+        selected = []
+        for quantity, unit in [("voltage", "V"), ("current", "A"), ("power", "W")]:
+            key = ref.get(quantity + "_component", quantity)
+            r = by_id.get(key)
+            if (
+                r is None
+                or r.quantity != quantity
+                or r.unit != unit
+                or r.quality != "valid"
+                or r.age_ms > 3000
+                or r.value is None
+                or not math.isfinite(r.value)
+            ):
+                raise RuntimeError("Fresh DC meter components in SI units required")
+            self.remember_epoch(ref["node"], ref["device"], r)
+            values[quantity] = r.value
+            selected.append(r)
+        if len({r.sequence for r in selected}) != 1:
+            raise RuntimeError("Meter readings are not from one sample")
+        values.update(
+            node=ref["node"],
+            device=ref["device"],
+            sequence=selected[0].sequence,
+            boot_id=result.boot_id,
+            age_ms=max(r.age_ms for r in selected),
+            quality="valid",
+        )
+        return values
+
+    def extra_sensor_sample(self, ref):
+        sample = self.read_sensor(ref, ref["component"])
+        if (
+            "minimum" in ref
+            and sample.value < ref["minimum"]
+            or "maximum" in ref
+            and sample.value > ref["maximum"]
+        ):
+            raise RuntimeError("Additional sensor outside configured range")
+        return sample
+
     def sample(self, stage, role):
+        from types import SimpleNamespace
+
         self.session.check()
         temperature = self.temperature()
-        m = self.node(role).core.get_measurements(
+        actor = self.node(role).core.get_measurements(
             self.device(role), _request_timeout=2.0
         )
-        expected_boot = self.metadata["nodes"][self.refs[role].node]["info"]["boot_id"]
-        if m.boot_id != expected_boot:
-            raise RuntimeError(
-                "Node reboot detected; samples cannot be integrated across boots"
+        self.check_sensor_boot(self.refs[role].node, actor.boot_id)
+        if (
+            actor.quality != "valid"
+            or actor.age_ms > 3000
+            or any(
+                v is None or not math.isfinite(v)
+                for v in (actor.voltage_v, actor.current_a, actor.power_w)
             )
-        valid = (
-            m.quality == "valid"
-            and m.age_ms <= 3000
-            and m.voltage_v is not None
-            and m.current_a is not None
+        ):
+            raise RuntimeError(f"{role}: stale/unavailable measurements")
+        if (
+            actor.voltage_v > self.profile.maximum_voltage_v
+            or abs(actor.current_a) > self.profile.maximum_current_a
+            or abs(actor.power_w) > self.profile.max_power_w
+        ):
+            raise RuntimeError("Actor measurement exceeds profile")
+        phase = (
+            "charge"
+            if stage.endswith(":charge")
+            else (
+                "discharge"
+                if stage.endswith(":discharge") or ":pulse:" in stage
+                else "rest"
+            )
         )
-        t = self.clock() - self.start - m.age_ms / 1000
+        meter = self.meters.get(phase)
+        if meter:
+            selected = self.meter_sample(meter)
+            raw_current, raw_power = selected["current"], selected["power"]
+            v, a, p = (
+                selected["voltage"],
+                raw_current * meter.get("current_sign", 1),
+                raw_power * meter.get("power_sign", 1),
+            )
+        else:
+            v, a, p = actor.voltage_v, actor.current_a, actor.power_w
+            raw_current, raw_power = a, p
+            selected = dict(
+                node=self.refs[role].node,
+                device=self.device(role),
+                sequence=actor.sequence,
+                boot_id=actor.boot_id,
+                age_ms=actor.age_ms,
+                quality=actor.quality,
+            )
+        if phase != "rest" and (a < 0 or p < 0):
+            raise RuntimeError(
+                "Meter polarity disagrees with the active phase; configure explicit signs"
+            )
+        if (
+            v < 0
+            or v > self.profile.maximum_voltage_v
+            or abs(a) > self.profile.maximum_current_a
+            or abs(p) > self.profile.max_power_w
+        ):
+            raise RuntimeError("Selected measurements exceed profile")
+        t = self.clock() - self.start - selected["age_ms"] / 1000
         self.integrators.setdefault(
             stage, Integrator(self.profile.max_sample_gap_s)
-        ).add(t, m.voltage_v or 0, m.current_a or 0, valid, m.sequence, stage)
+        ).add(t, v, a, True, selected["sequence"], stage, power_w=p)
         self.writer.writerow(
             dict(
                 elapsed_s=t,
-                node=self.refs[role].node,
-                device=self.device(role),
+                node=selected["node"],
+                device=selected["device"],
+                actor_node=self.refs[role].node,
+                actor_device=self.device(role),
+                actor_component=self.refs[role].component,
                 stage=stage,
-                sequence=m.sequence,
-                boot_id=m.boot_id,
-                voltage_v=m.voltage_v,
-                current_a=m.current_a,
-                power_w=m.power_w,
+                sequence=selected["sequence"],
+                boot_id=selected["boot_id"],
+                voltage_v=v,
+                current_a=a,
+                power_w=p,
+                current_raw_a=raw_current,
+                power_raw_w=raw_power,
                 temperature_c=temperature,
-                quality=m.quality,
-                age_ms=m.age_ms,
+                quality=selected["quality"],
+                age_ms=selected["age_ms"],
             )
         )
-        if not valid:
-            raise RuntimeError(f"{role}: stale/unavailable measurements")
-        if (
-            m.voltage_v > self.profile.maximum_voltage_v
-            or m.current_a > self.profile.maximum_current_a
-            or m.power_w is None
-            or m.power_w > self.profile.max_power_w
-        ):
-            raise RuntimeError("Measured voltage/power exceeds profile")
-        if ":pulse:" in stage and m.voltage_v <= self.profile.discharge_cutoff_v:
+        for extra in self.extra_sensors:
+            reading = self.extra_sensor_sample(extra)
+            if self.sensor_writer is not None:
+                self.sensor_writer.writerow(
+                    dict(
+                        elapsed_s=self.clock() - self.start - reading.age_ms / 1000,
+                        label=extra.get("label", extra["component"]),
+                        node=extra["node"],
+                        device=extra["device"],
+                        component=extra["component"],
+                        boot_id=reading.boot_id,
+                        sequence=reading.sequence,
+                        quantity=reading.quantity,
+                        unit=reading.unit,
+                        value=reading.value,
+                        quality=reading.quality,
+                        age_ms=reading.age_ms,
+                    )
+                )
+        if ":pulse:" in stage and v <= self.profile.discharge_cutoff_v:
             raise RuntimeError("Pulse reached cell cutoff")
-        return m
+        return SimpleNamespace(voltage_v=v, current_a=a, power_w=p)
 
     def pause(self, seconds, stage):
         end = self.clock() + seconds
@@ -414,10 +640,11 @@ class Runner:
 
     def isolate(self):
         errors = []
-        with ThreadPoolExecutor(max_workers=3) as executor:
+        targets = {(ref.node, ref.device) for ref in self.refs.values()}
+        with ThreadPoolExecutor(max_workers=len(targets)) as executor:
             futures = [
-                executor.submit(self.node(role).stop, self.device(role))
-                for role in ("interlock", "load", "source")
+                executor.submit(self.cluster.nodes[name].stop, identifier)
+                for name, identifier in targets
             ]
             for future in futures:
                 try:
@@ -429,16 +656,17 @@ class Runner:
 
     def path(self, path):
         self.isolate()
-        self.perform(
-            "interlock",
-            self.node("interlock").interlock.set_switch_path,
-            switch_path_request=SwitchPathRequest(path=path),
-        )
+        if "interlock" in self.refs:
+            self.perform(
+                "interlock",
+                self.node("interlock").interlock.set_switch_path,
+                switch_path_request=SwitchPathRequest(path=path),
+            )
 
     def enable(self, role, duration_s):
         self.perform(
             role,
-            self.node(role).core.set_output,
+            self.node(role).components.set_component_output,
             output_request=OutputRequest(
                 enabled=True,
                 max_duration_ms=math.ceil(
@@ -453,25 +681,26 @@ class Runner:
         # Absolute writes are checked against the other, still-current setpoint.
         self.perform(
             "source",
-            self.node("source").rd60xx.set_source_current,
+            self.node("source").components.set_component_current,
             current_request=CurrentRequest(current_a=0.0),
         )
         self.perform(
             "source",
-            self.node("source").rd60xx.set_source_voltage,
+            self.node("source").components.set_component_voltage,
             voltage_request=VoltageRequest(voltage_v=p.charge_voltage_v),
         )
         self.perform(
             "source",
-            self.node("source").rd60xx.set_source_current,
+            self.node("source").components.set_component_current,
             current_request=CurrentRequest(current_a=p.charge_current_a),
         )
         self.enable("source", p.charge_timeout_s)
-        self.perform(
-            "interlock",
-            self.node("interlock").interlock.set_switch_path,
-            switch_path_request=SwitchPathRequest(path="charge"),
-        )
+        if "interlock" in self.refs:
+            self.perform(
+                "interlock",
+                self.node("interlock").interlock.set_switch_path,
+                switch_path_request=SwitchPathRequest(path="charge"),
+            )
         deadline = self.clock() + p.charge_timeout_s
         held = None
         while self.clock() < deadline:
@@ -500,14 +729,7 @@ class Runner:
         self.path("discharge")
         self.perform(
             "load",
-            self.node("load").dl24m.set_dl24m_settings,
-            dl24m_settings=Dl24mSettings(
-                cutoff_voltage_v=p.discharge_cutoff_v, time_limit_s=0, mode=0
-            ),
-        )
-        self.perform(
-            "load",
-            self.node("load").dl24m.set_load_current,
+            self.node("load").components.set_component_current,
             current_request=CurrentRequest(current_a=p.discharge_current_a),
         )
         self.enable("load", p.discharge_timeout_s)
@@ -528,14 +750,7 @@ class Runner:
             self.path("discharge")
             self.perform(
                 "load",
-                self.node("load").dl24m.set_dl24m_settings,
-                dl24m_settings=Dl24mSettings(
-                    cutoff_voltage_v=p.discharge_cutoff_v, time_limit_s=0, mode=0
-                ),
-            )
-            self.perform(
-                "load",
-                self.node("load").dl24m.set_load_current,
+                self.node("load").components.set_component_current,
                 current_request=CurrentRequest(current_a=p.pulse_current_a),
             )
             self.enable("load", p.pulse_s)
@@ -555,36 +770,44 @@ class Runner:
                     v, a = self.original[role]
                     self.perform(
                         role,
-                        self.node(role).rd60xx.set_source_current,
+                        self.node(role).components.set_component_current,
                         current_request=CurrentRequest(current_a=0.0),
                     )
                     self.perform(
                         role,
-                        self.node(role).rd60xx.set_source_voltage,
+                        self.node(role).components.set_component_voltage,
                         voltage_request=VoltageRequest(voltage_v=v),
                     )
                     self.perform(
                         role,
-                        self.node(role).rd60xx.set_source_current,
+                        self.node(role).components.set_component_current,
                         current_request=CurrentRequest(current_a=a),
                     )
                 else:
                     a, settings = self.original[role]
                     self.perform(
                         role,
-                        self.node(role).dl24m.set_load_current,
+                        self.node(role).components.set_component_current,
                         current_request=CurrentRequest(current_a=a),
                     )
-                    # Restore only fields deliberately changed by this workflow.
                     self.perform(
                         role,
-                        self.node(role).dl24m.set_dl24m_settings,
-                        dl24m_settings=Dl24mSettings(
-                            cutoff_voltage_v=settings.cutoff_voltage_v,
-                            time_limit_s=settings.time_limit_s,
-                            mode=settings.mode,
+                        self.node(role).components.set_component_cutoff,
+                        cutoff_request=CutoffRequest(
+                            cutoff_voltage_v=settings.cutoff_voltage_v
                         ),
                     )
+                    if (
+                        settings.time_limit_s is not None
+                        and "duration" in self.actor_actions[role]
+                    ):
+                        self.perform(
+                            role,
+                            self.node(role).components.set_component_duration,
+                            duration_request=DurationRequest(
+                                time_limit_s=settings.time_limit_s
+                            ),
+                        )
             except Exception as exc:
                 errors.append(exc)
         self.metadata["restore_pending"] = bool(errors)
@@ -600,7 +823,9 @@ class Runner:
             self.checkpoint()
             groups = {}
             for ref in self.refs.values():
-                groups.setdefault(ref.node, []).append(ref.device)
+                ids = groups.setdefault(ref.node, [])
+                if ref.device not in ids:
+                    ids.append(ref.device)
             with self.cluster.lease(groups) as session:
                 self.session = session
                 self.metadata["status"] = "running"
@@ -608,13 +833,33 @@ class Runner:
                 self.checkpoint()
                 with (self.directory / "samples.csv").open(
                     "w", newline="", buffering=1
-                ) as stream:
+                ) as stream, (self.directory / "sensors.csv").open(
+                    "w", newline="", buffering=1
+                ) as sensor_stream:
                     self.writer = csv.DictWriter(
                         stream,
-                        fieldnames="elapsed_s node device stage sequence boot_id voltage_v current_a power_w temperature_c quality age_ms".split(),
+                        fieldnames="elapsed_s node device actor_node actor_device actor_component stage sequence boot_id voltage_v current_a power_w current_raw_a power_raw_w temperature_c quality age_ms".split(),
                     )
                     self.writer.writeheader()
+                    self.sensor_writer = csv.DictWriter(
+                        sensor_stream,
+                        fieldnames="elapsed_s label node device component boot_id sequence quantity unit value quality age_ms".split(),
+                    )
+                    self.sensor_writer.writeheader()
                     try:
+                        self.perform(
+                            "load",
+                            self.node("load").components.set_component_cutoff,
+                            cutoff_request=CutoffRequest(
+                                cutoff_voltage_v=self.profile.discharge_cutoff_v
+                            ),
+                        )
+                        if "duration" in self.actor_actions["load"]:
+                            self.perform(
+                                "load",
+                                self.node("load").components.set_component_duration,
+                                duration_request=DurationRequest(time_limit_s=0),
+                            )
                         for cycle in range(self.profile.cycles):
                             self.charge(cycle)
                             self.pause(

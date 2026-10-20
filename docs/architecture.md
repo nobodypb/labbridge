@@ -40,10 +40,21 @@ small and testable around generated types.
 Workflow state belongs on the host, safeguards on the node. A reference switch
 provider implements the `isolated/charge/discharge` capability; a future Wi-Fi
 relay provider must offer the same confirmation and fail-open semantics. It
-must not silently weaken the battery workflow's feedback requirement.
+must preserve feedback semantics whenever an interlock is selected. Direct
+source/load output switching is an explicit optional workflow arrangement.
 
 Startup configuration failure inhibits leases and instrument mutations while
 keeping read/management and priority STOP available. Already-created drivers
 continue ticking their shutdown/restore obligations. Guard dependencies and
 ordered temperature limits are validated before any factory allocation; a
 partially initialized module set must never become an unguarded control surface.
+
+
+Physical drivers expose component descriptors and virtual sensor/actor adapters.
+Standard routes translate component actions into the same checked driver
+transactions as compatibility routes; the core never branches on a model name.
+Multi-channel drivers can override component command/state/stop behavior.
+Read-only meters publish immutable snapshots from worker tasks; node routing and
+safety do not wait on I²C or network I/O. I²C endpoints share only their validated
+bus/pin pair, not their address or sample state. A host-native Yocto provider
+implements the same generated read-only API over the official USB SDK.

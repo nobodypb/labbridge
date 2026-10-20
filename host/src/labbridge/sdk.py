@@ -10,6 +10,7 @@ from contextlib import contextmanager
 from labbridge_generated.api_client import ApiClient
 from labbridge_generated.configuration import Configuration
 from labbridge_generated.api.core_api import CoreApi
+from labbridge_generated.api.components_api import ComponentsApi
 from labbridge_generated.api.dl24m_api import Dl24mApi
 from labbridge_generated.api.rd60xx_api import Rd60xxApi
 from labbridge_generated.api.gpio_interlock_api import GpioInterlockApi
@@ -30,7 +31,15 @@ class OperationFailed(RuntimeError):
 class Node:
     def __init__(self, url, token="", *, rest=None):
         config = Configuration(
-            host="http://usb" if url.startswith("serial:") else url.rstrip("/")
+            host=(
+                "http://usb"
+                if url.startswith("serial:")
+                else (
+                    "http://yocto-usb"
+                    if url.startswith("yocto+usb://")
+                    else url.rstrip("/")
+                )
+            )
         )
         config.access_token = token
         # Mutations must not be retried by urllib3 independently of the operation engine.
@@ -40,6 +49,12 @@ class Node:
             self.client.rest_client = rest
         elif url.startswith("serial:"):
             self.client.rest_client = SerialTransport(url.removeprefix("serial:"))
+        elif url.startswith("yocto+usb://"):
+            from .yocto import YoctoUsbTransport
+
+            self.client.rest_client = YoctoUsbTransport(
+                url.removeprefix("yocto+usb://")
+            )
         import labbridge_generated.api as package
 
         self.apis = {}
@@ -49,6 +64,7 @@ class Node:
                 if name.endswith("Api") and cls.__module__ == loaded.__name__:
                     self.apis[module.name.removesuffix("_api")] = cls(self.client)
         self.core = CoreApi(self.client)
+        self.components = ComponentsApi(self.client)
         self.dl24m = Dl24mApi(self.client)
         self.rd60xx = Rd60xxApi(self.client)
         self.interlock = GpioInterlockApi(self.client)

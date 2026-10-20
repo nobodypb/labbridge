@@ -1,0 +1,17 @@
+{
+  "revision": 1,
+  "node_id": "watt-node",
+  "board": "m5stack-sticks3",
+  "devices": [
+    {
+      "id": "meter",
+      "driver": "yocto_watt",
+      "transport": "http",
+      "endpoint": "YWATMK2C-123456",
+      "sensor_max_age_ms": 1000,
+      "yocto_watt": {
+        "hub_url": "http://virtualhub.local:4444"
+      }
+    }
+  ]
+}

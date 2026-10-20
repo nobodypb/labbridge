@@ -5,11 +5,13 @@
 #include "esp_timer.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
+#include "ina228.hpp"
 #include "labbridge/catalog.hpp"
 #include "nvs.h"
 #include "nvs_flash.h"
 #include "platform.hpp"
 #include "rd60xx_driver.hpp"
+#include "yocto_watt.hpp"
 #include <sstream>
 namespace labbridge::esp {
 std::recursive_mutex mutex;
@@ -86,6 +88,8 @@ static void modules() {
         j.text("id"), std::stoul(j.text("endpoint")), *wire, limits(j),
         persistence(j), journal(j), j.text("transport"));
   });
+  catalog.register_module("ina228", {"i2c"}, ina228_driver);
+  catalog.register_module("yocto_watt", {"http"}, yocto_watt_driver);
   catalog.register_module("gpio_interlock", {"gpio"}, switch_driver);
   catalog.register_module("ds18b20", {"onewire"}, probe_driver);
 }
@@ -100,7 +104,8 @@ static void validate_configuration(const Json &c) {
     Json j(cJSON_Duplicate(p, true));
     auto d = j.text("driver");
     auto count = pins(j).size();
-    if (!limits(j).valid())
+    if (d != "ina228" && d != "yocto_watt" && d != "ds18b20" &&
+        !limits(j).valid())
       throw ConfigurationError("Positive safety limits required");
     if (d == "dl24m") {
       auto e = j.text("endpoint");
@@ -123,6 +128,24 @@ static void validate_configuration(const Json &c) {
             "RD endpoint must be instrument register serial");
       if (j.text("transport") == "uart" && count != 2)
         throw ConfigurationError("UART needs TX,RX pins");
+    }
+    if (d == "ina228") {
+      auto e = j.text("endpoint");
+      if (e.empty() || e.find_first_not_of("0123456789") != std::string::npos ||
+          std::stoul(e) < 64 || std::stoul(e) > 79 ||
+          e != std::to_string(std::stoul(e)) || count != 2 || !j.has("ina228"))
+        throw ConfigurationError("INA228 needs decimal address 64..79, SDA/SCL "
+                                 "and explicit calibration");
+      auto c = j.item("ina228");
+      ina228::Calibration{c.number("shunt_ohms"), c.number("max_current_a"),
+                          unsigned(c.number("adc_range"))}
+          .validate();
+    }
+    if (d == "yocto_watt") {
+      auto url = j.item("yocto_watt").text("hub_url");
+      if (!yocto_watt::valid_serial(j.text("endpoint")) || !valid_hub_url(url))
+        throw ConfigurationError("Yocto-Watt requires hardware serial and "
+                                 "plain HTTP hub URL without credentials/path");
     }
     if (d == "gpio_interlock" && (count != 4 || !j.has("interlock")))
       throw ConfigurationError(
@@ -194,6 +217,7 @@ static void initialise() {
   if (!board.available_pins.empty()) {
     board.capacity["gpio"] = 2;
     board.capacity["onewire"] = 2;
+    board.capacity["i2c"] = 16;
     board.capacity["uart"] = 1;
   }
   modules();

@@ -11,6 +11,7 @@ public:
               Json journal);
   Json describe(uint64_t) override;
   Json measurements(uint64_t) override;
+  Json actuator_settings(const std::string &, uint64_t) override;
   bool supports(const std::string &) const override;
   void tick(uint64_t) override;
   void stop(uint64_t) override;

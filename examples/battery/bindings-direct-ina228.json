@@ -1,0 +1,45 @@
+{
+  "source": {
+    "node": "battery-node",
+    "device": "supply",
+    "component": "source"
+  },
+  "load": {
+    "node": "battery-node",
+    "device": "load",
+    "component": "sink"
+  },
+  "cell_probe": {
+    "node": "battery-node",
+    "device": "probe",
+    "component": "temperature-cell"
+  },
+  "meters": {
+    "charge": {
+      "node": "battery-node",
+      "device": "meter",
+      "current_sign": 1,
+      "power_sign": 1
+    },
+    "discharge": {
+      "node": "battery-node",
+      "device": "meter",
+      "current_sign": -1,
+      "power_sign": 1
+    },
+    "rest": {
+      "node": "battery-node",
+      "device": "meter",
+      "current_sign": 1,
+      "power_sign": 1
+    }
+  },
+  "sensors": [
+    {
+      "node": "battery-node",
+      "device": "meter",
+      "component": "temperature-die",
+      "label": "shunt-die"
+    }
+  ]
+}

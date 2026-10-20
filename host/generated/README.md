@@ -75,15 +75,16 @@ configuration = labbridge_generated.Configuration(
 # Enter a context with an instance of the API client
 with labbridge_generated.ApiClient(configuration) as api_client:
     # Create an instance of the API class
-    api_instance = labbridge_generated.CoreApi(api_client)
-    wifi_request = labbridge_generated.WifiRequest() # WifiRequest | 
+    api_instance = labbridge_generated.ComponentsApi(api_client)
+    device_id = 'device_id_example' # str | 
+    component_id = 'component_id_example' # str | 
 
     try:
-        api_response = api_instance.configure_wifi(wifi_request)
-        print("The response of CoreApi->configure_wifi:\n")
+        api_response = api_instance.get_actuator_state(device_id, component_id)
+        print("The response of ComponentsApi->get_actuator_state:\n")
         pprint(api_response)
     except ApiException as e:
-        print("Exception when calling CoreApi->configure_wifi: %s\n" % e)
+        print("Exception when calling ComponentsApi->get_actuator_state: %s\n" % e)
 
 ```
 
@@ -93,6 +94,16 @@ All URIs are relative to *http://labbridge.local*
 
 Class | Method | HTTP request | Description
 ------------ | ------------- | ------------- | -------------
+*ComponentsApi* | [**get_actuator_state**](docs/ComponentsApi.md#get_actuator_state) | **GET** /api/v1/devices/{deviceId}/components/{componentId}/state | 
+*ComponentsApi* | [**get_component_reading**](docs/ComponentsApi.md#get_component_reading) | **GET** /api/v1/devices/{deviceId}/components/{componentId}/measurement | 
+*ComponentsApi* | [**get_sensor_readings**](docs/ComponentsApi.md#get_sensor_readings) | **GET** /api/v1/devices/{deviceId}/readings | 
+*ComponentsApi* | [**list_components**](docs/ComponentsApi.md#list_components) | **GET** /api/v1/devices/{deviceId}/components | 
+*ComponentsApi* | [**set_component_current**](docs/ComponentsApi.md#set_component_current) | **PUT** /api/v1/devices/{deviceId}/components/{componentId}/current | 
+*ComponentsApi* | [**set_component_cutoff**](docs/ComponentsApi.md#set_component_cutoff) | **PUT** /api/v1/devices/{deviceId}/components/{componentId}/cutoff | 
+*ComponentsApi* | [**set_component_duration**](docs/ComponentsApi.md#set_component_duration) | **PUT** /api/v1/devices/{deviceId}/components/{componentId}/duration | 
+*ComponentsApi* | [**set_component_output**](docs/ComponentsApi.md#set_component_output) | **PUT** /api/v1/devices/{deviceId}/components/{componentId}/output | 
+*ComponentsApi* | [**set_component_voltage**](docs/ComponentsApi.md#set_component_voltage) | **PUT** /api/v1/devices/{deviceId}/components/{componentId}/voltage | 
+*ComponentsApi* | [**stop_component**](docs/ComponentsApi.md#stop_component) | **POST** /api/v1/devices/{deviceId}/components/{componentId}/stop | 
 *CoreApi* | [**configure_wifi**](docs/CoreApi.md#configure_wifi) | **PUT** /api/v1/wifi | 
 *CoreApi* | [**create_lease**](docs/CoreApi.md#create_lease) | **POST** /api/v1/leases | 
 *CoreApi* | [**get_configuration**](docs/CoreApi.md#get_configuration) | **GET** /api/v1/configuration | 
@@ -125,8 +136,13 @@ Class | Method | HTTP request | Description
 
 ## Documentation For Models
 
+ - [ActuatorSettings](docs/ActuatorSettings.md)
+ - [ActuatorState](docs/ActuatorState.md)
  - [CellTemperatureGuard](docs/CellTemperatureGuard.md)
+ - [Component](docs/Component.md)
+ - [ComponentList](docs/ComponentList.md)
  - [CurrentRequest](docs/CurrentRequest.md)
+ - [CutoffRequest](docs/CutoffRequest.md)
  - [Device](docs/Device.md)
  - [DeviceConfiguration](docs/DeviceConfiguration.md)
  - [DeviceList](docs/DeviceList.md)
@@ -135,6 +151,8 @@ Class | Method | HTTP request | Description
  - [Dl24mRegister](docs/Dl24mRegister.md)
  - [Dl24mRegisters](docs/Dl24mRegisters.md)
  - [Dl24mSettings](docs/Dl24mSettings.md)
+ - [DurationRequest](docs/DurationRequest.md)
+ - [Ina228Configuration](docs/Ina228Configuration.md)
  - [InterlockConfiguration](docs/InterlockConfiguration.md)
  - [Lease](docs/Lease.md)
  - [LeaseRequest](docs/LeaseRequest.md)
@@ -146,6 +164,8 @@ Class | Method | HTTP request | Description
  - [OutputRequest](docs/OutputRequest.md)
  - [Problem](docs/Problem.md)
  - [SafetyLimits](docs/SafetyLimits.md)
+ - [SensorReading](docs/SensorReading.md)
+ - [SensorReadings](docs/SensorReadings.md)
  - [StopRequest](docs/StopRequest.md)
  - [SwitchPathRequest](docs/SwitchPathRequest.md)
  - [TemperatureChannel](docs/TemperatureChannel.md)
@@ -155,6 +175,7 @@ Class | Method | HTTP request | Description
  - [WifiRequest](docs/WifiRequest.md)
  - [WifiScan](docs/WifiScan.md)
  - [WifiState](docs/WifiState.md)
+ - [YoctoWattConfiguration](docs/YoctoWattConfiguration.md)
 
 
 <a id="documentation-for-authorization"></a>

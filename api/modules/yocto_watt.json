@@ -1,0 +1,30 @@
+{
+  "x-labbridge-module": {
+    "id": "yocto_watt",
+    "transports": [
+      "http"
+    ],
+    "capabilities": [
+      "components",
+      "voltage.measure",
+      "current.measure",
+      "power.measure"
+    ]
+  },
+  "paths": {},
+  "schemas": {
+    "YoctoWattConfiguration": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "hub_url"
+      ],
+      "properties": {
+        "hub_url": {
+          "type": "string",
+          "maxLength": 256
+        }
+      }
+    }
+  }
+}

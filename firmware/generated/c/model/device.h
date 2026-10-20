@@ -15,6 +15,7 @@
 
 typedef struct device_t device_t;
 
+#include "component.h"
 #include "safety_limits.h"
 
 // Enum STATE for device
@@ -44,6 +45,7 @@ typedef struct device_t {
     labbridge_api_device_STATE_e state; //enum
     labbridge_api_device_OUTPUT_e output; //enum
     struct safety_limits_t *limits; //model
+    list_t *components; //nonprimitive container
 
     int _library_owned; // Is the library responsible for freeing this object?
 } device_t;
@@ -56,7 +58,8 @@ __attribute__((deprecated)) device_t *device_create(
     list_t *capabilities,
     labbridge_api_device_STATE_e state,
     labbridge_api_device_OUTPUT_e output,
-    safety_limits_t *limits
+    safety_limits_t *limits,
+    list_t *components
 );
 
 void device_free(device_t *device);

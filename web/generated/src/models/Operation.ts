@@ -99,6 +99,30 @@ export interface Operation {
      * @memberof Operation
      */
     error?: Problem;
+    /**
+     * 
+     * @type {string}
+     * @memberof Operation
+     */
+    componentId?: string;
+    /**
+     * 
+     * @type {string}
+     * @memberof Operation
+     */
+    confirmedUnit?: string;
+    /**
+     * 
+     * @type {string}
+     * @memberof Operation
+     */
+    requestedUnit?: string;
+    /**
+     * 
+     * @type {number}
+     * @memberof Operation
+     */
+    requestedValue?: number;
 }
 
 
@@ -164,6 +188,10 @@ export function OperationFromJSONTyped(json: any, ignoreDiscriminator: boolean):
         'finalOutput': json['final_output'],
         'restorePending': json['restore_pending'],
         'error': json['error'] == null ? undefined : ProblemFromJSON(json['error']),
+        'componentId': json['component_id'] == null ? undefined : json['component_id'],
+        'confirmedUnit': json['confirmed_unit'] == null ? undefined : json['confirmed_unit'],
+        'requestedUnit': json['requested_unit'] == null ? undefined : json['requested_unit'],
+        'requestedValue': json['requested_value'] == null ? undefined : json['requested_value'],
     };
 }
 
@@ -190,6 +218,10 @@ export function OperationToJSONTyped(value?: Operation | null, ignoreDiscriminat
         'final_output': value['finalOutput'],
         'restore_pending': value['restorePending'],
         'error': ProblemToJSON(value['error']),
+        'component_id': value['componentId'],
+        'confirmed_unit': value['confirmedUnit'],
+        'requested_unit': value['requestedUnit'],
+        'requested_value': value['requestedValue'],
     };
 }
 
