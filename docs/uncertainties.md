@@ -67,9 +67,11 @@ AP was restored to open; DL24M remained OFF / CC 0.100 A.
 Espressif documents that SmartConfig does not support open networks
 ([FAQ](https://docs.espressif.com/projects/esp-faq/en/latest/software-framework/wifi.html#connect-what-are-the-specifications-of-wi-fi-parameters-when-using-smartconfig)).
 That limitation alone does not explain the failed protected trial or establish
-what RIDEN's special server-address phase requires. Concrete PC-profile
-mismatches below must be corrected before attributing the failure to AP-origin
-transmission. No evidence currently proves that a second ESP is required for
+what RIDEN's special server-address phase requires. The PC-profile
+mismatches below have now been corrected and one protected AP-origin pairing
+succeeded, including the displayed address, UDP result and TCP identity. This
+disproves AP-origin impossibility for this W01 setup, but does not isolate which
+profile differences were essential. No evidence currently proves that a second ESP is required for
 pairing. A conventional station-origin comparison remains useful if the exact
 profile still fails.
 
@@ -119,9 +121,9 @@ resolved in this comparison; exact equality of its SSID, fixed byte and address
 prefix is therefore not claimed. The byte-exact specification and fixtures are
 for v1.0.0.22.
 
-### Differences from the current bridge sender
+### Differences from the previous bridge sender
 
-| Item | LabBridge firmware `0.1.0+4af9dc4` | RIDEN PC v1.0.0.22 |
+| Item | LabBridge firmware the development build | RIDEN PC v1.0.0.22 |
 | --- | --- | --- |
 | Phase-one SSID field | Actual AP SSID | Literal `RD6006` |
 | Logical byte 3 | Actual BSSID CRC | Fixed `0xC7` |
@@ -138,11 +140,29 @@ are in those fixtures. This is offline consistency evidence, not a W01 pairing
 result. The previous general-profile tests remain valid for that profile but
 cannot establish compatibility with RIDEN's PC profile.
 
-Implement the profile as a separate driver codec and scheduler with fixture-based
-TDD before changing the ESP sender. Preserve bounded cancellation, deadlines and
+The separate PC-profile codec/scheduler was implemented with fixture-based TDD: the old general codec failed the payload-length assertion before the PC codec passed. Generated-client tests also failed on absent burst/join counters before API regeneration passed. The new ESP sender uses multicast UDP in both AP modes. No fixed packet delay is imposed; transient queue backpressure retries the same packet and has a one-second bound. Preserve bounded cancellation, deadlines and
 STOP responsiveness: the PC has weak ACK validation, OS-dependent adapter
 selection and potentially overlapping workers; those are not requirements to
-copy. After the data/profile correction, verify displayed phase-one IP first,
+copy. For hardware acceptance, verify displayed phase-one IP first,
 then join ACK, TCP identity, reconnect/STOP behavior and AP+STA+BLE coexistence.
-The source output must remain OFF during commissioning. No further radio trial
-or firmware flash was performed as part of this PC investigation.
+The source output must remain OFF during commissioning. No radio trial or firmware flash was performed as part of the original PC
+investigation; subsequent hardware results are recorded in acceptance.md.
+
+The optional `pc_v22_target_ssid` profile changes only the phase-one SSID
+field. It is not a commissioned alternative to `pc_v22`. Use a fresh setup
+state and session; confirm the displayed server IP and advance before the
+management deadline. A retained candidate listing does not prove a new join
+or identity exchange.
+
+Target-SSID trials displayed the server IP but did not establish new join/TCP
+evidence. A late transition affected one trial; a same-session repeat had the
+same outcome. Different transition delays and receiver-state uncertainty
+prevent a universal conclusion about the SSID field. Retain the full-PC default.
+
+Discovery-only sockets previously remained idle after one identity request.
+A silent peer restart could leave a stale serial claim and block replacements.
+Read-only identity probes with a bounded reply deadline address that lifetime
+while preserving live-duplicate rejection and configured-device recovery.
+A physical source power cycle verified discovery release/reconnection without
+restarting the bridge; see acceptance.md. Configured-source STOP/reconnect and
+full coexistence acceptance remain open.

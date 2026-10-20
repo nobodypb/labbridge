@@ -43,9 +43,6 @@ New asynchronous runtime on StickS3; actual display firmware Ver 2.0. Bench sour
   temporarily raised from its original 21 V to 25 V for the 24 V pulse, then
   restored to 21 V. Counter reset was explicitly authorized.
 
-The old NVS namespace and source application are preserved. The rollback image
-and private pre-migration backup remain outside the public repository.
-
 ## Remaining physical acceptance
 
 - Local lease expiry confirmed OFF on the final runtime. Reset during ON returned
@@ -112,49 +109,53 @@ an unexpected disconnect/rejection, stale sample or restart fails the run. Files
 contain hardware identities and remain ignored/private. Active bench writes and
 intentional fault injection are separate checks; this runner makes no mutations.
 
-StickS3 bench smoke acceptance on firmware `0.1.0+026063a`: AP listener starts,
-status/invalid-session handling works over USB and authenticated LAN, the updated
-UI asset is served, and port 8080 is not reachable through the station address.
-The original DL24M settings matched the pre-flash snapshot; CC 0.100 A, fresh
-measurements and confirmed output OFF were preserved. A private system/application
-backup was taken before flashing. No RD source was paired or actuated in these
-checks, and no AP-client/BLE coexistence result is claimed from them.
+Initial general-profile broadcasts did not establish W01 pairing. Radio
+submission/completion counts alone do not prove receiver acceptance. Switching
+to WPA2 alone did not resolve the general sender's protocol differences.
 
-W01 provisioning investigation on firmware `0.1.0+c29b29d`: direct AP broadcasts
-reported 7,413 successful radio-driver completions and zero failed completions,
-with no associated AP client. The operator still observed W01 without a server
-IP; no incoming RD TCP connection occurred. This is a failed pairing result, not
-RD commissioning or coexistence acceptance. An intermittent USB request timeout
-was also observed; later status remained available without a confirmed reset.
-A protected-network comparison was subsequently performed as recorded below.
-Output actuation was not performed.
+Offline PC-profile checks independently verified all 256 CRC table entries
+and synthetic phase-one/phase-two payloads, including per-triple CRC and total
+XOR. Vendor binaries/decompiled sources are excluded. These checks establish
+encoder consistency, not RF delivery.
 
-WPA2 comparison preparation on firmware `0.1.0+4af9dc4`: the USB API rejected a
-short passphrase with 422, then accepted an AP-only WPA2 configuration. LAN
-status confirmed the security change without a boot-ID change, station address
-change or station disconnect. The AP secret was absent from Wi-Fi, provisioning
-and full-configuration responses. All original DL24M settings were re-read and
-unchanged; CC 0.100 A, output OFF and fresh BLE measurements were preserved.
-The protected-network server-address phase subsequently ran its full 120-second
-deadline with one associated client and 11,991 accepted UDP submissions. It
-timed out; the operator confirmed W01 still displayed Server IP placeholders
-without an address. WPA2 alone did not resolve AP-origin provisioning. The AP was
-restored explicitly to open through USB and station connectivity was preserved;
-DL24M remained OFF / 0.100 A. The operator confirmed the correct WiFi Config
-dialog with red Server IP placeholders and the skip button. No RD actuation
-occurred. The subsequent PC investigation found concrete packet-profile
-mismatches; correct these before another radio comparison.
+Physical W01/RD6018 pairing with the PC-compatible profile was verified:
+displayed server address, a new UDP join result, TCP model/firmware identity and
+completed setup. The first incoming socket can time out before identity; a
+subsequent connection succeeded. This is provisioning evidence, not source
+output/readback, configured-source STOP or full coexistence acceptance.
 
-Offline PC-protocol acceptance: the manufacturer-linked v1.0.0.22 executable
-was decompiled and its protected strings resolved without running it. CRC-table
-values agree with a separate bitwise implementation for all 256 byte values;
-two synthetic packet sets decode to their original logical payloads and satisfy
-per-triple CRC and total XOR. The current sender differs in phase-one SSID,
-BSSID handling, multicast addressing and scheduling. The older v1.0.0.8 has
-matching visible framing/control flow, but its encrypted strings were not
-resolved. Public reference vectors contain synthetic inputs only. These checks
-validate the documented PC sender profile, not ESP RF delivery or W01 acceptance.
-No additional flashing or pairing attempt occurred during this investigation.
+The optional target-SSID profile changes only phase one's SSID field;
+phase two remains identical. Codec and generated-client tests cover that
+invariance. The default remains the PC-compatible profile.
+
+Native ESP USB line-control behavior was verified through symbolic paths;
+UART adapters retain their reset wait. Tests use synthetic aliases and USB
+metadata. Physical setup details and installed host rules are not published.
+
+A target-SSID trial displayed the server address but produced no new join
+result or TCP identity. Its late management transition prevents a clean
+end-to-end comparison.
+
+A same-session target-SSID repeat likewise produced no new join/TCP evidence.
+The PC-compatible profile remains the supported default. Differing transition
+delays prevent claiming a universal receiver requirement.
+
+A subsequent full-PC control restored WLAN setup and fresh identity replies,
+but exposed a stale discovery socket retaining its serial claim. The listener
+rejected new connections as duplicates. This is separate from WLAN reception.
+
+Discovery-recovery acceptance covers read-only identity probes, a bounded
+missing-response deadline, rejection of late/changed identities, serial
+release/reclaim and live-duplicate rejection. Required checks and generation
+drift checks pass; configured-device driver recovery is preserved.
+
+Physical discovery-recovery acceptance verified release of a stale serial
+claim after a source power cycle, automatic reconnection to the same identity
+and continued heartbeat replies without restarting the bridge. No duplicate
+identities were rejected after recovery. Output/setpoint writes were not part
+of this check. This validates unregistered discovery recovery only; configured
+source STOP/fault tests, battery commissioning and the full coexistence soak
+remain open. All documented board builds and required CI checks passed.
 
 ## DL24M Bench (LB-020)
 

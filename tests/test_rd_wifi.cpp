@@ -1,6 +1,8 @@
 #include "rd60xx_driver.hpp"
 #include "rd_wifi.hpp"
 #include <cassert>
+#include <fstream>
+#include <iterator>
 using namespace labbridge;
 using namespace labbridge::rd60xx;
 static Bytes reply(uint32_t serial, uint16_t model = 60181) {
@@ -24,7 +26,170 @@ static Bytes reply(uint32_t serial, uint16_t model = 60181) {
   b.push_back(c >> 8);
   return b;
 }
+// A silent power loss must not pin an unconfigured serial forever. Exercise
+// actual read-only request/response handling and the duplicate-identity guard.
+static void discovery_recovery_acceptance() {
+  IdentityHeartbeat old;
+  IdentityBindings bindings;
+  const auto id = identify(reply(123));
+  assert(old.poll(100) == read(1, 0, 20));
+  assert(old.accept(id, 150));
+  assert(bindings.claim(id, 10) == IdentityBindings::Claim::discovered);
+  assert(bindings.claim(id, 11) == IdentityBindings::Claim::rejected);
+  assert(old.poll(1149).empty());
+  assert(old.poll(1150) == read(1, 0, 20));
+  assert(old.poll(1151).empty()); // No overlapping request.
+  assert(!old.expired(3149));
+  assert(old.expired(3150));
+  assert(!old.accept(id, 3150)); // A late response cannot revive the old claim.
+  bindings.release(10); // Transport closes the expired connection.
+  IdentityHeartbeat replacement;
+  assert(replacement.poll(3150) == read(1, 0, 20));
+  assert(replacement.accept(id, 3160));
+  assert(bindings.claim(id, 11) == IdentityBindings::Claim::discovered);
+  assert(bindings.claim(id, 12) == IdentityBindings::Claim::rejected);
+  assert(replacement.poll(4160) == read(1, 0, 20));
+  assert(replacement.accept(id, 4170));
+  assert(!replacement.expired(10000)); // No request pending, no timeout.
+  assert(replacement.poll(10000) == read(1, 0, 20));
+  assert(!replacement.accept(identify(reply(456)), 10001));
+  assert(replacement.expired(10001)); // An identity change closes the stream.
+  IdentityHeartbeat initial_timeout;
+  assert(!initial_timeout.accept(id, 0)); // Unsolicited data is not liveness.
+  assert(initial_timeout.expired(0));
+  IdentityHeartbeat silent;
+  silent.poll(50);
+  assert(silent.expired(2050));
+}
+// Reference bytes were reconstructed from RIDEN PC v1.0.0.22, not from
+// this codec. Verify every logical byte, the absent BSSID suffix and wire
+// order.
+static void pc_profile_acceptance() {
+  std::ifstream file(std::string(LABBRIDGE_SOURCE_DIR) +
+                     "/examples/protocol/rd60xx-pc-provisioning-v22.json");
+  assert(file);
+  auto fixture =
+      Json::parse(std::string(std::istreambuf_iterator<char>(file), {}));
+  PcTouchSender sender;
+  uint8_t expected_group = 0;
+  for (auto phase : {"phase1", "phase2"}) {
+    bool server = std::string(phase) == "phase1";
+    auto f = fixture.item(phase);
+    auto data =
+        pc_touch_data(server, "Fixture-WLAN", "fixture-psk", {192, 168, 4, 1});
+    auto hex = f.text("payload_hex");
+    assert(data.size() == hex.size() / 2 * 3);
+    for (size_t i = 0; i < hex.size() / 2; ++i) {
+      int expected = std::stoi(hex.substr(2 * i, 2), nullptr, 16);
+      auto a = data[3 * i] - 40, b = data[3 * i + 1] - 296,
+           c = data[3 * i + 2] - 40;
+      assert(b == int(i));
+      auto value = ((a & 15) << 4) | (c & 15);
+      assert(value == expected);
+      uint8_t crc = 0;
+      for (auto v : {value, b}) {
+        crc ^= v;
+        for (int bit = 0; bit < 8; ++bit)
+          crc = (crc & 1) ? (crc >> 1) ^ 0x8c : crc >> 1;
+      }
+      assert(crc == ((a & 240) | (c >> 4)));
+    }
+    if (server) {
+      assert(data[0] == 41 && data[1] == 296 && data[2] == 226);
+      assert(data.size() == 78);
+    } else
+      assert(data.size() == 96);
+    // No 8-ms packet gate: a complete burst may be accepted at one timestamp.
+    sender.start(data, 10000, !server);
+    uint64_t ready = server ? 10000 : 10300;
+    if (!server)
+      assert(!sender.peek(10299));
+    const size_t count = 156 + data.size();
+    for (size_t i = 0; i < count; ++i) {
+      auto p = sender.peek(ready);
+      assert(p);
+      bool new_group = i < 156 ? i % 4 == 0 : (i - 156) % 3 == 0;
+      if (new_group)
+        expected_group = expected_group % 100 + 1;
+      assert(p->group == expected_group);
+      assert(p->length == (i < 156 ? 515 - i % 4 : data[i - 156]));
+      auto again =
+          sender.peek(ready); // Backpressure must not consume a packet.
+      assert(again && again->group == p->group && again->length == p->length);
+      sender.sent(ready);
+    }
+    assert(!sender.peek(ready + 999));
+    auto next = sender.peek(ready + 1000);
+    assert(next && next->length == 515 &&
+           next->group == expected_group % 100 + 1);
+    assert(!sender.peek(ready + 60000));
+    sender.stop();
+    assert(!sender.peek(ready + 1000));
+  }
+  // Controlled rollback: only the phase-one SSID changes. Phase two is
+  // identical.
+  auto changed = pc_touch_data(true, "Fixture-WLAN", "fixture-psk",
+                               {192, 168, 4, 1}, "pc_v22_target_ssid");
+  std::string decoded;
+  for (size_t i = 0; i < changed.size(); i += 3)
+    decoded +=
+        char((((changed[i] - 40) & 15) << 4) | ((changed[i + 2] - 40) & 15));
+  assert(decoded.size() == 32 && uint8_t(decoded[1]) == 11 &&
+         uint8_t(decoded[3]) == 199);
+  assert(decoded.substr(9) == "192.168.4.1Fixture-WLAN");
+  assert(changed !=
+         pc_touch_data(true, "Fixture-WLAN", "fixture-psk", {192, 168, 4, 1}));
+  assert(pc_touch_data(false, "Fixture-WLAN", "fixture-psk", {192, 168, 4, 1},
+                       "pc_v22_target_ssid") ==
+         pc_touch_data(false, "Fixture-WLAN", "fixture-psk", {192, 168, 4, 1}));
+  // Every guide group/triple wraps once, across burst boundaries too.
+  sender = PcTouchSender{};
+  sender.start(pc_touch_data(true, "ignored", "ignored", {192, 168, 4, 1}), 0,
+               false);
+  for (size_t cycle = 0; cycle < 2; ++cycle) {
+    for (size_t i = 0; i < 234; ++i) {
+      auto p = sender.peek(cycle * 1000);
+      assert(p);
+      auto group =
+          (cycle * 65 + (i < 156 ? i / 4 : 39 + (i - 156) / 3)) % 100 + 1;
+      assert(p->group == group);
+      sender.sent(cycle * 1000);
+    }
+  }
+  // Stop/restart cancels quiet-time and preserves the multicast cursor.
+  sender.stop();
+  sender.start(pc_touch_data(true, "a", "", {192, 168, 4, 1}), 3000, false);
+  assert(sender.peek(3000)->group == 31);
+  for (auto bad : {std::string(33, 'a'), std::string("bad\xc3\xa4")}) {
+    bool rejected = false;
+    try {
+      pc_touch_data(false, bad, "psk", {192, 168, 4, 1});
+    } catch (...) {
+      rejected = true;
+    }
+    assert(rejected);
+  }
+  // The PC checks its 60-second limit between complete bursts, not packets.
+  sender = PcTouchSender{};
+  sender.start(pc_touch_data(true, "", "", {192, 168, 4, 1}), 0, false);
+  assert(sender.peek(59999));
+  sender.sent(59999);
+  for (size_t i = 1; i < 234; ++i) {
+    assert(sender.peek(60001));
+    sender.sent(60001);
+  }
+  assert(!sender.peek(61001));
+  Bytes ack{32, 2, 1, 2, 3, 4, 5, 192, 168, 4, 2};
+  auto address = pc_join_address(ack);
+  assert(address && (*address)[3] == 2);
+  ack.pop_back();
+  assert(!pc_join_address(ack));
+  ack = Bytes(11, 0);
+  assert(!pc_join_address(ack));
+}
 int main() {
+  discovery_recovery_acceptance();
+  pc_profile_acceptance();
   std::array<uint16_t, 20> r{};
   r[0] = 60181;
   r[2] = 123;

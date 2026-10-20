@@ -187,11 +187,11 @@ requests OFF before allowing work; it never resumes ON.
 
 ### Pairing through LabBridge
 
-**Commissioning limitation:** W01 pairing is not commissioned. The current sender uses a general ESPTouch profile; the RIDEN PC profile below differs in its phase-one SSID, BSSID field, multicast destinations and burst schedule. Correct these differences before interpreting another radio trial. Both open and WPA2 AP-origin trials failed to deliver a displayed server address. WPA2 alone did not resolve pairing. See [compatibility notes](uncertainties.md).
+**Commissioning status:** The RIDEN PC profile below paired a W01 RD6018 successfully from the ESP AP using WPA2 and an associated phone, including the displayed server address, UDP join result and TCP identity. Earlier general-profile open/WPA2 attempts failed. Open-network compatibility, which profile changes are essential, source control and the coexistence soak remain unvalidated. See [compatibility notes](uncertainties.md).
 
 The AP is open by default. `core.configure_access_point` (`PUT /api/v1/wifi/ap`) accepts only `{"psk":"..."}`: 8..63 printable ASCII characters enable WPA2-PSK/CCMP; an explicit empty string restores the open AP. This requires quiescent instruments and authenticated HTTP or trusted USB, including when called through the open AP. The change disconnects AP clients after the response; use USB or the station address to retain management access. Station credentials and the configured AP SSID are unchanged. Secrets are never returned. `getWifiState.ap_secured` reports current authentication; poll after the delayed change. Supply secrets through a private CLI args file or stdin, not shell command history.
 
-For protected provisioning, connect a phone/client to the AP and keep it associated during transmission. WPA2 uses normal UDP so that the WLAN driver encrypts packets; direct raw transmission is only the unencrypted diagnostic path. Radio-completion counters apply only to that diagnostic path and are not WPA2 transmission counters. PMF is not required, for compatibility with the original ESP8266 module.
+For protected provisioning, connect a phone/client to the AP and keep it associated during transmission. Both AP modes now use normal multicast UDP; on WPA2 the WLAN driver encrypts packets. Radio-completion counters belong to the older raw diagnostic path and remain zero for this sender. Complete-burst and join-ACK counters describe distinct stages; neither substitutes for TCP identity. PMF is not required, for compatibility with the original ESP8266 module.
 
 Keep the target PSU output OFF and configure one module at a time. On the PSU,
 select WiFi/address 1, reset the previous Wi-Fi setup and restart. In `/devices`,
@@ -204,11 +204,11 @@ are blocked while pairing; independent STOP remains available.
 1. In `server_address`, the ESP transmits its AP address using the RIDEN
    two-stage ESPTouch convention. When the PSU shows `192.168.4.1` /
    **Connecting WiFi**, acknowledge **ESP address shown / Connecting WiFi**.
-2. In `wifi`, the current ESP sender transmits the AP SSID/BSSID and configured
+2. In `wifi`, the ESP sender transmits the AP SSID and configured
    AP password (empty for an open AP). When
    the PSU shows **Connecting server**, acknowledge **Connecting server shown**.
 3. `waiting_connection` completes when a supported incoming identity has been
-   seen. Each phase has a 120-second deadline. Cancellation stops transmission;
+   seen. Each management phase has a 120-second deadline; the sender repeats bursts for at most 60 seconds, matching the PC. Cancellation stops transmission;
    settings already received by the PSU are not undone. Status includes AP client count/channel and separate radio submissions, successful transmission completions and failed completions. Successful broadcast transmission does not confirm PSU reception; use the display and eventual TCP identity. Old session IDs are
    rejected and repeated phase acknowledgements never skip a step.
 4. Check the displayed model/serial. Enter a device ID and explicit voltage,
@@ -230,13 +230,27 @@ labbridge --endpoint serial:/dev/ttyACM0 call rd60xx.cancel_rd_provisioning --ar
 See [single-node configuration](../examples/configuration/rd6018-ap-sticks3.json).
 Replace all synthetic identities and bench limits for the actual circuit.
 
+Provisioning defaults to `profile: "pc_v22"`. For a controlled commissioning
+comparison, trusted USB/CLI may explicitly select `pc_v22_target_ssid` in the
+start request. That variant changes only the phase-one SSID field to the AP
+SSID, with the resulting CRC/XOR/length changes; phase two, multicast and timing
+are identical. W01 trials received the server IP but have not established
+Wi-Fi/TCP pairing with this variant; retain the default `pc_v22` profile.
+Status returns the selected `profile`. Confirm the displayed server IP and
+advance within the 120-second management phase; the sender itself runs for
+up to 60 seconds. A stale candidate listing does not prove a new pairing: check
+for a new join result and TCP identity exchange. Start a new session for each comparison;
+never change profiles midway through a phase. Keep the known working baseline
+and re-pair the module with it after a failed comparison.
+
+
 ### RIDEN PC provisioning wire profile
 
 The original-module setup uses **two ESPTouch length-coded transmissions**.
-These are the wire rules implemented by RIDEN PC software 1.0.0.22; they are
-not yet a claim that LabBridge emits this profile or that W01 accepts it from
-an ESP acting as the AP. No initial TCP connection or IP address on the module
-is needed: it observes Wi-Fi frame lengths before joining the network.
+LabBridge's PC-profile sender implements the wire rules of RIDEN PC software
+1.0.0.22. A W01 RD6018 accepted this profile from the ESP AP with WPA2 and an
+associated phone. No initial TCP connection or IP address on the
+module is needed: it observes Wi-Fi frame lengths before joining the network.
 
 | Phase | SSID field `S` | Password field `P` | Transition |
 | --- | --- | --- | --- |
@@ -345,6 +359,34 @@ Protocol/provisioning references: [original-module bridge and pairing documentat
 [ordinary/P model scaling](https://github.com/morgendagen/riden-dongle/blob/main/src/riden_modbus/riden_modbus.cpp),
 [Espressif RF coexistence](https://docs.espressif.com/projects/esp-idf/en/v5.5.2/esp32s3/api-guides/coexist.html).
 No third-party implementation code is vendored for this transport/provisioner.
+The portable PC-profile codec/scheduler is separate from the general ESPTouch
+reference codec. It keeps the multicast counter across bursts/phases, commits a
+packet only after UDP submission, and waits only on transient queue backpressure
+(up to one second) rather than inserting a fixed packet delay. STOP/cancellation
+is checked between packets and during the quiet interval. An eleven-byte result
+is counted only during phase two, for a matching peer/embedded AP-subnet address;
+it stops credential transmission but does not advance management or enable output.
+
+Unregistered TCP discovery peers are monitored with read-only identity probes:
+one second after a valid reply, with a two-second reply deadline. A missed reply
+or identity change closes that stream and releases its serial claim. A second
+live stream with the same serial remains rejected. Configured devices use their
+existing driver polling/recovery. This does not confirm an output state.
+
+### Stable host USB names
+
+Use `/dev/serial/by-id/` paths or locally configured udev aliases instead of
+unstable `/dev/ttyACM0` numbering. The SDK resolves USB identity for native ESP
+CDC/JTAG line control while opening the selected stable path.
+
+The [example udev rules](../examples/host/99-labbridge-usb.rules.example) use
+synthetic aliases and serial placeholders. Adapt and install rules locally;
+never commit physical USB serials, installed host rules, node assignments or
+configured network identities. Recheck the physical device before flashing.
+
+```sh
+labbridge --endpoint serial:/dev/serial/by-id/REPLACE_WITH_DEVICE_ID call core.get_node
+```
 
 ## Public API and USB
 
