@@ -2,6 +2,7 @@
 // Copyright (c) 2026 LabBridge contributors
 import {RpcStream} from './stream.js';
 import {RequestQueue} from './request-queue.js';
+import {SampleClock} from './sample-clock.js';
 import {Configuration,CoreApi,ComponentsApi,Dl24mApi} from '../../generated/src/index';
 import {DeviceFromJSON,MeasurementsFromJSON,Dl24mSettingsFromJSON,OperationFromJSON,ActuatorStateFromJSON} from '../../generated/src/index';
 import type {Device,Measurements,Dl24mSettings,Operation,ActuatorState} from '../../generated/src/index';
@@ -19,6 +20,7 @@ export class BenchAdapter {
  measurement?:Measurements;settings:Dl24mSettings={};actor?:ActuatorState;receivedAt=0;pollMs=1000;
  onChange=()=>{};onSample=(m:Measurements)=>{};onError=(m:string)=>{};onGap=()=>{};
  readonly stream=new RpcStream(`${location.protocol==='https:'?'wss:':'ws:'}//${location.host}/api/v1/ws`);
+ private readonly sampleClock=new SampleClock();
  private operations=new Map<string,Operation>();
  private operationWaiters=new Map<string,{resolve:(o:Operation)=>void;reject:(e:Error)=>void;timer:ReturnType<typeof setTimeout>}>();
  constructor(){
@@ -60,7 +62,7 @@ export class BenchAdapter {
   if(!this.devices.length){this.device=undefined;this.onChange();throw Error('No DL24M device configured on this node');}
   this.device=this.devices.find(d=>d.id===this.device?.id)??this.devices[0];
   if(!this.sink)throw Error('DL24M sink component unavailable');
-  this.connected=true;await this.stream.subscribe(this.device.id,this.pollMs);await this.initialSnapshot();this.onChange();
+  this.connected=true;this.sampleClock.start(performance.now());await this.stream.subscribe(this.device.id,this.pollMs);await this.initialSnapshot();this.onChange();
  }
  private snapshot(event:any){
   if(event.boot_id!==this.boot){this.lose('ESP restarted: reservation invalidated. Reconnect to start a new session.');return;}
@@ -76,7 +78,7 @@ export class BenchAdapter {
   if(body.devices){const list=body.devices.map(DeviceFromJSON);this.devices=list.filter((d:Device)=>d.driver==='dl24m');this.device=this.devices.find(d=>d.id===this.device?.id)??this.device;}
   const actor=body.actors?.find((a:any)=>a.component_id===this.sink);if(actor)this.actor=ActuatorStateFromJSON(actor);
   if(body.details?.settings){this.settings=Dl24mSettingsFromJSON(body.details.settings);}
-  if(body.measurements){this.measurement=MeasurementsFromJSON(body.measurements);this.receivedAt=performance.now();this.onSample(this.measurement);}
+  if(body.measurements){this.receivedAt=performance.now();const m:Measurements=this.sampleClock.adjust(MeasurementsFromJSON(body.measurements),this.receivedAt);this.measurement=m;this.onSample(m);}
   this.onChange();
  }
  private async initialSnapshot(){
@@ -102,7 +104,7 @@ export class BenchAdapter {
   if(this.lease)await this.release();
   const next=this.devices.find(d=>d.id===id);if(!next)throw Error('Unknown DL24M device');
   this.invalidate();this.device=next;this.actor=undefined;this.measurement=undefined;this.settings={};
-  this.onChange();if(this.connected){await this.stream.subscribe(id,this.pollMs);await this.initialSnapshot();}
+  this.onChange();if(this.connected){this.sampleClock.start(performance.now());await this.stream.subscribe(id,this.pollMs);await this.initialSnapshot();}
  }
  async reserve(){
   if(!this.connected||!this.device||!this.fresh||this.uncertain)throw Error('Reconnect and wait for fresh measurements before reserving');

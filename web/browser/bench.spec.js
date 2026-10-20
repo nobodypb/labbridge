@@ -16,7 +16,7 @@ async function backend(page,opts={}){
   if(path==='/api/v1/leases')return state.conflict?reply({detail:'Already reserved'},409):reply({id:'lease-a',device_ids:body.device_ids,expires_at_ms:100000,state:'active'});
   if(path.endsWith('/heartbeat'))return state.heartbeatFail?reply({detail:'Lease expired'},423):reply({id:'lease-a',device_ids:['load-a'],expires_at_ms:100000,state:'active'});
   if(path==='/api/v1/leases/lease-a/stop')return reply({id:'lease-a',device_ids:['load-a'],expires_at_ms:0,state:'stopped'});
-  if(path.endsWith('/measurements'))return reply({device_id:path.split('/')[4],boot_id:state.boot,sequence:state.sequence++,received_ms:state.sequence*1000,age_ms:0,quality:state.stale?'stale':'valid',voltage_v:state.voltage??10,current_a:.1,power_w:1,load_mode:['cc','cv','cr','cp'][state.settings.mode],load_target:state.target??{mode:['cc','cv','cr','cp'][state.settings.mode],value:.1,unit:'A'},temperature_channels:[{id:'internal',kind:'internal',quality:'valid',age_ms:0,received_ms:1000,value_c:25}]});
+  if(path.endsWith('/measurements'))return reply({device_id:path.split('/')[4],boot_id:state.boot,sequence:state.sequence++,received_ms:state.receivedMs??(state.lastReceivedMs=100000+performance.now()),age_ms:0,quality:state.stale?'stale':'valid',voltage_v:state.voltage??10,current_a:.1,power_w:1,load_mode:['cc','cv','cr','cp'][state.settings.mode],load_target:state.target??{mode:['cc','cv','cr','cp'][state.settings.mode],value:.1,unit:'A'},temperature_channels:[{id:'internal',kind:'internal',quality:'valid',age_ms:0,received_ms:1000,value_c:25}]});
   if(path.endsWith('/dl24m/diagnostics'))return reply({entries:[{sequence:1,received_ms:1000,generation:1,direction:'tx',hex:'b1b2100000000000b6',truncated:false}],dropped:1,registers:[{name:'output',command:16,value:0,quality:'valid',received_ms:1000,age_ms:0}]});
   if(path.endsWith('/state'))return reply({device_id:path.split('/')[4],component_id:'sink',state:'ready',output:state.output,settings:{current_a:.1,regulation_mode:'cc'}});
   if(path.endsWith('/dl24m/settings')&&method==='GET')return reply(state.settings);
@@ -206,4 +206,13 @@ test('CC current remains adjustable while ON through the common current operatio
  await expect.poll(()=>s.writes.find(w=>w.path.endsWith('/current'))?.body).toEqual({current_a:.12});
  await expect(page.locator('#benchStatus')).toContainText('succeeded');
  expect(s.writes.filter(w=>w.path.endsWith('/dl24m/target'))).toHaveLength(0);
+});
+
+test('buffered valid telemetry ages out without renewing freshness on arrival',async({page})=>{
+ const s=await backend(page);await connect(page);await page.locator('#reserve').click();
+ await expect(page.locator('#loadBtn')).toBeEnabled();s.receivedMs=s.lastReceivedMs+100;
+ await expect(page.locator('#dataQuality')).toContainText('Stale',{timeout:6000});
+ await expect(page.locator('#loadBtn')).toBeDisabled();await expect(page.locator('#rV')).toHaveText('—');
+ s.receivedMs=undefined;await expect(page.locator('#dataQuality')).toContainText('fresh');await expect(page.locator('#loadBtn')).toBeEnabled();
+ expect(s.writes.filter(w=>w.path.endsWith('/output'))).toHaveLength(0);
 });

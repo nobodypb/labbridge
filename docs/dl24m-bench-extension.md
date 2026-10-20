@@ -96,6 +96,11 @@ operation completion use pushed snapshots, with no HTTP polling. Load view
 pauses recording while OFF, while readings, state checks and heartbeats continue.
 Native values and their quality/source are also retained in CSV separately from
 browser-session charge/energy.
+The browser anchors the device clock conservatively to the subscription request
+that caused its first sample. Later arrival does not renew freshness: queued
+transport time also ages scalar, temperature and native readings. Expired samples
+lock control, break curves and do not enter session integrals. Device changes and
+reconnects establish a new clock bound; changing push interval retains it.
 
 ## Memory and response integrity
 
