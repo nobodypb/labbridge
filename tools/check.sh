@@ -7,6 +7,4 @@ cmake --build .build/host -j2
 ctest --test-dir .build/host --output-on-failure
 python3 -m unittest discover -s tests -p 'test_*.py' -v
 PYTHONPATH=host/src python3 -m unittest discover -s host/tests -v
-if [[ -n "${IDF_PATH:-}" ]]; then
-  IDF_PATH="$IDF_PATH" reference/scripts/test.sh
-fi
+tools/check_reference.sh

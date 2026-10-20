@@ -1,7 +1,11 @@
 """Small orchestration layer above the generated typed operations."""
+
 import threading
 import time
 import uuid
+import importlib
+import inspect
+import pkgutil
 from contextlib import contextmanager
 from labbridge_generated.api_client import ApiClient
 from labbridge_generated.configuration import Configuration
@@ -14,47 +18,80 @@ from labbridge_generated.models.lease_request import LeaseRequest
 from labbridge_generated.models.stop_request import StopRequest
 from .transport import SerialTransport
 
+
 class OperationFailed(RuntimeError):
     def __init__(self, operation):
         self.operation = operation
-        super().__init__(f'{operation.id}: {operation.status} at {operation.stage}; output={operation.final_output}')
+        super().__init__(
+            f"{operation.id}: {operation.status} at {operation.stage}; output={operation.final_output}"
+        )
+
 
 class Node:
-    def __init__(self, url, token='', *, rest=None):
-        config = Configuration(host='http://usb' if url.startswith('serial:') else url.rstrip('/'))
+    def __init__(self, url, token="", *, rest=None):
+        config = Configuration(
+            host="http://usb" if url.startswith("serial:") else url.rstrip("/")
+        )
         config.access_token = token
         # Mutations must not be retried by urllib3 independently of the operation engine.
         config.retries = 0
         self.client = ApiClient(config)
         if rest is not None:
             self.client.rest_client = rest
-        elif url.startswith('serial:'):
-            self.client.rest_client = SerialTransport(url.removeprefix('serial:'))
+        elif url.startswith("serial:"):
+            self.client.rest_client = SerialTransport(url.removeprefix("serial:"))
+        import labbridge_generated.api as package
+
+        self.apis = {}
+        for module in pkgutil.iter_modules(package.__path__):
+            loaded = importlib.import_module(package.__name__ + "." + module.name)
+            for name, cls in inspect.getmembers(loaded, inspect.isclass):
+                if name.endswith("Api") and cls.__module__ == loaded.__name__:
+                    self.apis[module.name.removesuffix("_api")] = cls(self.client)
         self.core = CoreApi(self.client)
         self.dl24m = Dl24mApi(self.client)
         self.rd60xx = Rd60xxApi(self.client)
         self.interlock = GpioInterlockApi(self.client)
         self.temperature = Ds18b20Api(self.client)
 
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *args):
+        self.close()
+
     def wait(self, operation, timeout=12.0):
         identifier = operation if isinstance(operation, str) else operation.id
-        deadline = time.monotonic()+timeout
+        deadline = time.monotonic() + timeout
         while time.monotonic() < deadline:
             result = self.core.get_operation(identifier, _request_timeout=2.0)
-            if result.status == 'succeeded':
+            if result.status == "succeeded":
                 return result
-            if result.status in ('failed', 'cancelled'):
+            if result.status in ("failed", "cancelled"):
                 raise OperationFailed(result)
-            time.sleep(.05)
-        raise TimeoutError(f'Operation {identifier} not terminal; query before another mutation')
+            time.sleep(0.05)
+        raise TimeoutError(
+            f"Operation {identifier} not terminal; query before another mutation"
+        )
 
     def stop(self, device_id):
-        return self.wait(self.core.stop_device(device_id, uuid.uuid4().hex, StopRequest(), _request_timeout=2.0))
+        return self.wait(
+            self.core.stop_device(
+                device_id, uuid.uuid4().hex, StopRequest(), _request_timeout=2.0
+            )
+        )
 
     def close(self):
-        self.client.close()
+        rest = self.client.rest_client
+        if hasattr(rest, "close"):
+            rest.close()
+        elif hasattr(rest, "pool_manager"):
+            rest.pool_manager.clear()
 
-class LeaseLost(RuntimeError): pass
+
+class LeaseLost(RuntimeError):
+    pass
+
 
 class Session:
     def __init__(self, nodes, leases):
@@ -67,13 +104,20 @@ class Session:
     def _heartbeat(self):
         while not self.stop_event.wait(1):
             try:
-                for name, lease in self.leases.items():
-                    response = self.nodes[name].core.heartbeat_lease(lease.id, StopRequest(), _request_timeout=2.0)
-                    if response.state != 'active':
-                        raise LeaseLost(f'{name}: lease no longer active')
+                self.heartbeat()
             except Exception as exc:
                 self.error = exc
                 self.stop_event.set()
+
+    def heartbeat(self):
+        for name, lease in self.leases.items():
+            if self.stop_event.is_set():
+                return
+            response = self.nodes[name].core.heartbeat_lease(
+                lease.id, StopRequest(), _request_timeout=2.0
+            )
+            if response.state != "active":
+                raise LeaseLost(f"{name}: lease no longer active")
 
     def token(self, name):
         self.check()
@@ -81,11 +125,12 @@ class Session:
 
     def check(self):
         if self.error:
-            raise LeaseLost('Cluster heartbeat failed') from self.error
+            raise LeaseLost("Cluster heartbeat failed") from self.error
 
     def close(self):
         self.stop_event.set()
         self.worker.join(timeout=3)
+
 
 class Cluster:
     def __init__(self, nodes):
@@ -97,7 +142,9 @@ class Cluster:
         try:
             for name in sorted(devices):
                 acquired[name] = self.nodes[name].core.create_lease(
-                    LeaseRequest(device_ids=devices[name], ttl_ms=10000), _request_timeout=2.0)
+                    LeaseRequest(device_ids=devices[name], ttl_ms=10000),
+                    _request_timeout=2.0,
+                )
             session = Session(self.nodes, acquired)
             yield session
             session.check()
@@ -106,9 +153,13 @@ class Cluster:
                 session.close()
             for name, lease in reversed(list(acquired.items())):
                 try:
-                    self.nodes[name].core.stop_lease(lease.id, StopRequest(), _request_timeout=2.0)
+                    self.nodes[name].core.stop_lease(
+                        lease.id, StopRequest(), _request_timeout=2.0
+                    )
                 except Exception as exc:
                     errors.append(exc)
             # Do not hide shutdown failures: local lease expiry remains last resort.
             if errors:
-                raise ExceptionGroup('One or more node shutdown requests failed', errors)
+                raise ExceptionGroup(
+                    "One or more node shutdown requests failed", errors
+                )

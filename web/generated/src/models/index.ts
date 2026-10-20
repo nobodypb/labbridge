@@ -1,12 +1,19 @@
 /* tslint:disable */
 /* eslint-disable */
+export * from './CellTemperatureGuard';
 export * from './CurrentRequest';
 export * from './Device';
 export * from './DeviceConfiguration';
 export * from './DeviceList';
+export * from './Dl24mBankRequest';
+export * from './Dl24mBankTargetRequest';
+export * from './Dl24mRegister';
+export * from './Dl24mRegisters';
 export * from './Dl24mSettings';
+export * from './InterlockConfiguration';
 export * from './Lease';
 export * from './LeaseRequest';
+export * from './ManagementToken';
 export * from './Measurements';
 export * from './NodeConfiguration';
 export * from './NodeInfo';

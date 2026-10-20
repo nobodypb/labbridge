@@ -20,6 +20,20 @@ import {
     SafetyLimitsToJSON,
     SafetyLimitsToJSONTyped,
 } from './SafetyLimits';
+import type { CellTemperatureGuard } from './CellTemperatureGuard';
+import {
+    CellTemperatureGuardFromJSON,
+    CellTemperatureGuardFromJSONTyped,
+    CellTemperatureGuardToJSON,
+    CellTemperatureGuardToJSONTyped,
+} from './CellTemperatureGuard';
+import type { InterlockConfiguration } from './InterlockConfiguration';
+import {
+    InterlockConfigurationFromJSON,
+    InterlockConfigurationFromJSONTyped,
+    InterlockConfigurationToJSON,
+    InterlockConfigurationToJSONTyped,
+} from './InterlockConfiguration';
 
 /**
  * 
@@ -63,6 +77,18 @@ export interface DeviceConfiguration {
      * @memberof DeviceConfiguration
      */
     limits: SafetyLimits;
+    /**
+     * 
+     * @type {CellTemperatureGuard}
+     * @memberof DeviceConfiguration
+     */
+    cellTemperature?: CellTemperatureGuard;
+    /**
+     * 
+     * @type {InterlockConfiguration}
+     * @memberof DeviceConfiguration
+     */
+    interlock?: InterlockConfiguration;
 }
 
 /**
@@ -93,6 +119,8 @@ export function DeviceConfigurationFromJSONTyped(json: any, ignoreDiscriminator:
         'endpoint': json['endpoint'],
         'pins': json['pins'] == null ? undefined : json['pins'],
         'limits': SafetyLimitsFromJSON(json['limits']),
+        'cellTemperature': json['cell_temperature'] == null ? undefined : CellTemperatureGuardFromJSON(json['cell_temperature']),
+        'interlock': json['interlock'] == null ? undefined : InterlockConfigurationFromJSON(json['interlock']),
     };
 }
 
@@ -113,6 +141,8 @@ export function DeviceConfigurationToJSONTyped(value?: DeviceConfiguration | nul
         'endpoint': value['endpoint'],
         'pins': value['pins'],
         'limits': SafetyLimitsToJSON(value['limits']),
+        'cell_temperature': CellTemperatureGuardToJSON(value['cellTemperature']),
+        'interlock': InterlockConfigurationToJSON(value['interlock']),
     };
 }
 

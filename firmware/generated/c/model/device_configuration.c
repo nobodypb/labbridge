@@ -11,7 +11,9 @@ static device_configuration_t *device_configuration_create_internal(
     char *transport,
     char *endpoint,
     list_t *pins,
-    safety_limits_t *limits
+    safety_limits_t *limits,
+    cell_temperature_guard_t *cell_temperature,
+    interlock_configuration_t *interlock
     ) {
     device_configuration_t *device_configuration_local_var = malloc(sizeof(device_configuration_t));
     if (!device_configuration_local_var) {
@@ -23,6 +25,8 @@ static device_configuration_t *device_configuration_create_internal(
     device_configuration_local_var->endpoint = endpoint;
     device_configuration_local_var->pins = pins;
     device_configuration_local_var->limits = limits;
+    device_configuration_local_var->cell_temperature = cell_temperature;
+    device_configuration_local_var->interlock = interlock;
 
     device_configuration_local_var->_library_owned = 1;
     return device_configuration_local_var;
@@ -34,7 +38,9 @@ __attribute__((deprecated)) device_configuration_t *device_configuration_create(
     char *transport,
     char *endpoint,
     list_t *pins,
-    safety_limits_t *limits
+    safety_limits_t *limits,
+    cell_temperature_guard_t *cell_temperature,
+    interlock_configuration_t *interlock
     ) {
     return device_configuration_create_internal (
         id,
@@ -42,7 +48,9 @@ __attribute__((deprecated)) device_configuration_t *device_configuration_create(
         transport,
         endpoint,
         pins,
-        limits
+        limits,
+        cell_temperature,
+        interlock
         );
 }
 
@@ -81,6 +89,14 @@ void device_configuration_free(device_configuration_t *device_configuration) {
     if (device_configuration->limits) {
         safety_limits_free(device_configuration->limits);
         device_configuration->limits = NULL;
+    }
+    if (device_configuration->cell_temperature) {
+        cell_temperature_guard_free(device_configuration->cell_temperature);
+        device_configuration->cell_temperature = NULL;
+    }
+    if (device_configuration->interlock) {
+        interlock_configuration_free(device_configuration->interlock);
+        device_configuration->interlock = NULL;
     }
     free(device_configuration);
 }
@@ -154,6 +170,32 @@ cJSON *device_configuration_convertToJSON(device_configuration_t *device_configu
     goto fail;
     }
 
+
+    // device_configuration->cell_temperature
+    if(device_configuration->cell_temperature) {
+    cJSON *cell_temperature_local_JSON = cell_temperature_guard_convertToJSON(device_configuration->cell_temperature);
+    if(cell_temperature_local_JSON == NULL) {
+    goto fail; //model
+    }
+    cJSON_AddItemToObject(item, "cell_temperature", cell_temperature_local_JSON);
+    if(item->child == NULL) {
+    goto fail;
+    }
+    }
+
+
+    // device_configuration->interlock
+    if(device_configuration->interlock) {
+    cJSON *interlock_local_JSON = interlock_configuration_convertToJSON(device_configuration->interlock);
+    if(interlock_local_JSON == NULL) {
+    goto fail; //model
+    }
+    cJSON_AddItemToObject(item, "interlock", interlock_local_JSON);
+    if(item->child == NULL) {
+    goto fail;
+    }
+    }
+
     return item;
 fail:
     if (item) {
@@ -171,6 +213,12 @@ device_configuration_t *device_configuration_parseFromJSON(cJSON *device_configu
 
     // define the local variable for device_configuration->limits
     safety_limits_t *limits_local_nonprim = NULL;
+
+    // define the local variable for device_configuration->cell_temperature
+    cell_temperature_guard_t *cell_temperature_local_nonprim = NULL;
+
+    // define the local variable for device_configuration->interlock
+    interlock_configuration_t *interlock_local_nonprim = NULL;
 
     // device_configuration->id
     cJSON *id = cJSON_GetObjectItemCaseSensitive(device_configurationJSON, "id");
@@ -272,6 +320,24 @@ device_configuration_t *device_configuration_parseFromJSON(cJSON *device_configu
     
     limits_local_nonprim = safety_limits_parseFromJSON(limits); //nonprimitive
 
+    // device_configuration->cell_temperature
+    cJSON *cell_temperature = cJSON_GetObjectItemCaseSensitive(device_configurationJSON, "cell_temperature");
+    if (cJSON_IsNull(cell_temperature)) {
+        cell_temperature = NULL;
+    }
+    if (cell_temperature) { 
+    cell_temperature_local_nonprim = cell_temperature_guard_parseFromJSON(cell_temperature); //nonprimitive
+    }
+
+    // device_configuration->interlock
+    cJSON *interlock = cJSON_GetObjectItemCaseSensitive(device_configurationJSON, "interlock");
+    if (cJSON_IsNull(interlock)) {
+        interlock = NULL;
+    }
+    if (interlock) { 
+    interlock_local_nonprim = interlock_configuration_parseFromJSON(interlock); //nonprimitive
+    }
+
 
     device_configuration_local_var = device_configuration_create_internal (
         strdup(id->valuestring),
@@ -279,7 +345,9 @@ device_configuration_t *device_configuration_parseFromJSON(cJSON *device_configu
         strdup(transport->valuestring),
         strdup(endpoint->valuestring),
         pins ? pinsList : NULL,
-        limits_local_nonprim
+        limits_local_nonprim,
+        cell_temperature ? cell_temperature_local_nonprim : NULL,
+        interlock ? interlock_local_nonprim : NULL
         );
 
     return device_configuration_local_var;
@@ -296,6 +364,14 @@ end:
     if (limits_local_nonprim) {
         safety_limits_free(limits_local_nonprim);
         limits_local_nonprim = NULL;
+    }
+    if (cell_temperature_local_nonprim) {
+        cell_temperature_guard_free(cell_temperature_local_nonprim);
+        cell_temperature_local_nonprim = NULL;
+    }
+    if (interlock_local_nonprim) {
+        interlock_configuration_free(interlock_local_nonprim);
+        interlock_local_nonprim = NULL;
     }
     return NULL;
 

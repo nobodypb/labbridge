@@ -33,13 +33,32 @@ export interface WifiScan {
      * @memberof WifiScan
      */
     networks: Array<WifiNetwork>;
+    /**
+     * 
+     * @type {string}
+     * @memberof WifiScan
+     */
+    state: WifiScanStateEnum;
 }
+
+
+/**
+ * @export
+ */
+export const WifiScanStateEnum = {
+    Scanning: 'scanning',
+    Complete: 'complete',
+    Failed: 'failed'
+} as const;
+export type WifiScanStateEnum = typeof WifiScanStateEnum[keyof typeof WifiScanStateEnum];
+
 
 /**
  * Check if a given object implements the WifiScan interface.
  */
 export function instanceOfWifiScan(value: object): value is WifiScan {
     if (!('networks' in value) || value['networks'] === undefined) return false;
+    if (!('state' in value) || value['state'] === undefined) return false;
     return true;
 }
 
@@ -54,6 +73,7 @@ export function WifiScanFromJSONTyped(json: any, ignoreDiscriminator: boolean): 
     return {
         
         'networks': ((json['networks'] as Array<any>).map(WifiNetworkFromJSON)),
+        'state': json['state'],
     };
 }
 
@@ -69,6 +89,7 @@ export function WifiScanToJSONTyped(value?: WifiScan | null, ignoreDiscriminator
     return {
         
         'networks': ((value['networks'] as Array<any>).map(WifiNetworkToJSON)),
+        'state': value['state'],
     };
 }
 

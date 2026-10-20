@@ -158,13 +158,111 @@ void Node::release(Lease &l, uint64_t now) {
   if (!l.active)
     return;
   l.active = false;
-  for (auto &d : l.devices)
+  for (auto &d : l.devices) {
+    cancel_active(d, "lease_stopped");
     devices_.at(d)->stop(now);
+  }
+}
+void Node::cell_guard(const std::string &device, CellGuard guard) {
+  if (!devices_.count(device) || !devices_.count(guard.sensor) ||
+      guard.channel.empty() || guard.max_age_ms < 100 ||
+      guard.max_age_ms > 3000 || !std::isfinite(guard.minimum_c) ||
+      !std::isfinite(guard.maximum_c) || guard.minimum_c >= guard.maximum_c)
+    throw std::invalid_argument("Invalid cell guard dependency");
+  cell_guards_[device] = std::move(guard);
+}
+bool Node::temperature_ok(const std::string &device, uint64_t now) const {
+  auto it = cell_guards_.find(device);
+  if (it == cell_guards_.end())
+    return true;
+  const auto &g = it->second;
+  auto m = devices_.at(g.sensor)->measurements(now);
+  auto channels = m.at("temperature_channels");
+  if (!cJSON_IsArray(channels))
+    return false;
+  for (auto p = channels->child; p; p = p->next) {
+    Json t(cJSON_Duplicate(p, true));
+    if (t.text("id") != g.channel)
+      continue;
+    auto kind = t.text("kind");
+    double value = t.number("value_c", NAN),
+           received = t.number("received_ms", -1);
+    return (kind == "cell" || kind == "external_probe") &&
+           t.text("quality") == "valid" && std::isfinite(value) &&
+           received >= 0 && received <= now && now - received <= g.max_age_ms &&
+           value >= g.minimum_c && value <= g.maximum_c;
+  }
+  return false;
+}
+void Node::cancel_active(const std::string &device, const std::string &reason) {
+  auto it = active_operations_.find(device);
+  if (it == active_operations_.end())
+    return;
+  operations_.at(it->second)
+      .set("status", "cancelled")
+      .set("stage", reason)
+      .set("final_output", "unknown");
+  active_operations_.erase(it);
+}
+bool Node::idle(uint64_t now) {
+  tick(now);
+  if (!active_operations_.empty())
+    return false;
+  for (auto &p : leases_)
+    if (p.second.active)
+      return false;
+  return true;
+}
+bool Node::quiescent(uint64_t now) {
+  tick(now);
+  for (auto &l : leases_)
+    if (l.second.active)
+      return false;
+  if (!active_operations_.empty())
+    return false;
+  for (auto &d : devices_) {
+    auto description = d.second->describe(now);
+    auto caps = description.at("capabilities");
+    bool output = false;
+    if (cJSON_IsArray(caps))
+      for (auto p = caps->child; p; p = p->next)
+        if (cJSON_IsString(p) && std::string(p->valuestring) == "output")
+          output = true;
+    if (output && !d.second->safe_to_reconfigure(now))
+      return false;
+  }
+  return true;
 }
 void Node::tick(uint64_t now) {
+  if (now >= prune_at_) {
+    prune_at_ = now + 1000;
+    for (auto it = keys_.begin(); it != keys_.end();) {
+      auto op = operations_.find(it->second.id);
+      bool terminal = op != operations_.end() &&
+                      op->second.text("status") != "running" &&
+                      op->second.text("status") != "pending";
+      if (terminal && now >= it->second.created_ms &&
+          now - it->second.created_ms >= 300000) {
+        operations_.erase(it->second.id);
+        it = keys_.erase(it);
+      } else
+        ++it;
+    }
+  }
+
   for (auto &p : leases_)
     if (p.second.active && now >= p.second.deadline)
       release(p.second, now);
+  for (auto &p : cell_guards_)
+    if (!temperature_ok(p.first, now) && !guard_tripped_[p.first] &&
+        devices_.at(p.first)->describe(now).text("output") != "off") {
+      guard_tripped_[p.first] = true;
+      cancel_active(p.first, "cell_temperature_guard");
+      devices_.at(p.first)->stop(now);
+    }
+  for (auto &p : cell_guards_)
+    if (temperature_ok(p.first, now))
+      guard_tripped_[p.first] = false;
   for (auto &p : devices_)
     p.second->tick(now);
   for (auto it = active_operations_.begin(); it != active_operations_.end();) {
@@ -181,6 +279,17 @@ void Node::tick(uint64_t now) {
     }
     ++it;
   }
+  for (auto &p : leases_)
+    if (p.second.active) {
+      bool unsafe = false;
+      for (auto &d : p.second.devices) {
+        auto state = devices_.at(d)->describe(now).text("state");
+        if (state == "fault" || state == "unavailable")
+          unsafe = true;
+      }
+      if (unsafe)
+        release(p.second, now);
+    }
 }
 Response Node::request(const std::string &method, const std::string &path,
                        const Json &body, const Headers &headers, uint64_t now) {
@@ -223,7 +332,7 @@ Response Node::request(const std::string &method, const std::string &path,
     Json j;
     j.set("id", id_)
         .set("boot_id", boot_)
-        .set("firmware_version", "0.1.0-dev")
+        .set("firmware_version", version_)
         .set("board", board_)
         .set("api_version", "0.1.0");
     return {200, j};
@@ -307,7 +416,7 @@ Response Node::request(const std::string &method, const std::string &path,
     auto key = header(headers, "Idempotency-Key");
     if (key.empty() || key.size() > 96)
       return problem(400, "Idempotency-Key required (1..96 bytes)");
-    std::string signature = method + path + body.dump();
+    std::string signature = method + path + body.canonical_dump();
     auto saved = keys_.find(key);
     if (saved != keys_.end()) {
       if (saved->second.signature != signature)
@@ -316,17 +425,36 @@ Response Node::request(const std::string &method, const std::string &path,
               operations_.at(saved->second.id),
               {{"Location", "/api/v1/operations/" + saved->second.id}}};
     }
-    if (keys_.size() >= 128)
-      return problem(503, "Operation journal full; restart only after all "
-                          "outputs are confirmed off");
-    bool stop =
-        op == "stopDevice" || (op == "setOutput" && !body.boolean("enabled"));
+    bool stop = op == "stopDevice" ||
+                (op == "setSwitchPath" && body.text("path") == "isolated") ||
+                (op == "setOutput" && !body.boolean("enabled"));
+    if (keys_.size() >= 128) {
+      if (!stop)
+        return problem(503, "Operation cache full; stop remains available");
+      auto oldest = keys_.end();
+      for (auto it = keys_.begin(); it != keys_.end(); ++it) {
+        auto status = operations_.at(it->second.id).text("status");
+        if (status == "running" || status == "pending")
+          continue;
+        if (oldest == keys_.end() ||
+            it->second.created_ms < oldest->second.created_ms)
+          oldest = it;
+      }
+      if (oldest != keys_.end()) {
+        operations_.erase(oldest->second.id);
+        keys_.erase(oldest);
+      }
+    }
     if (!stop && !owns(header(headers, "X-Lab-Lease"), device, now))
       return problem(423, "Active device lease required");
     if (!stop && active_operations_.count(device))
       return problem(409, "Device operation in progress");
     if (!stop && !driver.supports(op))
       return problem(422, "Capability unavailable");
+    if (!stop && !temperature_ok(device, now))
+      return problem(422, "Fresh external cell-temperature guard required");
+    if (stop)
+      cancel_active(device, "priority_stop");
     Json result;
     try {
       if (stop) {
@@ -349,7 +477,7 @@ Response Node::request(const std::string &method, const std::string &path,
     auto id = next_id("o");
     result.set("id", id).set("device_id", device);
     operations_[id] = result;
-    keys_.emplace(key, Saved{signature, id, device, body});
+    keys_.emplace(key, Saved{signature, id, device, now});
     if (result.text("status") == "running" ||
         result.text("status") == "pending")
       active_operations_[device] = id;

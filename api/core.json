@@ -702,6 +702,37 @@
           }
         ]
       }
+    },
+    "/management/token": {
+      "get": {
+        "operationId": "getManagementToken",
+        "tags": [
+          "core"
+        ],
+        "responses": {
+          "200": {
+            "description": "Confirmed result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ManagementToken"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Structured error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "x-labbridge-local-only": true
+      }
     }
   },
   "components": {
@@ -1008,6 +1039,22 @@
             "items": {
               "$ref": "#/components/schemas/TemperatureChannel"
             }
+          },
+          "set_voltage_v": {
+            "type": "number",
+            "minimum": 0
+          },
+          "set_current_a": {
+            "type": "number",
+            "minimum": 0
+          },
+          "regulation_mode": {
+            "type": "string",
+            "enum": [
+              "cc",
+              "cv",
+              "unknown"
+            ]
           }
         },
         "required": [
@@ -1230,6 +1277,12 @@
           },
           "limits": {
             "$ref": "#/components/schemas/SafetyLimits"
+          },
+          "cell_temperature": {
+            "$ref": "#/components/schemas/CellTemperatureGuard"
+          },
+          "interlock": {
+            "$ref": "#/components/schemas/InterlockConfiguration"
           }
         },
         "required": [
@@ -1270,10 +1323,19 @@
             "items": {
               "$ref": "#/components/schemas/WifiNetwork"
             }
+          },
+          "state": {
+            "type": "string",
+            "enum": [
+              "scanning",
+              "complete",
+              "failed"
+            ]
           }
         },
         "required": [
-          "networks"
+          "networks",
+          "state"
         ]
       },
       "WifiRequest": {
@@ -1331,7 +1393,8 @@
             "minimum": 0
           },
           "node_id": {
-            "type": "string"
+            "type": "string",
+            "pattern": "^[A-Za-z0-9_-]{1,48}$"
           },
           "board": {
             "type": "string"
@@ -1348,6 +1411,78 @@
           "node_id",
           "board",
           "devices"
+        ]
+      },
+      "CellTemperatureGuard": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "sensor_device_id",
+          "channel_id",
+          "minimum_c",
+          "maximum_c",
+          "max_age_ms"
+        ],
+        "properties": {
+          "sensor_device_id": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9_-]{1,48}$"
+          },
+          "channel_id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 48
+          },
+          "minimum_c": {
+            "type": "number",
+            "minimum": -20,
+            "maximum": 80
+          },
+          "maximum_c": {
+            "type": "number",
+            "minimum": -20,
+            "maximum": 80
+          },
+          "max_age_ms": {
+            "type": "integer",
+            "minimum": 100,
+            "maximum": 3000
+          }
+        }
+      },
+      "InterlockConfiguration": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "active_high",
+          "feedback_active_high",
+          "break_ms"
+        ],
+        "properties": {
+          "active_high": {
+            "type": "boolean"
+          },
+          "feedback_active_high": {
+            "type": "boolean"
+          },
+          "break_ms": {
+            "type": "integer",
+            "minimum": 20,
+            "maximum": 2000
+          }
+        }
+      },
+      "ManagementToken": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "token": {
+            "type": "string",
+            "format": "password"
+          }
+        },
+        "required": [
+          "token"
         ]
       }
     }

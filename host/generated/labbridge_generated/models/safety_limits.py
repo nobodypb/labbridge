@@ -35,6 +35,7 @@ class SafetyLimits(BaseModel):
     __properties: ClassVar[List[str]] = ["voltage_v", "current_a", "power_w", "max_age_ms", "max_duration_s"]
 
     model_config = ConfigDict(
+        extra='forbid',
         populate_by_name=True,
         validate_assignment=True,
         protected_namespaces=(),

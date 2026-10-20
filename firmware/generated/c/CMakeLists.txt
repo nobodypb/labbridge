@@ -48,13 +48,20 @@ set(SRCS
     src/binary.c
     external/cJSON.c
     model/object.c
+    model/cell_temperature_guard.c
     model/current_request.c
     model/device.c
     model/device_configuration.c
     model/device_list.c
+    model/dl24m_bank_request.c
+    model/dl24m_bank_target_request.c
+    model/dl24m_register.c
+    model/dl24m_registers.c
     model/dl24m_settings.c
+    model/interlock_configuration.c
     model/lease.c
     model/lease_request.c
+    model/management_token.c
     model/measurements.c
     model/node_configuration.c
     model/node_info.c
@@ -82,13 +89,20 @@ set(HDRS
     external/cJSON.h
     model/object.h
     model/any_type.h
+    model/cell_temperature_guard.h
     model/current_request.h
     model/device.h
     model/device_configuration.h
     model/device_list.h
+    model/dl24m_bank_request.h
+    model/dl24m_bank_target_request.h
+    model/dl24m_register.h
+    model/dl24m_registers.h
     model/dl24m_settings.h
+    model/interlock_configuration.h
     model/lease.h
     model/lease_request.h
+    model/management_token.h
     model/measurements.h
     model/node_configuration.h
     model/node_info.h

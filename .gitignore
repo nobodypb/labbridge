@@ -22,3 +22,5 @@ results/
 .tools/
 web/dist/
 !examples/**/*.json
+**/sdkconfig.usb-otg
+**/sdkconfig.*.old

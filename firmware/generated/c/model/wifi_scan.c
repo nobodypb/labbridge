@@ -4,25 +4,46 @@
 #include "wifi_scan.h"
 
 
+char* wifi_scan_state_ToString(labbridge_api_wifi_scan_STATE_e state) {
+    char* stateArray[] =  { "NULL", "scanning", "complete", "failed" };
+    return stateArray[state];
+}
+
+labbridge_api_wifi_scan_STATE_e wifi_scan_state_FromString(char* state){
+    int stringToReturn = 0;
+    char *stateArray[] =  { "NULL", "scanning", "complete", "failed" };
+    size_t sizeofArray = sizeof(stateArray) / sizeof(stateArray[0]);
+    while(stringToReturn < sizeofArray) {
+        if(strcmp(state, stateArray[stringToReturn]) == 0) {
+            return stringToReturn;
+        }
+        stringToReturn++;
+    }
+    return 0;
+}
 
 static wifi_scan_t *wifi_scan_create_internal(
-    list_t *networks
+    list_t *networks,
+    labbridge_api_wifi_scan_STATE_e state
     ) {
     wifi_scan_t *wifi_scan_local_var = malloc(sizeof(wifi_scan_t));
     if (!wifi_scan_local_var) {
         return NULL;
     }
     wifi_scan_local_var->networks = networks;
+    wifi_scan_local_var->state = state;
 
     wifi_scan_local_var->_library_owned = 1;
     return wifi_scan_local_var;
 }
 
 __attribute__((deprecated)) wifi_scan_t *wifi_scan_create(
-    list_t *networks
+    list_t *networks,
+    labbridge_api_wifi_scan_STATE_e state
     ) {
     return wifi_scan_create_internal (
-        networks
+        networks,
+        state
         );
 }
 
@@ -68,6 +89,16 @@ cJSON *wifi_scan_convertToJSON(wifi_scan_t *wifi_scan) {
     }
     }
 
+
+    // wifi_scan->state
+    if (labbridge_api_wifi_scan_STATE_NULL == wifi_scan->state) {
+        goto fail;
+    }
+    if(cJSON_AddStringToObject(item, "state", wifi_scan_state_ToString(wifi_scan->state)) == NULL)
+    {
+    goto fail; //Enum
+    }
+
     return item;
 fail:
     if (item) {
@@ -110,9 +141,27 @@ wifi_scan_t *wifi_scan_parseFromJSON(cJSON *wifi_scanJSON){
         list_addElement(networksList, networksItem);
     }
 
+    // wifi_scan->state
+    cJSON *state = cJSON_GetObjectItemCaseSensitive(wifi_scanJSON, "state");
+    if (cJSON_IsNull(state)) {
+        state = NULL;
+    }
+    if (!state) {
+        goto end;
+    }
+
+    labbridge_api_wifi_scan_STATE_e stateVariable;
+    
+    if(!cJSON_IsString(state))
+    {
+    goto end; //Enum
+    }
+    stateVariable = wifi_scan_state_FromString(state->valuestring);
+
 
     wifi_scan_local_var = wifi_scan_create_internal (
-        networksList
+        networksList,
+        stateVariable
         );
 
     return wifi_scan_local_var;

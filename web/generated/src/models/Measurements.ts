@@ -93,6 +93,24 @@ export interface Measurements {
      * @memberof Measurements
      */
     temperatureChannels: Array<TemperatureChannel>;
+    /**
+     * 
+     * @type {number}
+     * @memberof Measurements
+     */
+    setVoltageV?: number;
+    /**
+     * 
+     * @type {number}
+     * @memberof Measurements
+     */
+    setCurrentA?: number;
+    /**
+     * 
+     * @type {string}
+     * @memberof Measurements
+     */
+    regulationMode?: MeasurementsRegulationModeEnum;
 }
 
 
@@ -105,6 +123,16 @@ export const MeasurementsQualityEnum = {
     Unavailable: 'unavailable'
 } as const;
 export type MeasurementsQualityEnum = typeof MeasurementsQualityEnum[keyof typeof MeasurementsQualityEnum];
+
+/**
+ * @export
+ */
+export const MeasurementsRegulationModeEnum = {
+    Cc: 'cc',
+    Cv: 'cv',
+    Unknown: 'unknown'
+} as const;
+export type MeasurementsRegulationModeEnum = typeof MeasurementsRegulationModeEnum[keyof typeof MeasurementsRegulationModeEnum];
 
 
 /**
@@ -141,6 +169,9 @@ export function MeasurementsFromJSONTyped(json: any, ignoreDiscriminator: boolea
         'capacityAh': json['capacity_ah'] == null ? undefined : json['capacity_ah'],
         'energyWh': json['energy_wh'] == null ? undefined : json['energy_wh'],
         'temperatureChannels': ((json['temperature_channels'] as Array<any>).map(TemperatureChannelFromJSON)),
+        'setVoltageV': json['set_voltage_v'] == null ? undefined : json['set_voltage_v'],
+        'setCurrentA': json['set_current_a'] == null ? undefined : json['set_current_a'],
+        'regulationMode': json['regulation_mode'] == null ? undefined : json['regulation_mode'],
     };
 }
 
@@ -166,6 +197,9 @@ export function MeasurementsToJSONTyped(value?: Measurements | null, ignoreDiscr
         'capacity_ah': value['capacityAh'],
         'energy_wh': value['energyWh'],
         'temperature_channels': ((value['temperatureChannels'] as Array<any>).map(TemperatureChannelToJSON)),
+        'set_voltage_v': value['setVoltageV'],
+        'set_current_a': value['setCurrentA'],
+        'regulation_mode': value['regulationMode'],
     };
 }
 

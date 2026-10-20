@@ -1,5 +1,16 @@
 {
- "name":"labbridge-web","version":"0.1.0","private":true,"type":"module",
- "scripts":{"test":"node --test tests/*.test.js","build":"tsc --noEmit && esbuild src/main.ts --bundle --minify --outfile=dist/app.js && cp index.html dist/index.html"},
- "devDependencies":{"typescript":"5.8.3","esbuild":"0.25.12"}
+  "name": "labbridge-web",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node --test tests/*.test.js",
+    "build": "tsc --noEmit && esbuild src/main.ts --bundle --minify --outfile=dist/app.js && cp index.html dist/index.html",
+    "test:browser": "playwright test"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.64.1",
+    "esbuild": "0.25.12",
+    "typescript": "5.8.3"
+  }
 }

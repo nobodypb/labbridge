@@ -32,4 +32,16 @@ int main() {
   }
   assert(rejected && otg.devices().size() == 2);
   std::cout << "resource isolation and board validation passed\n";
+  BoardProfile mixed{"mixed", {{"usb", 1}, {"uart", 1}}, {16, 17}};
+  Registry identities(mixed);
+  identities.add({"one", "rd60xx", "usb", "123", {}});
+  bool duplicate = false;
+  try {
+    identities.add({"two", "rd60xx", "uart", "123", {16, 17}});
+  } catch (const ConfigurationError &) {
+    duplicate = true;
+  }
+  assert(duplicate);
+  auto classic = BoardProfile::esp32_devkit();
+  assert(classic.capacity.at("ble") == 2 && classic.capacity.at("spp") == 0);
 }

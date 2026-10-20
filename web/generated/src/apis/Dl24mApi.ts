@@ -16,6 +16,9 @@
 import * as runtime from '../runtime';
 import type {
   CurrentRequest,
+  Dl24mBankRequest,
+  Dl24mBankTargetRequest,
+  Dl24mRegisters,
   Dl24mSettings,
   Operation,
   Problem,
@@ -24,6 +27,12 @@ import type {
 import {
     CurrentRequestFromJSON,
     CurrentRequestToJSON,
+    Dl24mBankRequestFromJSON,
+    Dl24mBankRequestToJSON,
+    Dl24mBankTargetRequestFromJSON,
+    Dl24mBankTargetRequestToJSON,
+    Dl24mRegistersFromJSON,
+    Dl24mRegistersToJSON,
     Dl24mSettingsFromJSON,
     Dl24mSettingsToJSON,
     OperationFromJSON,
@@ -34,8 +43,19 @@ import {
     StopRequestToJSON,
 } from '../models/index';
 
+export interface GetDl24mRegistersRequest {
+    deviceId: string;
+}
+
 export interface GetDl24mSettingsRequest {
     deviceId: string;
+}
+
+export interface ReadDl24mBankTargetRequest {
+    deviceId: string;
+    xLabLease: string;
+    idempotencyKey: string;
+    dl24mBankRequest: Dl24mBankRequest;
 }
 
 export interface ResetDl24mCountersRequest {
@@ -43,6 +63,13 @@ export interface ResetDl24mCountersRequest {
     xLabLease: string;
     idempotencyKey: string;
     stopRequest: StopRequest;
+}
+
+export interface SetDl24mBankTargetRequest {
+    deviceId: string;
+    xLabLease: string;
+    idempotencyKey: string;
+    dl24mBankTargetRequest: Dl24mBankTargetRequest;
 }
 
 export interface SetDl24mSettingsRequest {
@@ -63,6 +90,45 @@ export interface SetLoadCurrentRequest {
  * 
  */
 export class Dl24mApi extends runtime.BaseAPI {
+
+    /**
+     */
+    async getDl24mRegistersRaw(requestParameters: GetDl24mRegistersRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<Dl24mRegisters>> {
+        if (requestParameters['deviceId'] == null) {
+            throw new runtime.RequiredError(
+                'deviceId',
+                'Required parameter "deviceId" was null or undefined when calling getDl24mRegisters().'
+            );
+        }
+
+        const queryParameters: any = {};
+
+        const headerParameters: runtime.HTTPHeaders = {};
+
+        if (this.configuration && this.configuration.accessToken) {
+            const token = this.configuration.accessToken;
+            const tokenString = await token("bearerAuth", []);
+
+            if (tokenString) {
+                headerParameters["Authorization"] = `Bearer ${tokenString}`;
+            }
+        }
+        const response = await this.request({
+            path: `/api/v1/devices/{deviceId}/dl24m/registers`.replace(`{${"deviceId"}}`, encodeURIComponent(String(requestParameters['deviceId']))),
+            method: 'GET',
+            headers: headerParameters,
+            query: queryParameters,
+        }, initOverrides);
+
+        return new runtime.JSONApiResponse(response, (jsonValue) => Dl24mRegistersFromJSON(jsonValue));
+    }
+
+    /**
+     */
+    async getDl24mRegisters(requestParameters: GetDl24mRegistersRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<Dl24mRegisters> {
+        const response = await this.getDl24mRegistersRaw(requestParameters, initOverrides);
+        return await response.value();
+    }
 
     /**
      */
@@ -100,6 +166,77 @@ export class Dl24mApi extends runtime.BaseAPI {
      */
     async getDl24mSettings(requestParameters: GetDl24mSettingsRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<Dl24mSettings> {
         const response = await this.getDl24mSettingsRaw(requestParameters, initOverrides);
+        return await response.value();
+    }
+
+    /**
+     */
+    async readDl24mBankTargetRaw(requestParameters: ReadDl24mBankTargetRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<Operation>> {
+        if (requestParameters['deviceId'] == null) {
+            throw new runtime.RequiredError(
+                'deviceId',
+                'Required parameter "deviceId" was null or undefined when calling readDl24mBankTarget().'
+            );
+        }
+
+        if (requestParameters['xLabLease'] == null) {
+            throw new runtime.RequiredError(
+                'xLabLease',
+                'Required parameter "xLabLease" was null or undefined when calling readDl24mBankTarget().'
+            );
+        }
+
+        if (requestParameters['idempotencyKey'] == null) {
+            throw new runtime.RequiredError(
+                'idempotencyKey',
+                'Required parameter "idempotencyKey" was null or undefined when calling readDl24mBankTarget().'
+            );
+        }
+
+        if (requestParameters['dl24mBankRequest'] == null) {
+            throw new runtime.RequiredError(
+                'dl24mBankRequest',
+                'Required parameter "dl24mBankRequest" was null or undefined when calling readDl24mBankTarget().'
+            );
+        }
+
+        const queryParameters: any = {};
+
+        const headerParameters: runtime.HTTPHeaders = {};
+
+        headerParameters['Content-Type'] = 'application/json';
+
+        if (requestParameters['xLabLease'] != null) {
+            headerParameters['X-Lab-Lease'] = String(requestParameters['xLabLease']);
+        }
+
+        if (requestParameters['idempotencyKey'] != null) {
+            headerParameters['Idempotency-Key'] = String(requestParameters['idempotencyKey']);
+        }
+
+        if (this.configuration && this.configuration.accessToken) {
+            const token = this.configuration.accessToken;
+            const tokenString = await token("bearerAuth", []);
+
+            if (tokenString) {
+                headerParameters["Authorization"] = `Bearer ${tokenString}`;
+            }
+        }
+        const response = await this.request({
+            path: `/api/v1/devices/{deviceId}/dl24m/banks/read`.replace(`{${"deviceId"}}`, encodeURIComponent(String(requestParameters['deviceId']))),
+            method: 'POST',
+            headers: headerParameters,
+            query: queryParameters,
+            body: Dl24mBankRequestToJSON(requestParameters['dl24mBankRequest']),
+        }, initOverrides);
+
+        return new runtime.JSONApiResponse(response, (jsonValue) => OperationFromJSON(jsonValue));
+    }
+
+    /**
+     */
+    async readDl24mBankTarget(requestParameters: ReadDl24mBankTargetRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<Operation> {
+        const response = await this.readDl24mBankTargetRaw(requestParameters, initOverrides);
         return await response.value();
     }
 
@@ -171,6 +308,77 @@ export class Dl24mApi extends runtime.BaseAPI {
      */
     async resetDl24mCounters(requestParameters: ResetDl24mCountersRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<Operation> {
         const response = await this.resetDl24mCountersRaw(requestParameters, initOverrides);
+        return await response.value();
+    }
+
+    /**
+     */
+    async setDl24mBankTargetRaw(requestParameters: SetDl24mBankTargetRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<Operation>> {
+        if (requestParameters['deviceId'] == null) {
+            throw new runtime.RequiredError(
+                'deviceId',
+                'Required parameter "deviceId" was null or undefined when calling setDl24mBankTarget().'
+            );
+        }
+
+        if (requestParameters['xLabLease'] == null) {
+            throw new runtime.RequiredError(
+                'xLabLease',
+                'Required parameter "xLabLease" was null or undefined when calling setDl24mBankTarget().'
+            );
+        }
+
+        if (requestParameters['idempotencyKey'] == null) {
+            throw new runtime.RequiredError(
+                'idempotencyKey',
+                'Required parameter "idempotencyKey" was null or undefined when calling setDl24mBankTarget().'
+            );
+        }
+
+        if (requestParameters['dl24mBankTargetRequest'] == null) {
+            throw new runtime.RequiredError(
+                'dl24mBankTargetRequest',
+                'Required parameter "dl24mBankTargetRequest" was null or undefined when calling setDl24mBankTarget().'
+            );
+        }
+
+        const queryParameters: any = {};
+
+        const headerParameters: runtime.HTTPHeaders = {};
+
+        headerParameters['Content-Type'] = 'application/json';
+
+        if (requestParameters['xLabLease'] != null) {
+            headerParameters['X-Lab-Lease'] = String(requestParameters['xLabLease']);
+        }
+
+        if (requestParameters['idempotencyKey'] != null) {
+            headerParameters['Idempotency-Key'] = String(requestParameters['idempotencyKey']);
+        }
+
+        if (this.configuration && this.configuration.accessToken) {
+            const token = this.configuration.accessToken;
+            const tokenString = await token("bearerAuth", []);
+
+            if (tokenString) {
+                headerParameters["Authorization"] = `Bearer ${tokenString}`;
+            }
+        }
+        const response = await this.request({
+            path: `/api/v1/devices/{deviceId}/dl24m/bank-target`.replace(`{${"deviceId"}}`, encodeURIComponent(String(requestParameters['deviceId']))),
+            method: 'PUT',
+            headers: headerParameters,
+            query: queryParameters,
+            body: Dl24mBankTargetRequestToJSON(requestParameters['dl24mBankTargetRequest']),
+        }, initOverrides);
+
+        return new runtime.JSONApiResponse(response, (jsonValue) => OperationFromJSON(jsonValue));
+    }
+
+    /**
+     */
+    async setDl24mBankTarget(requestParameters: SetDl24mBankTargetRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<Operation> {
+        const response = await this.setDl24mBankTargetRaw(requestParameters, initOverrides);
         return await response.value();
     }
 

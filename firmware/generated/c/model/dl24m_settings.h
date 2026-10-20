@@ -32,6 +32,7 @@ typedef struct dl24m_settings_t {
     long battery_overtemperature_c; //numeric
     long language; //numeric
     int mode; //numeric
+    int standby_time; //numeric
 
     int _library_owned; // Is the library responsible for freeing this object?
 } dl24m_settings_t;
@@ -49,7 +50,8 @@ __attribute__((deprecated)) dl24m_settings_t *dl24m_settings_create(
     long fan_temperature_c,
     long battery_overtemperature_c,
     long language,
-    int mode
+    int mode,
+    int standby_time
 );
 
 void dl24m_settings_free(dl24m_settings_t *dl24m_settings);

@@ -21,6 +21,23 @@ labbridge_api_measurements_QUALITY_e measurements_quality_FromString(char* quali
     }
     return 0;
 }
+char* measurements_regulation_mode_ToString(labbridge_api_measurements_REGULATIONMODE_e regulation_mode) {
+    char* regulation_modeArray[] =  { "NULL", "cc", "cv", "unknown" };
+    return regulation_modeArray[regulation_mode];
+}
+
+labbridge_api_measurements_REGULATIONMODE_e measurements_regulation_mode_FromString(char* regulation_mode){
+    int stringToReturn = 0;
+    char *regulation_modeArray[] =  { "NULL", "cc", "cv", "unknown" };
+    size_t sizeofArray = sizeof(regulation_modeArray) / sizeof(regulation_modeArray[0]);
+    while(stringToReturn < sizeofArray) {
+        if(strcmp(regulation_mode, regulation_modeArray[stringToReturn]) == 0) {
+            return stringToReturn;
+        }
+        stringToReturn++;
+    }
+    return 0;
+}
 
 static measurements_t *measurements_create_internal(
     char *device_id,
@@ -33,7 +50,10 @@ static measurements_t *measurements_create_internal(
     double power_w,
     double capacity_ah,
     double energy_wh,
-    list_t *temperature_channels
+    list_t *temperature_channels,
+    double set_voltage_v,
+    double set_current_a,
+    labbridge_api_measurements_REGULATIONMODE_e regulation_mode
     ) {
     measurements_t *measurements_local_var = malloc(sizeof(measurements_t));
     if (!measurements_local_var) {
@@ -50,6 +70,9 @@ static measurements_t *measurements_create_internal(
     measurements_local_var->capacity_ah = capacity_ah;
     measurements_local_var->energy_wh = energy_wh;
     measurements_local_var->temperature_channels = temperature_channels;
+    measurements_local_var->set_voltage_v = set_voltage_v;
+    measurements_local_var->set_current_a = set_current_a;
+    measurements_local_var->regulation_mode = regulation_mode;
 
     measurements_local_var->_library_owned = 1;
     return measurements_local_var;
@@ -66,7 +89,10 @@ __attribute__((deprecated)) measurements_t *measurements_create(
     double power_w,
     double capacity_ah,
     double energy_wh,
-    list_t *temperature_channels
+    list_t *temperature_channels,
+    double set_voltage_v,
+    double set_current_a,
+    labbridge_api_measurements_REGULATIONMODE_e regulation_mode
     ) {
     return measurements_create_internal (
         device_id,
@@ -79,7 +105,10 @@ __attribute__((deprecated)) measurements_t *measurements_create(
         power_w,
         capacity_ah,
         energy_wh,
-        temperature_channels
+        temperature_channels,
+        set_voltage_v,
+        set_current_a,
+        regulation_mode
         );
 }
 
@@ -212,6 +241,31 @@ cJSON *measurements_convertToJSON(measurements_t *measurements) {
     goto fail;
     }
     cJSON_AddItemToArray(temperature_channels, itemLocal);
+    }
+    }
+
+
+    // measurements->set_voltage_v
+    if(measurements->set_voltage_v) {
+    if(cJSON_AddNumberToObject(item, "set_voltage_v", measurements->set_voltage_v) == NULL) {
+    goto fail; //Numeric
+    }
+    }
+
+
+    // measurements->set_current_a
+    if(measurements->set_current_a) {
+    if(cJSON_AddNumberToObject(item, "set_current_a", measurements->set_current_a) == NULL) {
+    goto fail; //Numeric
+    }
+    }
+
+
+    // measurements->regulation_mode
+    if(measurements->regulation_mode != labbridge_api_measurements_REGULATIONMODE_NULL) {
+    if(cJSON_AddStringToObject(item, "regulation_mode", measurements_regulation_mode_ToString(measurements->regulation_mode)) == NULL)
+    {
+    goto fail; //Enum
     }
     }
 
@@ -394,6 +448,44 @@ measurements_t *measurements_parseFromJSON(cJSON *measurementsJSON){
         list_addElement(temperature_channelsList, temperature_channelsItem);
     }
 
+    // measurements->set_voltage_v
+    cJSON *set_voltage_v = cJSON_GetObjectItemCaseSensitive(measurementsJSON, "set_voltage_v");
+    if (cJSON_IsNull(set_voltage_v)) {
+        set_voltage_v = NULL;
+    }
+    if (set_voltage_v) { 
+    if(!cJSON_IsNumber(set_voltage_v))
+    {
+    goto end; //Numeric
+    }
+    }
+
+    // measurements->set_current_a
+    cJSON *set_current_a = cJSON_GetObjectItemCaseSensitive(measurementsJSON, "set_current_a");
+    if (cJSON_IsNull(set_current_a)) {
+        set_current_a = NULL;
+    }
+    if (set_current_a) { 
+    if(!cJSON_IsNumber(set_current_a))
+    {
+    goto end; //Numeric
+    }
+    }
+
+    // measurements->regulation_mode
+    cJSON *regulation_mode = cJSON_GetObjectItemCaseSensitive(measurementsJSON, "regulation_mode");
+    if (cJSON_IsNull(regulation_mode)) {
+        regulation_mode = NULL;
+    }
+    labbridge_api_measurements_REGULATIONMODE_e regulation_modeVariable;
+    if (regulation_mode) { 
+    if(!cJSON_IsString(regulation_mode))
+    {
+    goto end; //Enum
+    }
+    regulation_modeVariable = measurements_regulation_mode_FromString(regulation_mode->valuestring);
+    }
+
 
     measurements_local_var = measurements_create_internal (
         strdup(device_id->valuestring),
@@ -406,7 +498,10 @@ measurements_t *measurements_parseFromJSON(cJSON *measurementsJSON){
         power_w ? power_w->valuedouble : 0,
         capacity_ah ? capacity_ah->valuedouble : 0,
         energy_wh ? energy_wh->valuedouble : 0,
-        temperature_channelsList
+        temperature_channelsList,
+        set_voltage_v ? set_voltage_v->valuedouble : 0,
+        set_current_a ? set_current_a->valuedouble : 0,
+        regulation_mode ? regulation_modeVariable : labbridge_api_measurements_REGULATIONMODE_NULL
         );
 
     return measurements_local_var;

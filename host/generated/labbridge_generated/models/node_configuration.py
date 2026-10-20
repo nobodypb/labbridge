@@ -17,7 +17,7 @@ import pprint
 import re  # noqa: F401
 import json
 
-from pydantic import BaseModel, ConfigDict, Field, StrictStr
+from pydantic import BaseModel, ConfigDict, Field, StrictStr, field_validator
 from typing import Any, ClassVar, Dict, List
 from typing_extensions import Annotated
 from labbridge_generated.models.device_configuration import DeviceConfiguration
@@ -29,12 +29,20 @@ class NodeConfiguration(BaseModel):
     NodeConfiguration
     """ # noqa: E501
     revision: Annotated[int, Field(strict=True, ge=0)]
-    node_id: StrictStr
+    node_id: Annotated[str, Field(strict=True)]
     board: StrictStr
     devices: List[DeviceConfiguration]
     __properties: ClassVar[List[str]] = ["revision", "node_id", "board", "devices"]
 
+    @field_validator('node_id')
+    def node_id_validate_regular_expression(cls, value):
+        """Validates the regular expression"""
+        if not re.match(r"^[A-Za-z0-9_-]{1,48}$", value):
+            raise ValueError(r"must validate the regular expression /^[A-Za-z0-9_-]{1,48}$/")
+        return value
+
     model_config = ConfigDict(
+        extra='forbid',
         populate_by_name=True,
         validate_assignment=True,
         protected_namespaces=(),

@@ -2,8 +2,10 @@
 #include <cassert>
 using namespace labbridge;
 struct Wire : Endpoint {
-  std::map<int, uint32_t> regs{{0x10, 0},   {0x11, 24000}, {0x12, 0},
-                               {0x16, 250}, {0x17, 100},   {0x21, 0}};
+  std::map<int, uint32_t> regs{{0x10, 0},    {0x11, 24000}, {0x12, 0},
+                               {0x16, 250},  {0x17, 100},   {0x21, 0},
+                               {0x37, 21000}};
+  uint32_t targets[4] = {100, 500, 1200, 10};
   Bytes rx;
   uint64_t gen = 1;
   unsigned on = 0;
@@ -16,11 +18,15 @@ struct Wire : Endpoint {
       regs[0x10] = v ? 1 : 0;
       if (v)
         ++on;
-    } else if (c == 2)
+    } else if (c == 2) {
+      targets[regs[0x21]] = v;
       regs[0x17] = v;
-    else if (c == 6)
+    } else if (c == 0x47)
+      regs[0x37] = v;
+    else if (c == 6) {
       regs[0x21] = v;
-    else if (dl24m::dl24m_read_only(c)) {
+      regs[0x17] = targets[v];
+    } else if (c == 0x31 || dl24m::dl24m_read_only(c)) {
       v = regs[c];
       rx = {0xca, 0xcb, c,   uint8_t(v >> 16), uint8_t(v >> 8), uint8_t(v), 0,
             0,    0xce, 0xcf};
@@ -36,7 +42,15 @@ struct Wire : Endpoint {
 int main() {
   Wire w;
   bool pending = false;
-  auto save = [&](const Json &j) { pending = j.boolean("stop_pending"); };
+  uint32_t snapshot_wire = 0;
+  auto save = [&](const Json &j) {
+    pending = j.boolean("stop_pending");
+    auto a = j.at("restore");
+    if (cJSON_IsArray(a) && a->child) {
+      Json r(cJSON_Duplicate(a->child, true));
+      snapshot_wire = r.number("wire");
+    }
+  };
   Dl24mDriver d("load", "test", w, {25, .2, 5, 3000, 0}, save, Json());
   for (uint64_t t = 0; t < 1000; t += 5)
     d.tick(t);
@@ -48,15 +62,45 @@ int main() {
          w.regs[0x17] == 150);
   d.execute("setOutput", Json::parse(R"({"enabled":true})"), 1500);
   assert(pending);
-  for (uint64_t t = 1500; t < 1600; t += 5)
+  for (uint64_t t = 1500; t < 1750; t += 5) {
     d.tick(t);
+    if (d.operation(t).text("status") == "succeeded") {
+      assert(d.operation(t).text("final_output") == "on");
+      break;
+    }
+  }
+  assert(d.operation(1750).text("status") == "succeeded");
   assert(w.on == 1);
+  assert(d.operation(1750).text("final_output") == "on");
   ++w.gen;
-  for (uint64_t t = 1600; t < 2000; t += 5)
+  for (uint64_t t = 1750; t < 2000; t += 5)
     d.tick(t);
   assert(w.on == 1 && w.regs[0x10] == 0 && !pending);
   d.stop(2000);
+  assert(d.describe(2000).text("state") == "busy");
   for (uint64_t t = 2000; t < 2200; t += 5)
     d.tick(t);
   assert(w.regs[0x10] == 0);
+  for (uint64_t t = 2200; t < 7000; t += 5)
+    d.tick(t);
+  w.regs[0x37] = 20000; // Changed at front panel after the cached read.
+  d.execute("setDl24mSettings", Json::parse(R"({"overvoltage_v":19})"), 7000);
+  for (uint64_t t = 7000; t < 8000; t += 5)
+    d.tick(t);
+  assert(snapshot_wire == 20000);
+  assert(w.regs[0x37] == 19000);
+  auto cc_before_banks = w.regs[0x17];
+  d.execute("readDl24mBankTarget", Json::parse(R"({"bank":1})"), 8000);
+  for (uint64_t t = 8000; t < 9500; t += 5)
+    d.tick(t);
+  assert(d.operation(9500).text("status") == "succeeded");
+  assert(d.operation(9500).number("confirmed_value") == 500);
+  d.execute("setDl24mBankTarget", Json::parse(R"({"bank":1,"target_raw":750})"),
+            9500);
+  for (uint64_t t = 9500; t < 11000; t += 5)
+    d.tick(t);
+  assert(d.operation(11000).text("status") == "succeeded" &&
+         w.targets[1] == 750);
+  assert(w.regs[0x21] == 0 && w.regs[0x17] == cc_before_banks &&
+         w.regs[0x10] == 0);
 }

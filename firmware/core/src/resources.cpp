@@ -24,9 +24,9 @@ BoardProfile BoardProfile::s3_usb_otg() {
 }
 BoardProfile BoardProfile::esp32_devkit() {
   return {"esp32-devkit",
-          {{"ble", 0},
+          {{"ble", 2},
            {"usb", 0},
-           {"spp", 1},
+           {"spp", 0},
            {"uart", 1},
            {"gpio", 0},
            {"onewire", 0}},
@@ -50,6 +50,9 @@ void Registry::add(DeviceSpec spec) {
     return value;
   };
   for (const auto &old : devices_) {
+    if (old.driver == spec.driver &&
+        canonical(old.endpoint) == canonical(spec.endpoint))
+      throw ConfigurationError("Instrument identity already assigned");
     if (old.id == spec.id)
       throw ConfigurationError("Duplicate device ID");
     if (old.transport == spec.transport) {
