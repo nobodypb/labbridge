@@ -1,5 +1,6 @@
 /* tslint:disable */
 /* eslint-disable */
+export * from './AccessPointRequest';
 export * from './ActuatorSettings';
 export * from './ActuatorState';
 export * from './CellTemperatureGuard';

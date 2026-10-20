@@ -1,0 +1,148 @@
+{
+  "source_version": "RidenPowerSupply 1.0.0.22",
+  "exe_sha256": "efe21eb1efa5cb7fb7ebf0767a2d316ec7654d37423ee240ffbf8734de8c59ee",
+  "synthetic_inputs_only": true,
+  "phase1": {
+    "ssid_field": "RD6006",
+    "password_field": "192.168.4.1",
+    "header_bytes": [
+      26,
+      11,
+      103,
+      199,
+      228,
+      192,
+      168,
+      4,
+      1
+    ],
+    "payload_hex": "1a0b67c7e4c0a804013139322e3136382e342e31524436303036",
+    "total_payload_bytes": 26,
+    "guide_groups": 39,
+    "guide_datagrams": 156,
+    "data_datagrams": 78,
+    "cycle_datagrams": 234,
+    "first_data_triplets": [
+      {
+        "destination": "234.40.40.40",
+        "port": 7001,
+        "payload_length": 41
+      },
+      {
+        "destination": "234.40.40.40",
+        "port": 7001,
+        "payload_length": 296
+      },
+      {
+        "destination": "234.40.40.40",
+        "port": 7001,
+        "payload_length": 226
+      },
+      {
+        "destination": "234.41.41.41",
+        "port": 7001,
+        "payload_length": 152
+      },
+      {
+        "destination": "234.41.41.41",
+        "port": 7001,
+        "payload_length": 297
+      },
+      {
+        "destination": "234.41.41.41",
+        "port": 7001,
+        "payload_length": 259
+      },
+      {
+        "destination": "234.42.42.42",
+        "port": 7001,
+        "payload_length": 174
+      },
+      {
+        "destination": "234.42.42.42",
+        "port": 7001,
+        "payload_length": 298
+      },
+      {
+        "destination": "234.42.42.42",
+        "port": 7001,
+        "payload_length": 175
+      }
+    ],
+    "initial_multicast_counter": 0
+  },
+  "phase2": {
+    "ssid_field": "Fixture-WLAN",
+    "password_field": "fixture-psk",
+    "header_bytes": [
+      32,
+      11,
+      141,
+      199,
+      80,
+      192,
+      168,
+      4,
+      1
+    ],
+    "payload_hex": "200b8dc750c0a80401666978747572652d70736b466978747572652d574c414e",
+    "total_payload_bytes": 32,
+    "guide_groups": 39,
+    "guide_datagrams": 156,
+    "data_datagrams": 96,
+    "cycle_datagrams": 252,
+    "first_data_triplets": [
+      {
+        "destination": "234.40.40.40",
+        "port": 7001,
+        "payload_length": 234
+      },
+      {
+        "destination": "234.40.40.40",
+        "port": 7001,
+        "payload_length": 296
+      },
+      {
+        "destination": "234.40.40.40",
+        "port": 7001,
+        "payload_length": 56
+      },
+      {
+        "destination": "234.41.41.41",
+        "port": 7001,
+        "payload_length": 152
+      },
+      {
+        "destination": "234.41.41.41",
+        "port": 7001,
+        "payload_length": 297
+      },
+      {
+        "destination": "234.41.41.41",
+        "port": 7001,
+        "payload_length": 259
+      },
+      {
+        "destination": "234.42.42.42",
+        "port": 7001,
+        "payload_length": 64
+      },
+      {
+        "destination": "234.42.42.42",
+        "port": 7001,
+        "payload_length": 298
+      },
+      {
+        "destination": "234.42.42.42",
+        "port": 7001,
+        "payload_length": 213
+      }
+    ],
+    "initial_multicast_counter": 0
+  },
+  "notes": [
+    "Each phase is an independent burst example starting with counter zero. The real PC retains the counter between bursts and phases until connection-state reset.",
+    "Only UDP payload lengths are encoded. The arrays sent by the PC are zero-filled.",
+    "These are offline PC-profile reference vectors, not W01 hardware acceptance."
+  ]
+}

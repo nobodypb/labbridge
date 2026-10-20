@@ -18,6 +18,7 @@ from typing_extensions import Annotated
 
 from pydantic import Field, StrictStr, field_validator
 from typing_extensions import Annotated
+from labbridge_generated.models.access_point_request import AccessPointRequest
 from labbridge_generated.models.device import Device
 from labbridge_generated.models.device_list import DeviceList
 from labbridge_generated.models.lease import Lease
@@ -52,6 +53,281 @@ class CoreApi:
 
 
     @validate_call
+    def configure_access_point(
+        self,
+        access_point_request: Annotated[AccessPointRequest, Field(description="JSON request with the fields documented by the referenced schema. Unknown properties are rejected; use {} for an empty StopRequest.")],
+        _request_timeout: Union[
+            None,
+            Annotated[StrictFloat, Field(gt=0)],
+            Tuple[
+                Annotated[StrictFloat, Field(gt=0)],
+                Annotated[StrictFloat, Field(gt=0)]
+            ]
+        ] = None,
+        _request_auth: Optional[Dict[StrictStr, Any]] = None,
+        _content_type: Optional[StrictStr] = None,
+        _headers: Optional[Dict[StrictStr, Any]] = None,
+        _host_index: Annotated[StrictInt, Field(ge=0, le=0)] = 0,
+    ) -> WifiState:
+        """Set access-point security independently
+
+        Persist AP security and apply after the response (about 300 ms). Requires confirmed OFF/quiescent instruments, released leases and no pending Wi-Fi operation; returns 409 otherwise. AP clients disconnect and must reconnect with the new passphrase. Station credentials are unchanged. Use USB or the station address to retain management access. Requires bearer authentication on all HTTP interfaces, including the open AP. Independent instrument STOP remains available. Empty PSK explicitly restores the open default; no automatic fallback opens a secured AP.
+
+        :param access_point_request: JSON request with the fields documented by the referenced schema. Unknown properties are rejected; use {} for an empty StopRequest. (required)
+        :type access_point_request: AccessPointRequest
+        :param _request_timeout: timeout setting for this request. If one
+                                 number provided, it will be total request
+                                 timeout. It can also be a pair (tuple) of
+                                 (connection, read) timeouts.
+        :type _request_timeout: int, tuple(int, int), optional
+        :param _request_auth: set to override the auth_settings for an a single
+                              request; this effectively ignores the
+                              authentication in the spec for a single request.
+        :type _request_auth: dict, optional
+        :param _content_type: force content-type for the request.
+        :type _content_type: str, Optional
+        :param _headers: set to override the headers for a single
+                         request; this effectively ignores the headers
+                         in the spec for a single request.
+        :type _headers: dict, optional
+        :param _host_index: set to override the host_index for a single
+                            request; this effectively ignores the host_index
+                            in the spec for a single request.
+        :type _host_index: int, optional
+        :return: Returns the result object.
+        """ # noqa: E501
+
+        _param = self._configure_access_point_serialize(
+            access_point_request=access_point_request,
+            _request_auth=_request_auth,
+            _content_type=_content_type,
+            _headers=_headers,
+            _host_index=_host_index
+        )
+
+        _response_types_map: Dict[str, Optional[str]] = {
+            '200': "WifiState",
+        }
+        response_data = self.api_client.call_api(
+            *_param,
+            _request_timeout=_request_timeout
+        )
+        response_data.read()
+        return self.api_client.response_deserialize(
+            response_data=response_data,
+            response_types_map=_response_types_map,
+        ).data
+
+
+    @validate_call
+    def configure_access_point_with_http_info(
+        self,
+        access_point_request: Annotated[AccessPointRequest, Field(description="JSON request with the fields documented by the referenced schema. Unknown properties are rejected; use {} for an empty StopRequest.")],
+        _request_timeout: Union[
+            None,
+            Annotated[StrictFloat, Field(gt=0)],
+            Tuple[
+                Annotated[StrictFloat, Field(gt=0)],
+                Annotated[StrictFloat, Field(gt=0)]
+            ]
+        ] = None,
+        _request_auth: Optional[Dict[StrictStr, Any]] = None,
+        _content_type: Optional[StrictStr] = None,
+        _headers: Optional[Dict[StrictStr, Any]] = None,
+        _host_index: Annotated[StrictInt, Field(ge=0, le=0)] = 0,
+    ) -> ApiResponse[WifiState]:
+        """Set access-point security independently
+
+        Persist AP security and apply after the response (about 300 ms). Requires confirmed OFF/quiescent instruments, released leases and no pending Wi-Fi operation; returns 409 otherwise. AP clients disconnect and must reconnect with the new passphrase. Station credentials are unchanged. Use USB or the station address to retain management access. Requires bearer authentication on all HTTP interfaces, including the open AP. Independent instrument STOP remains available. Empty PSK explicitly restores the open default; no automatic fallback opens a secured AP.
+
+        :param access_point_request: JSON request with the fields documented by the referenced schema. Unknown properties are rejected; use {} for an empty StopRequest. (required)
+        :type access_point_request: AccessPointRequest
+        :param _request_timeout: timeout setting for this request. If one
+                                 number provided, it will be total request
+                                 timeout. It can also be a pair (tuple) of
+                                 (connection, read) timeouts.
+        :type _request_timeout: int, tuple(int, int), optional
+        :param _request_auth: set to override the auth_settings for an a single
+                              request; this effectively ignores the
+                              authentication in the spec for a single request.
+        :type _request_auth: dict, optional
+        :param _content_type: force content-type for the request.
+        :type _content_type: str, Optional
+        :param _headers: set to override the headers for a single
+                         request; this effectively ignores the headers
+                         in the spec for a single request.
+        :type _headers: dict, optional
+        :param _host_index: set to override the host_index for a single
+                            request; this effectively ignores the host_index
+                            in the spec for a single request.
+        :type _host_index: int, optional
+        :return: Returns the result object.
+        """ # noqa: E501
+
+        _param = self._configure_access_point_serialize(
+            access_point_request=access_point_request,
+            _request_auth=_request_auth,
+            _content_type=_content_type,
+            _headers=_headers,
+            _host_index=_host_index
+        )
+
+        _response_types_map: Dict[str, Optional[str]] = {
+            '200': "WifiState",
+        }
+        response_data = self.api_client.call_api(
+            *_param,
+            _request_timeout=_request_timeout
+        )
+        response_data.read()
+        return self.api_client.response_deserialize(
+            response_data=response_data,
+            response_types_map=_response_types_map,
+        )
+
+
+    @validate_call
+    def configure_access_point_without_preload_content(
+        self,
+        access_point_request: Annotated[AccessPointRequest, Field(description="JSON request with the fields documented by the referenced schema. Unknown properties are rejected; use {} for an empty StopRequest.")],
+        _request_timeout: Union[
+            None,
+            Annotated[StrictFloat, Field(gt=0)],
+            Tuple[
+                Annotated[StrictFloat, Field(gt=0)],
+                Annotated[StrictFloat, Field(gt=0)]
+            ]
+        ] = None,
+        _request_auth: Optional[Dict[StrictStr, Any]] = None,
+        _content_type: Optional[StrictStr] = None,
+        _headers: Optional[Dict[StrictStr, Any]] = None,
+        _host_index: Annotated[StrictInt, Field(ge=0, le=0)] = 0,
+    ) -> RESTResponseType:
+        """Set access-point security independently
+
+        Persist AP security and apply after the response (about 300 ms). Requires confirmed OFF/quiescent instruments, released leases and no pending Wi-Fi operation; returns 409 otherwise. AP clients disconnect and must reconnect with the new passphrase. Station credentials are unchanged. Use USB or the station address to retain management access. Requires bearer authentication on all HTTP interfaces, including the open AP. Independent instrument STOP remains available. Empty PSK explicitly restores the open default; no automatic fallback opens a secured AP.
+
+        :param access_point_request: JSON request with the fields documented by the referenced schema. Unknown properties are rejected; use {} for an empty StopRequest. (required)
+        :type access_point_request: AccessPointRequest
+        :param _request_timeout: timeout setting for this request. If one
+                                 number provided, it will be total request
+                                 timeout. It can also be a pair (tuple) of
+                                 (connection, read) timeouts.
+        :type _request_timeout: int, tuple(int, int), optional
+        :param _request_auth: set to override the auth_settings for an a single
+                              request; this effectively ignores the
+                              authentication in the spec for a single request.
+        :type _request_auth: dict, optional
+        :param _content_type: force content-type for the request.
+        :type _content_type: str, Optional
+        :param _headers: set to override the headers for a single
+                         request; this effectively ignores the headers
+                         in the spec for a single request.
+        :type _headers: dict, optional
+        :param _host_index: set to override the host_index for a single
+                            request; this effectively ignores the host_index
+                            in the spec for a single request.
+        :type _host_index: int, optional
+        :return: Returns the result object.
+        """ # noqa: E501
+
+        _param = self._configure_access_point_serialize(
+            access_point_request=access_point_request,
+            _request_auth=_request_auth,
+            _content_type=_content_type,
+            _headers=_headers,
+            _host_index=_host_index
+        )
+
+        _response_types_map: Dict[str, Optional[str]] = {
+            '200': "WifiState",
+        }
+        response_data = self.api_client.call_api(
+            *_param,
+            _request_timeout=_request_timeout
+        )
+        return response_data.response
+
+
+    def _configure_access_point_serialize(
+        self,
+        access_point_request,
+        _request_auth,
+        _content_type,
+        _headers,
+        _host_index,
+    ) -> RequestSerialized:
+
+        _host = None
+
+        _collection_formats: Dict[str, str] = {
+        }
+
+        _path_params: Dict[str, str] = {}
+        _query_params: List[Tuple[str, str]] = []
+        _header_params: Dict[str, Optional[str]] = _headers or {}
+        _form_params: List[Tuple[str, str]] = []
+        _files: Dict[
+            str, Union[str, bytes, List[str], List[bytes], List[Tuple[str, bytes]]]
+        ] = {}
+        _body_params: Optional[bytes] = None
+
+        # process the path parameters
+        # process the query parameters
+        # process the header parameters
+        # process the form parameters
+        # process the body parameter
+        if access_point_request is not None:
+            _body_params = access_point_request
+
+
+        # set the HTTP header `Accept`
+        if 'Accept' not in _header_params:
+            _header_params['Accept'] = self.api_client.select_header_accept(
+                [
+                    'application/json', 
+                    'application/problem+json'
+                ]
+            )
+
+        # set the HTTP header `Content-Type`
+        if _content_type:
+            _header_params['Content-Type'] = _content_type
+        else:
+            _default_content_type = (
+                self.api_client.select_header_content_type(
+                    [
+                        'application/json'
+                    ]
+                )
+            )
+            if _default_content_type is not None:
+                _header_params['Content-Type'] = _default_content_type
+
+        # authentication setting
+        _auth_settings: List[str] = [
+            'bearerAuth'
+        ]
+
+        return self.api_client.param_serialize(
+            method='PUT',
+            resource_path='/api/v1/wifi/ap',
+            path_params=_path_params,
+            query_params=_query_params,
+            header_params=_header_params,
+            body=_body_params,
+            post_params=_form_params,
+            files=_files,
+            auth_settings=_auth_settings,
+            collection_formats=_collection_formats,
+            _host=_host,
+            _request_auth=_request_auth
+        )
+
+
+
+
+    @validate_call
     def configure_wifi(
         self,
         wifi_request: Annotated[WifiRequest, Field(description="JSON request with the fields documented by the referenced schema. Unknown properties are rejected; use {} for an empty StopRequest.")],
@@ -70,7 +346,7 @@ class CoreApi:
     ) -> WifiState:
         """Save Wi-Fi credentials and connect
 
-        Persist the target SSID/PSK and schedule connection after the response (about 300 ms). The returned state is not a connection confirmation: poll getWifiState or reconnect to the new station address. Requires idle instruments and released leases (409 otherwise). Empty/omitted PSK selects an open network; non-empty PSK must be 8..63 characters or exactly 64 hexadecimal digits (422 otherwise). The setup AP itself requires no password.
+        Persist the target SSID/PSK and schedule connection after the response (about 300 ms). The returned state is not a connection confirmation: poll getWifiState or reconnect to the new station address. Requires idle instruments and released leases (409 otherwise). Empty/omitted PSK selects an open network; non-empty PSK must be 8..63 characters or exactly 64 hexadecimal digits (422 otherwise). The setup AP is open by default; configureAccessPoint controls its security independently.
 
         :param wifi_request: JSON request with the fields documented by the referenced schema. Unknown properties are rejected; use {} for an empty StopRequest. (required)
         :type wifi_request: WifiRequest
@@ -137,7 +413,7 @@ class CoreApi:
     ) -> ApiResponse[WifiState]:
         """Save Wi-Fi credentials and connect
 
-        Persist the target SSID/PSK and schedule connection after the response (about 300 ms). The returned state is not a connection confirmation: poll getWifiState or reconnect to the new station address. Requires idle instruments and released leases (409 otherwise). Empty/omitted PSK selects an open network; non-empty PSK must be 8..63 characters or exactly 64 hexadecimal digits (422 otherwise). The setup AP itself requires no password.
+        Persist the target SSID/PSK and schedule connection after the response (about 300 ms). The returned state is not a connection confirmation: poll getWifiState or reconnect to the new station address. Requires idle instruments and released leases (409 otherwise). Empty/omitted PSK selects an open network; non-empty PSK must be 8..63 characters or exactly 64 hexadecimal digits (422 otherwise). The setup AP is open by default; configureAccessPoint controls its security independently.
 
         :param wifi_request: JSON request with the fields documented by the referenced schema. Unknown properties are rejected; use {} for an empty StopRequest. (required)
         :type wifi_request: WifiRequest
@@ -204,7 +480,7 @@ class CoreApi:
     ) -> RESTResponseType:
         """Save Wi-Fi credentials and connect
 
-        Persist the target SSID/PSK and schedule connection after the response (about 300 ms). The returned state is not a connection confirmation: poll getWifiState or reconnect to the new station address. Requires idle instruments and released leases (409 otherwise). Empty/omitted PSK selects an open network; non-empty PSK must be 8..63 characters or exactly 64 hexadecimal digits (422 otherwise). The setup AP itself requires no password.
+        Persist the target SSID/PSK and schedule connection after the response (about 300 ms). The returned state is not a connection confirmation: poll getWifiState or reconnect to the new station address. Requires idle instruments and released leases (409 otherwise). Empty/omitted PSK selects an open network; non-empty PSK must be 8..63 characters or exactly 64 hexadecimal digits (422 otherwise). The setup AP is open by default; configureAccessPoint controls its security independently.
 
         :param wifi_request: JSON request with the fields documented by the referenced schema. Unknown properties are rejected; use {} for an empty StopRequest. (required)
         :type wifi_request: WifiRequest
@@ -2408,7 +2684,7 @@ class CoreApi:
     ) -> WifiState:
         """Read Wi-Fi provisioning state
 
-        Return station connection state, hostname and current address without returning the saved PSK. The open LabBridge-Setup AP uses 192.168.4.1; its setup UI is /wifi and the device UI is /devices. Provisioning routes are available without bearer credentials on that AP.
+        Return station connection state, hostname and current address without returning the saved PSK. The default-open LabBridge-Setup AP uses 192.168.4.1; its setup UI is /wifi and the device UI is /devices. Provisioning routes are available without bearer credentials on that AP.
 
         :param _request_timeout: timeout setting for this request. If one
                                  number provided, it will be total request
@@ -2471,7 +2747,7 @@ class CoreApi:
     ) -> ApiResponse[WifiState]:
         """Read Wi-Fi provisioning state
 
-        Return station connection state, hostname and current address without returning the saved PSK. The open LabBridge-Setup AP uses 192.168.4.1; its setup UI is /wifi and the device UI is /devices. Provisioning routes are available without bearer credentials on that AP.
+        Return station connection state, hostname and current address without returning the saved PSK. The default-open LabBridge-Setup AP uses 192.168.4.1; its setup UI is /wifi and the device UI is /devices. Provisioning routes are available without bearer credentials on that AP.
 
         :param _request_timeout: timeout setting for this request. If one
                                  number provided, it will be total request
@@ -2534,7 +2810,7 @@ class CoreApi:
     ) -> RESTResponseType:
         """Read Wi-Fi provisioning state
 
-        Return station connection state, hostname and current address without returning the saved PSK. The open LabBridge-Setup AP uses 192.168.4.1; its setup UI is /wifi and the device UI is /devices. Provisioning routes are available without bearer credentials on that AP.
+        Return station connection state, hostname and current address without returning the saved PSK. The default-open LabBridge-Setup AP uses 192.168.4.1; its setup UI is /wifi and the device UI is /devices. Provisioning routes are available without bearer credentials on that AP.
 
         :param _request_timeout: timeout setting for this request. If one
                                  number provided, it will be total request

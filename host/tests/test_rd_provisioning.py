@@ -15,12 +15,15 @@ class RecordingRest:
         self.requests.append((method, url, body))
         value = dict(
             state="server_address",
+            profile="pc_v22",
             session_id="boot-p1",
             deadline_ms=120000,
             ap_ssid="LabBridge-Setup",
             ap_address="192.168.4.1",
             tcp_port=8080,
             listener_running=True,
+            ap_clients=1,
+            ap_channel=6,
             candidates=[],
             metrics=dict(
                 accepted=0,
@@ -29,6 +32,10 @@ class RecordingRest:
                 rx_bytes=0,
                 tx_bytes=0,
                 provision_packets=0,
+                provision_bursts=2,
+                provision_join_acks=1,
+                provision_tx_completed=4,
+                provision_tx_failed=1,
             ),
         )
         from urllib3.response import HTTPResponse
@@ -42,6 +49,28 @@ class RecordingRest:
 
 
 class ProvisioningTests(unittest.TestCase):
+    def test_status_preserves_radio_diagnostics_for_automation(self):
+        with Node("serial:/synthetic", rest=RecordingRest()) as node:
+            status = node.rd60xx.get_rd_provisioning()
+            self.assertEqual(status.profile, "pc_v22")
+            self.assertEqual(status.ap_clients, 1)
+            self.assertEqual(status.ap_channel, 6)
+            self.assertEqual(status.metrics.provision_tx_completed, 4)
+            self.assertEqual(status.metrics.provision_tx_failed, 1)
+            self.assertEqual(status.metrics.provision_bursts, 2)
+            self.assertEqual(status.metrics.provision_join_acks, 1)
+
+    def test_controlled_profile_selection_reaches_wire_and_status(self):
+        rest = RecordingRest()
+        with Node("serial:/synthetic", rest=rest) as node:
+            node.rd60xx.start_rd_provisioning(
+                rd_provision_start={
+                    "confirm_outputs_off": True,
+                    "profile": "pc_v22_target_ssid",
+                }
+            )
+            self.assertEqual(rest.requests[-1][2]["profile"], "pc_v22_target_ssid")
+
     def test_cli_uses_generated_provisioning_requests_without_operation_polling(self):
         rest = RecordingRest()
         node = Node("serial:/synthetic", rest=rest)

@@ -17,3 +17,5 @@ foreach(test resources dl24m_codec interlock temperature transaction guard rd60x
 endforeach()
 add_executable(contract_dump tests/contract_dump.cpp)
 target_link_libraries(contract_dump PRIVATE labbridge_core)
+
+target_compile_definitions(test_rd_wifi PRIVATE LABBRIDGE_SOURCE_DIR="${CMAKE_SOURCE_DIR}")

@@ -37,6 +37,12 @@ export interface WifiState {
      * @memberof WifiState
      */
     address?: string;
+    /**
+     * Current AP authentication: true for WPA2-PSK/CCMP, false for the default open AP. The AP passphrase is never returned.
+     * @type {boolean}
+     * @memberof WifiState
+     */
+    apSecured?: boolean;
 }
 
 
@@ -74,6 +80,7 @@ export function WifiStateFromJSONTyped(json: any, ignoreDiscriminator: boolean):
         'state': json['state'],
         'hostname': json['hostname'],
         'address': json['address'] == null ? undefined : json['address'],
+        'apSecured': json['ap_secured'] == null ? undefined : json['ap_secured'],
     };
 }
 
@@ -91,6 +98,7 @@ export function WifiStateToJSONTyped(value?: WifiState | null, ignoreDiscriminat
         'state': value['state'],
         'hostname': value['hostname'],
         'address': value['address'],
+        'ap_secured': value['apSecured'],
     };
 }
 

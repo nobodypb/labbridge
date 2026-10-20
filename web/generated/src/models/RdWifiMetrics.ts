@@ -50,11 +50,35 @@ export interface RdWifiMetrics {
      */
     txBytes: number;
     /**
-     * ESPTouch datagrams successfully submitted to the AP interface.
+     * Zero-filled PC-profile multicast UDP packets accepted by sendto. This is not a radio completion or receiver acknowledgement.
      * @type {number}
      * @memberof RdWifiMetrics
      */
     provisionPackets: number;
+    /**
+     * ESPTouch AP frames for which the Wi-Fi driver reported successful transmission. Broadcasts have no receiver acknowledgement; this does not prove PSU reception. Populated only for the direct unencrypted diagnostic path; normal WPA2 UDP transmissions have no callback in this counter.
+     * @type {number}
+     * @memberof RdWifiMetrics
+     */
+    provisionTxCompleted?: number;
+    /**
+     * ESPTouch frames for which the radio callback reported failed transmission. Immediate submission errors also fail the active provisioning session.
+     * @type {number}
+     * @memberof RdWifiMetrics
+     */
+    provisionTxFailed?: number;
+    /**
+     * Complete PC-profile bursts submitted: 39 guide groups followed by all data triples. The sender then waits one second. Counter is boot-local.
+     * @type {number}
+     * @memberof RdWifiMetrics
+     */
+    provisionBursts?: number;
+    /**
+     * Distinct eleven-byte phase-two UDP results received on AP port 18266 with matching peer/embedded AP-subnet address. Stops credential transmission but does not prove instrument identity or authorize output.
+     * @type {number}
+     * @memberof RdWifiMetrics
+     */
+    provisionJoinAcks?: number;
 }
 
 /**
@@ -86,6 +110,10 @@ export function RdWifiMetricsFromJSONTyped(json: any, ignoreDiscriminator: boole
         'rxBytes': json['rx_bytes'],
         'txBytes': json['tx_bytes'],
         'provisionPackets': json['provision_packets'],
+        'provisionTxCompleted': json['provision_tx_completed'] == null ? undefined : json['provision_tx_completed'],
+        'provisionTxFailed': json['provision_tx_failed'] == null ? undefined : json['provision_tx_failed'],
+        'provisionBursts': json['provision_bursts'] == null ? undefined : json['provision_bursts'],
+        'provisionJoinAcks': json['provision_join_acks'] == null ? undefined : json['provision_join_acks'],
     };
 }
 
@@ -106,6 +134,10 @@ export function RdWifiMetricsToJSONTyped(value?: RdWifiMetrics | null, ignoreDis
         'rx_bytes': value['rxBytes'],
         'tx_bytes': value['txBytes'],
         'provision_packets': value['provisionPackets'],
+        'provision_tx_completed': value['provisionTxCompleted'],
+        'provision_tx_failed': value['provisionTxFailed'],
+        'provision_bursts': value['provisionBursts'],
+        'provision_join_acks': value['provisionJoinAcks'],
     };
 }
 

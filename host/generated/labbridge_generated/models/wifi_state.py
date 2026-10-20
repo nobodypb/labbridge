@@ -17,7 +17,7 @@ import pprint
 import re  # noqa: F401
 import json
 
-from pydantic import BaseModel, ConfigDict, Field, StrictStr, field_validator
+from pydantic import BaseModel, ConfigDict, Field, StrictBool, StrictStr, field_validator
 from typing import Any, ClassVar, Dict, List, Optional
 from typing import Optional, Set
 from typing_extensions import Self
@@ -29,7 +29,8 @@ class WifiState(BaseModel):
     state: StrictStr = Field(description="setup: no saved station SSID; connecting: credentials exist but no station address yet (also used while retrying after disconnect); connected: station has an address. failed is reserved by the contract; the current ESP runtime keeps retrying as connecting.")
     hostname: StrictStr = Field(description="Configured mDNS host name for the bridge.")
     address: Optional[StrictStr] = Field(default=None, description="Current station IP address when connected; omitted until the station has an address. The setup AP is separately reachable at 192.168.4.1.")
-    __properties: ClassVar[List[str]] = ["state", "hostname", "address"]
+    ap_secured: Optional[StrictBool] = Field(default=None, description="Current AP authentication: true for WPA2-PSK/CCMP, false for the default open AP. The AP passphrase is never returned.")
+    __properties: ClassVar[List[str]] = ["state", "hostname", "address", "ap_secured"]
 
     @field_validator('state')
     def state_validate_enum(cls, value):
@@ -92,7 +93,8 @@ class WifiState(BaseModel):
         _obj = cls.model_validate({
             "state": obj.get("state"),
             "hostname": obj.get("hostname"),
-            "address": obj.get("address")
+            "address": obj.get("address"),
+            "ap_secured": obj.get("ap_secured")
         })
         return _obj
 

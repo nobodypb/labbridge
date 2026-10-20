@@ -29,7 +29,7 @@ import {
 } from './RdWifiCandidate';
 
 /**
- * Provisioning and AP transport status. One session at a time; each sending phase and connection-wait phase expires after 120 seconds. The AP is open, server address 192.168.4.1, TCP port 8080. The original PSU initiates the connection; payloads are CRC-protected Modbus RTU, not MBAP-framed Modbus TCP. No NAT/Internet access is required.
+ * Provisioning and AP transport status. One session at a time; management phases expire after 120 seconds. Each PC-profile sender transmits for at most 60 seconds, with 39 guide groups and all data triples per burst followed by a one-second pause. Phase two starts after 300 ms. The AP defaults to open; WPA2 is configurable. Server address is 192.168.4.1, TCP port 8080. The original PSU initiates the connection; payloads are CRC-protected Modbus RTU, not MBAP-framed Modbus TCP. No NAT/Internet access is required.
  * @export
  * @interface RdProvisioning
  */
@@ -94,6 +94,24 @@ export interface RdProvisioning {
      * @memberof RdProvisioning
      */
     error?: string;
+    /**
+     * Number of stations currently associated with the ESP AP. Diagnostic only; an association is not RD identity or protocol readiness.
+     * @type {number}
+     * @memberof RdProvisioning
+     */
+    apClients?: number;
+    /**
+     * Current shared AP/STA primary Wi-Fi channel, for commissioning.
+     * @type {number}
+     * @memberof RdProvisioning
+     */
+    apChannel?: number;
+    /**
+     * Selected wire profile for the current or most recent session. pc_v22 is the hardware-accepted baseline; pc_v22_target_ssid is the controlled phase-one SSID comparison.
+     * @type {string}
+     * @memberof RdProvisioning
+     */
+    profile?: RdProvisioningProfileEnum;
 }
 
 
@@ -111,6 +129,15 @@ export const RdProvisioningStateEnum = {
     Failed: 'failed'
 } as const;
 export type RdProvisioningStateEnum = typeof RdProvisioningStateEnum[keyof typeof RdProvisioningStateEnum];
+
+/**
+ * @export
+ */
+export const RdProvisioningProfileEnum = {
+    PcV22: 'pc_v22',
+    PcV22TargetSsid: 'pc_v22_target_ssid'
+} as const;
+export type RdProvisioningProfileEnum = typeof RdProvisioningProfileEnum[keyof typeof RdProvisioningProfileEnum];
 
 
 /**
@@ -147,6 +174,9 @@ export function RdProvisioningFromJSONTyped(json: any, ignoreDiscriminator: bool
         'candidates': ((json['candidates'] as Array<any>).map(RdWifiCandidateFromJSON)),
         'metrics': RdWifiMetricsFromJSON(json['metrics']),
         'error': json['error'] == null ? undefined : json['error'],
+        'apClients': json['ap_clients'] == null ? undefined : json['ap_clients'],
+        'apChannel': json['ap_channel'] == null ? undefined : json['ap_channel'],
+        'profile': json['profile'] == null ? undefined : json['profile'],
     };
 }
 
@@ -171,6 +201,9 @@ export function RdProvisioningToJSONTyped(value?: RdProvisioning | null, ignoreD
         'candidates': ((value['candidates'] as Array<any>).map(RdWifiCandidateToJSON)),
         'metrics': RdWifiMetricsToJSON(value['metrics']),
         'error': value['error'],
+        'ap_clients': value['apClients'],
+        'ap_channel': value['apChannel'],
+        'profile': value['profile'],
     };
 }
 

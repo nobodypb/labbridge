@@ -1,7 +1,7 @@
 /*
  * rd_provisioning.h
  *
- * Provisioning and AP transport status. One session at a time; each sending phase and connection-wait phase expires after 120 seconds. The AP is open, server address 192.168.4.1, TCP port 8080. The original PSU initiates the connection; payloads are CRC-protected Modbus RTU, not MBAP-framed Modbus TCP. No NAT/Internet access is required.
+ * Provisioning and AP transport status. One session at a time; management phases expire after 120 seconds. Each PC-profile sender transmits for at most 60 seconds, with 39 guide groups and all data triples per burst followed by a one-second pause. Phase two starts after 300 ms. The AP defaults to open; WPA2 is configurable. Server address is 192.168.4.1, TCP port 8080. The original PSU initiates the connection; payloads are CRC-protected Modbus RTU, not MBAP-framed Modbus TCP. No NAT/Internet access is required.
  */
 
 #ifndef _rd_provisioning_H_
@@ -26,6 +26,14 @@ char* rd_provisioning_state_ToString(labbridge_api_rd_provisioning_STATE_e state
 
 labbridge_api_rd_provisioning_STATE_e rd_provisioning_state_FromString(char* state);
 
+// Enum PROFILE for rd_provisioning
+
+typedef enum  { labbridge_api_rd_provisioning_PROFILE_NULL = 0, labbridge_api_rd_provisioning_PROFILE_pc_v22, labbridge_api_rd_provisioning_PROFILE_pc_v22_target_ssid } labbridge_api_rd_provisioning_PROFILE_e;
+
+char* rd_provisioning_profile_ToString(labbridge_api_rd_provisioning_PROFILE_e profile);
+
+labbridge_api_rd_provisioning_PROFILE_e rd_provisioning_profile_FromString(char* profile);
+
 
 
 typedef struct rd_provisioning_t {
@@ -39,6 +47,9 @@ typedef struct rd_provisioning_t {
     list_t *candidates; //nonprimitive container
     struct rd_wifi_metrics_t *metrics; //model
     char *error; // string
+    long ap_clients; //numeric
+    long ap_channel; //numeric
+    labbridge_api_rd_provisioning_PROFILE_e profile; //enum
 
     int _library_owned; // Is the library responsible for freeing this object?
 } rd_provisioning_t;
@@ -53,7 +64,10 @@ __attribute__((deprecated)) rd_provisioning_t *rd_provisioning_create(
     int listener_running,
     list_t *candidates,
     rd_wifi_metrics_t *metrics,
-    char *error
+    char *error,
+    long ap_clients,
+    long ap_channel,
+    labbridge_api_rd_provisioning_PROFILE_e profile
 );
 
 void rd_provisioning_free(rd_provisioning_t *rd_provisioning);

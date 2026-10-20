@@ -15,6 +15,7 @@
 
 import * as runtime from '../runtime';
 import type {
+  AccessPointRequest,
   Device,
   DeviceList,
   Lease,
@@ -32,6 +33,8 @@ import type {
   WifiState,
 } from '../models/index';
 import {
+    AccessPointRequestFromJSON,
+    AccessPointRequestToJSON,
     DeviceFromJSON,
     DeviceToJSON,
     DeviceListFromJSON,
@@ -63,6 +66,10 @@ import {
     WifiStateFromJSON,
     WifiStateToJSON,
 } from '../models/index';
+
+export interface ConfigureAccessPointRequest {
+    accessPointRequest: AccessPointRequest;
+}
 
 export interface ConfigureWifiRequest {
     wifiRequest: WifiRequest;
@@ -122,7 +129,53 @@ export interface StopLeaseRequest {
 export class CoreApi extends runtime.BaseAPI {
 
     /**
-     * Persist the target SSID/PSK and schedule connection after the response (about 300 ms). The returned state is not a connection confirmation: poll getWifiState or reconnect to the new station address. Requires idle instruments and released leases (409 otherwise). Empty/omitted PSK selects an open network; non-empty PSK must be 8..63 characters or exactly 64 hexadecimal digits (422 otherwise). The setup AP itself requires no password.
+     * Persist AP security and apply after the response (about 300 ms). Requires confirmed OFF/quiescent instruments, released leases and no pending Wi-Fi operation; returns 409 otherwise. AP clients disconnect and must reconnect with the new passphrase. Station credentials are unchanged. Use USB or the station address to retain management access. Requires bearer authentication on all HTTP interfaces, including the open AP. Independent instrument STOP remains available. Empty PSK explicitly restores the open default; no automatic fallback opens a secured AP.
+     * Set access-point security independently
+     */
+    async configureAccessPointRaw(requestParameters: ConfigureAccessPointRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<WifiState>> {
+        if (requestParameters['accessPointRequest'] == null) {
+            throw new runtime.RequiredError(
+                'accessPointRequest',
+                'Required parameter "accessPointRequest" was null or undefined when calling configureAccessPoint().'
+            );
+        }
+
+        const queryParameters: any = {};
+
+        const headerParameters: runtime.HTTPHeaders = {};
+
+        headerParameters['Content-Type'] = 'application/json';
+
+        if (this.configuration && this.configuration.accessToken) {
+            const token = this.configuration.accessToken;
+            const tokenString = await token("bearerAuth", []);
+
+            if (tokenString) {
+                headerParameters["Authorization"] = `Bearer ${tokenString}`;
+            }
+        }
+        const response = await this.request({
+            path: `/api/v1/wifi/ap`,
+            method: 'PUT',
+            headers: headerParameters,
+            query: queryParameters,
+            body: AccessPointRequestToJSON(requestParameters['accessPointRequest']),
+        }, initOverrides);
+
+        return new runtime.JSONApiResponse(response, (jsonValue) => WifiStateFromJSON(jsonValue));
+    }
+
+    /**
+     * Persist AP security and apply after the response (about 300 ms). Requires confirmed OFF/quiescent instruments, released leases and no pending Wi-Fi operation; returns 409 otherwise. AP clients disconnect and must reconnect with the new passphrase. Station credentials are unchanged. Use USB or the station address to retain management access. Requires bearer authentication on all HTTP interfaces, including the open AP. Independent instrument STOP remains available. Empty PSK explicitly restores the open default; no automatic fallback opens a secured AP.
+     * Set access-point security independently
+     */
+    async configureAccessPoint(requestParameters: ConfigureAccessPointRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<WifiState> {
+        const response = await this.configureAccessPointRaw(requestParameters, initOverrides);
+        return await response.value();
+    }
+
+    /**
+     * Persist the target SSID/PSK and schedule connection after the response (about 300 ms). The returned state is not a connection confirmation: poll getWifiState or reconnect to the new station address. Requires idle instruments and released leases (409 otherwise). Empty/omitted PSK selects an open network; non-empty PSK must be 8..63 characters or exactly 64 hexadecimal digits (422 otherwise). The setup AP is open by default; configureAccessPoint controls its security independently.
      * Save Wi-Fi credentials and connect
      */
     async configureWifiRaw(requestParameters: ConfigureWifiRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<WifiState>> {
@@ -159,7 +212,7 @@ export class CoreApi extends runtime.BaseAPI {
     }
 
     /**
-     * Persist the target SSID/PSK and schedule connection after the response (about 300 ms). The returned state is not a connection confirmation: poll getWifiState or reconnect to the new station address. Requires idle instruments and released leases (409 otherwise). Empty/omitted PSK selects an open network; non-empty PSK must be 8..63 characters or exactly 64 hexadecimal digits (422 otherwise). The setup AP itself requires no password.
+     * Persist the target SSID/PSK and schedule connection after the response (about 300 ms). The returned state is not a connection confirmation: poll getWifiState or reconnect to the new station address. Requires idle instruments and released leases (409 otherwise). Empty/omitted PSK selects an open network; non-empty PSK must be 8..63 characters or exactly 64 hexadecimal digits (422 otherwise). The setup AP is open by default; configureAccessPoint controls its security independently.
      * Save Wi-Fi credentials and connect
      */
     async configureWifi(requestParameters: ConfigureWifiRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<WifiState> {
@@ -494,7 +547,7 @@ export class CoreApi extends runtime.BaseAPI {
     }
 
     /**
-     * Return station connection state, hostname and current address without returning the saved PSK. The open LabBridge-Setup AP uses 192.168.4.1; its setup UI is /wifi and the device UI is /devices. Provisioning routes are available without bearer credentials on that AP.
+     * Return station connection state, hostname and current address without returning the saved PSK. The default-open LabBridge-Setup AP uses 192.168.4.1; its setup UI is /wifi and the device UI is /devices. Provisioning routes are available without bearer credentials on that AP.
      * Read Wi-Fi provisioning state
      */
     async getWifiStateRaw(initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<WifiState>> {
@@ -521,7 +574,7 @@ export class CoreApi extends runtime.BaseAPI {
     }
 
     /**
-     * Return station connection state, hostname and current address without returning the saved PSK. The open LabBridge-Setup AP uses 192.168.4.1; its setup UI is /wifi and the device UI is /devices. Provisioning routes are available without bearer credentials on that AP.
+     * Return station connection state, hostname and current address without returning the saved PSK. The default-open LabBridge-Setup AP uses 192.168.4.1; its setup UI is /wifi and the device UI is /devices. Provisioning routes are available without bearer credentials on that AP.
      * Read Wi-Fi provisioning state
      */
     async getWifiState(initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<WifiState> {

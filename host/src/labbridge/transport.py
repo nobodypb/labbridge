@@ -1,6 +1,7 @@
 """USB carries the same HTTP-shaped contract, with correlated JSON lines."""
 
 import json
+import os
 import threading
 import time
 import uuid
@@ -15,9 +16,10 @@ class SerialTransport:
             import serial
             from serial.tools import list_ports
 
-            native = path.startswith("/dev/ttyACM")
+            physical = os.path.realpath(path)
+            native = physical.startswith("/dev/ttyACM")
             for info in list_ports.comports():
-                if info.device == path and info.vid is not None:
+                if os.path.realpath(info.device) == physical and info.vid is not None:
                     native = info.vid == 0x303A
             port = serial.Serial(
                 port=None, baudrate=115200, timeout=0.1, write_timeout=1

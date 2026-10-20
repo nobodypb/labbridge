@@ -21,6 +21,23 @@ labbridge_api_rd_provisioning_STATE_e rd_provisioning_state_FromString(char* sta
     }
     return 0;
 }
+char* rd_provisioning_profile_ToString(labbridge_api_rd_provisioning_PROFILE_e profile) {
+    char* profileArray[] =  { "NULL", "pc_v22", "pc_v22_target_ssid" };
+    return profileArray[profile];
+}
+
+labbridge_api_rd_provisioning_PROFILE_e rd_provisioning_profile_FromString(char* profile){
+    int stringToReturn = 0;
+    char *profileArray[] =  { "NULL", "pc_v22", "pc_v22_target_ssid" };
+    size_t sizeofArray = sizeof(profileArray) / sizeof(profileArray[0]);
+    while(stringToReturn < sizeofArray) {
+        if(strcmp(profile, profileArray[stringToReturn]) == 0) {
+            return stringToReturn;
+        }
+        stringToReturn++;
+    }
+    return 0;
+}
 
 static rd_provisioning_t *rd_provisioning_create_internal(
     labbridge_api_rd_provisioning_STATE_e state,
@@ -32,7 +49,10 @@ static rd_provisioning_t *rd_provisioning_create_internal(
     int listener_running,
     list_t *candidates,
     rd_wifi_metrics_t *metrics,
-    char *error
+    char *error,
+    long ap_clients,
+    long ap_channel,
+    labbridge_api_rd_provisioning_PROFILE_e profile
     ) {
     rd_provisioning_t *rd_provisioning_local_var = malloc(sizeof(rd_provisioning_t));
     if (!rd_provisioning_local_var) {
@@ -48,6 +68,9 @@ static rd_provisioning_t *rd_provisioning_create_internal(
     rd_provisioning_local_var->candidates = candidates;
     rd_provisioning_local_var->metrics = metrics;
     rd_provisioning_local_var->error = error;
+    rd_provisioning_local_var->ap_clients = ap_clients;
+    rd_provisioning_local_var->ap_channel = ap_channel;
+    rd_provisioning_local_var->profile = profile;
 
     rd_provisioning_local_var->_library_owned = 1;
     return rd_provisioning_local_var;
@@ -63,7 +86,10 @@ __attribute__((deprecated)) rd_provisioning_t *rd_provisioning_create(
     int listener_running,
     list_t *candidates,
     rd_wifi_metrics_t *metrics,
-    char *error
+    char *error,
+    long ap_clients,
+    long ap_channel,
+    labbridge_api_rd_provisioning_PROFILE_e profile
     ) {
     return rd_provisioning_create_internal (
         state,
@@ -75,7 +101,10 @@ __attribute__((deprecated)) rd_provisioning_t *rd_provisioning_create(
         listener_running,
         candidates,
         metrics,
-        error
+        error,
+        ap_clients,
+        ap_channel,
+        profile
         );
 }
 
@@ -222,6 +251,31 @@ cJSON *rd_provisioning_convertToJSON(rd_provisioning_t *rd_provisioning) {
     if(rd_provisioning->error) {
     if(cJSON_AddStringToObject(item, "error", rd_provisioning->error) == NULL) {
     goto fail; //String
+    }
+    }
+
+
+    // rd_provisioning->ap_clients
+    if(rd_provisioning->ap_clients) {
+    if(cJSON_AddNumberToObject(item, "ap_clients", rd_provisioning->ap_clients) == NULL) {
+    goto fail; //Numeric
+    }
+    }
+
+
+    // rd_provisioning->ap_channel
+    if(rd_provisioning->ap_channel) {
+    if(cJSON_AddNumberToObject(item, "ap_channel", rd_provisioning->ap_channel) == NULL) {
+    goto fail; //Numeric
+    }
+    }
+
+
+    // rd_provisioning->profile
+    if(rd_provisioning->profile != labbridge_api_rd_provisioning_PROFILE_NULL) {
+    if(cJSON_AddStringToObject(item, "profile", rd_provisioning_profile_ToString(rd_provisioning->profile)) == NULL)
+    {
+    goto fail; //Enum
     }
     }
 
@@ -395,6 +449,44 @@ rd_provisioning_t *rd_provisioning_parseFromJSON(cJSON *rd_provisioningJSON){
     }
     }
 
+    // rd_provisioning->ap_clients
+    cJSON *ap_clients = cJSON_GetObjectItemCaseSensitive(rd_provisioningJSON, "ap_clients");
+    if (cJSON_IsNull(ap_clients)) {
+        ap_clients = NULL;
+    }
+    if (ap_clients) { 
+    if(!cJSON_IsNumber(ap_clients))
+    {
+    goto end; //Numeric
+    }
+    }
+
+    // rd_provisioning->ap_channel
+    cJSON *ap_channel = cJSON_GetObjectItemCaseSensitive(rd_provisioningJSON, "ap_channel");
+    if (cJSON_IsNull(ap_channel)) {
+        ap_channel = NULL;
+    }
+    if (ap_channel) { 
+    if(!cJSON_IsNumber(ap_channel))
+    {
+    goto end; //Numeric
+    }
+    }
+
+    // rd_provisioning->profile
+    cJSON *profile = cJSON_GetObjectItemCaseSensitive(rd_provisioningJSON, "profile");
+    if (cJSON_IsNull(profile)) {
+        profile = NULL;
+    }
+    labbridge_api_rd_provisioning_PROFILE_e profileVariable;
+    if (profile) { 
+    if(!cJSON_IsString(profile))
+    {
+    goto end; //Enum
+    }
+    profileVariable = rd_provisioning_profile_FromString(profile->valuestring);
+    }
+
 
     rd_provisioning_local_var = rd_provisioning_create_internal (
         stateVariable,
@@ -406,7 +498,10 @@ rd_provisioning_t *rd_provisioning_parseFromJSON(cJSON *rd_provisioningJSON){
         listener_running->valueint,
         candidatesList,
         metrics_local_nonprim,
-        error && !cJSON_IsNull(error) ? strdup(error->valuestring) : NULL
+        error && !cJSON_IsNull(error) ? strdup(error->valuestring) : NULL,
+        ap_clients ? ap_clients->valuedouble : 0,
+        ap_channel ? ap_channel->valuedouble : 0,
+        profile ? profileVariable : labbridge_api_rd_provisioning_PROFILE_NULL
         );
 
     return rd_provisioning_local_var;

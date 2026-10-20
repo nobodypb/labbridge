@@ -1,7 +1,7 @@
 /*
  * wifi_network.h
  *
- * One network discovered by the asynchronous station scan. The setup AP itself remains open.
+ * One network discovered by the asynchronous station scan. AP security is configured independently.
  */
 
 #ifndef _wifi_network_H_

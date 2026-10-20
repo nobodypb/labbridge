@@ -7,6 +7,7 @@
 #include <cerrno>
 #include <fcntl.h>
 #include <map>
+#include <set>
 namespace labbridge::esp {
 namespace {
 constexpr const char *ap_address = "192.168.4.1";
@@ -52,7 +53,7 @@ public:
 struct Connection {
   int fd = -1;
   uint32_t serial = 0;
-  uint64_t deadline = 0;
+  rd60xx::IdentityHeartbeat discovery;
   rd60xx::RtuStream parser;
   std::shared_ptr<TcpLink> link;
   Bytes pending;
@@ -64,8 +65,18 @@ std::mutex management;
 rd60xx::Provisioning provisioning;
 uint64_t session_number = 0, accepted = 0, disconnects = 0, rejected = 0,
          rx_bytes = 0, tx_bytes = 0, provision_packets = 0;
+uint64_t provision_bursts = 0, provision_join_acks = 0;
 bool listening = false;
-std::string listener_error;
+std::string listener_error, provision_error, provision_profile = "pc_v22";
+std::atomic<uint32_t> provision_tx_completed{0}, provision_tx_failed{0};
+void touch_tx_done(const esp_80211_tx_info_t *info) {
+  if (!info || info->ifidx != WIFI_IF_AP)
+    return;
+  if (info->tx_status == WIFI_SEND_SUCCESS)
+    ++provision_tx_completed;
+  else
+    ++provision_tx_failed;
+}
 void nonblocking(int fd) {
   fcntl(fd, F_SETFL, fcntl(fd, F_GETFL, 0) | O_NONBLOCK);
 }
@@ -103,15 +114,29 @@ Json status(uint64_t now) {
       .set("rejected", double(rejected))
       .set("rx_bytes", double(rx_bytes))
       .set("tx_bytes", double(tx_bytes))
-      .set("provision_packets", double(provision_packets));
-  j.set("ap_ssid", ap_ssid)
+      .set("provision_packets", double(provision_packets))
+      .set("provision_bursts", double(provision_bursts))
+      .set("provision_join_acks", double(provision_join_acks))
+      .set("provision_tx_completed", double(provision_tx_completed.load()))
+      .set("provision_tx_failed", double(provision_tx_failed.load()));
+  j.set("profile", provision_profile)
+      .set("ap_ssid", ap_ssid)
       .set("ap_address", ap_address)
       .set("tcp_port", double(tcp_port))
       .set("listener_running", listening)
       .set("candidates", all)
       .set("metrics", metrics);
+  wifi_sta_list_t stations{};
+  if (esp_wifi_ap_get_sta_list(&stations) == ESP_OK)
+    j.set("ap_clients", double(stations.num));
+  uint8_t channel = 0;
+  wifi_second_chan_t secondary;
+  if (esp_wifi_get_channel(&channel, &secondary) == ESP_OK && channel)
+    j.set("ap_channel", double(channel));
   if (!listener_error.empty())
     j.set("error", listener_error);
+  else if (!provision_error.empty())
+    j.set("error", provision_error);
   return j;
 }
 void worker(void *) {
@@ -157,8 +182,7 @@ void worker(void *) {
         int yes = 1;
         setsockopt(peer, IPPROTO_TCP, TCP_NODELAY, &yes, sizeof(yes));
         slot->fd = peer;
-        slot->deadline = now + 2000;
-        slot->pending = rd60xx::read(1, 0, 20);
+        slot->pending = slot->discovery.poll(now);
         std::lock_guard<std::mutex> lock(management);
         ++accepted;
       }
@@ -166,6 +190,16 @@ void worker(void *) {
     for (auto &c : connections) {
       if (c.fd < 0)
         continue;
+      if (!c.link) {
+        if (c.discovery.expired(now)) {
+          close_connection(c);
+          continue;
+        }
+        if (c.pending.empty()) {
+          c.pending = c.discovery.poll(now);
+          c.offset = 0;
+        }
+      }
       if (c.link && c.link->reset) {
         close_connection(c);
         continue;
@@ -211,11 +245,17 @@ void worker(void *) {
             c.link->reset = true;
           else
             c.link->rx.insert(c.link->rx.end(), bytes, bytes + n);
-        } else if (!c.serial) {
+        } else {
           bool identity_rejected = false;
           for (auto &frame : c.parser.feed(Bytes(bytes, bytes + n))) {
             try {
               auto identity = rd60xx::identify(frame);
+              if (!c.discovery.accept(identity, now)) {
+                identity_rejected = true;
+                break;
+              }
+              if (c.serial)
+                break; // Liveness reply; retain the existing serial claim.
               std::lock_guard<std::mutex> lock(management);
               auto claim = bindings.claim(identity, c.fd);
               if (claim == rd60xx::IdentityBindings::Claim::rejected) {
@@ -247,15 +287,32 @@ void worker(void *) {
           }
         }
       }
-      if (!c.serial && now >= c.deadline)
-        close_connection(c);
     }
     sleep_ms(5);
   }
 }
 void touch_worker(void *) {
-  int sock = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
-  if (sock < 0) {
+  // Use the normal stack in both AP modes, matching the PC's multicast UDP
+  // transport. Raw unencrypted broadcasts are not the PC wire profile.
+  int udp = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
+  int ack = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
+  sockaddr_in local{}, result_address{};
+  local.sin_family = result_address.sin_family = AF_INET;
+  local.sin_addr.s_addr = result_address.sin_addr.s_addr =
+      inet_addr(ap_address);
+  result_address.sin_port = htons(18266);
+  in_addr multicast_interface{};
+  multicast_interface.s_addr = inet_addr(ap_address);
+  if (udp < 0 || ack < 0 ||
+      bind(udp, reinterpret_cast<sockaddr *>(&local), sizeof(local)) < 0 ||
+      setsockopt(udp, IPPROTO_IP, IP_MULTICAST_IF, &multicast_interface,
+                 sizeof(multicast_interface)) < 0 ||
+      bind(ack, reinterpret_cast<sockaddr *>(&result_address),
+           sizeof(result_address)) < 0) {
+    if (udp >= 0)
+      close(udp);
+    if (ack >= 0)
+      close(ack);
     {
       std::lock_guard<std::mutex> lock(management);
       listener_error = "Provisioning UDP unavailable";
@@ -264,66 +321,135 @@ void touch_worker(void *) {
     vTaskDelete(nullptr);
     return;
   }
-  int yes = 1;
-  setsockopt(sock, SOL_SOCKET, SO_BROADCAST, &yes, sizeof(yes));
-  sockaddr_in local{};
-  local.sin_family = AF_INET;
-  local.sin_addr.s_addr = inet_addr(ap_address);
-  if (bind(sock, reinterpret_cast<sockaddr *>(&local), sizeof(local)) < 0) {
-    close(sock);
-    {
-      std::lock_guard<std::mutex> lock(management);
-      listener_error = "Cannot bind provisioning to AP";
-    }
-    vTaskDelete(nullptr);
-    return;
-  }
-  sockaddr_in target{};
-  target.sin_family = AF_INET;
-  target.sin_port = htons(7001);
-  target.sin_addr.s_addr = inet_addr("192.168.4.255");
-  std::string previous;
-  uint64_t cycle = 0;
-  size_t index = 0;
-  rd60xx::TouchPackets packets;
-  std::array<uint8_t, 1024> payload{};
+  nonblocking(udp);
+  nonblocking(ack);
+  // Retain diagnostic counters for older clients, but this sender does not
+  // use raw TX and must not count UDP submissions as radio completions.
+  esp_wifi_register_80211_tx_cb(touch_tx_done);
+  rd60xx::PcTouchSender sender;
+  std::string previous_phase, previous_session;
+  std::set<uint32_t> seen_acks;
+  std::array<uint8_t, 515> payload{};
+  uint64_t backpressure_since = 0;
+  size_t burst_packets = 0, burst_size = 0;
+  bool acknowledged = false;
   for (;;) {
-    std::string phase;
+    std::string phase, session, profile;
     {
       std::lock_guard<std::mutex> lock(management);
       provisioning.tick(now_ms());
       phase = provisioning.phase();
+      session = provisioning.session_id();
+      profile = provision_profile;
     }
     if (phase != "server_address" && phase != "wifi") {
-      previous.clear();
-      sleep_ms(50);
+      sender.stop();
+      previous_phase.clear();
+      sleep_ms(5);
       continue;
     }
-    if (previous != phase) {
-      std::array<uint8_t, 6> mac{};
-      esp_wifi_get_mac(WIFI_IF_AP, mac.data());
-      packets = rd60xx::esptouch_lengths(
-          ap_ssid, phase == "server_address" ? ap_address : "",
-          {192, 168, 4, 1}, mac);
-      previous = phase;
-      cycle = now_ms();
-      index = 0;
-    }
-    auto elapsed = (now_ms() - cycle) % 6000;
-    auto &lengths = elapsed < 2000 ? packets.guide : packets.data;
-    auto size = lengths[index++ % lengths.size()];
-    auto n = sendto(sock, payload.data(), size, 0,
-                    reinterpret_cast<sockaddr *>(&target), sizeof(target));
-    {
-      std::lock_guard<std::mutex> lock(management);
-      if (n == size)
-        ++provision_packets;
-      else
+    if (previous_phase != phase || previous_session != session) {
+      if (previous_session != session) {
+        sender = rd60xx::PcTouchSender{};
+        seen_acks.clear();
+      }
+      // Remove late results before arming a new phase. An ACK never advances
+      // management state or authorizes an instrument; TCP identity is separate.
+      std::array<uint8_t, 64> discard{};
+      for (int i = 0; i < 8 && recv(ack, discard.data(), discard.size(), 0) > 0;
+           ++i) {
+      }
+      try {
+        auto password = read_nvs("ap").text("psk");
+        auto data = rd60xx::pc_touch_data(phase == "server_address", ap_ssid,
+                                          password, {192, 168, 4, 1}, profile);
+        burst_size = 156 + data.size();
+        burst_packets = 0;
+        sender.start(std::move(data), now_ms(), phase == "wifi");
+      } catch (const std::invalid_argument &e) {
+        std::lock_guard<std::mutex> lock(management);
+        provision_error = e.what();
         provisioning.fail();
+        continue;
+      }
+      previous_phase = phase;
+      previous_session = session;
+      acknowledged = false;
+      backpressure_since = 0;
     }
-    sleep_ms(8);
+    if (phase == "wifi") {
+      for (int i = 0; i < 4; ++i) {
+        std::array<uint8_t, 64> bytes{};
+        sockaddr_in source{};
+        socklen_t length = sizeof(source);
+        auto n = recvfrom(ack, bytes.data(), bytes.size(), 0,
+                          reinterpret_cast<sockaddr *>(&source), &length);
+        if (n < 0)
+          break;
+        auto ip =
+            rd60xx::pc_join_address(Bytes(bytes.begin(), bytes.begin() + n));
+        if (!ip || (*ip)[0] != 192 || (*ip)[1] != 168 || (*ip)[2] != 4 ||
+            (*ip)[3] < 2 || (*ip)[3] == 255)
+          continue;
+        auto value =
+            htonl((uint32_t((*ip)[0]) << 24) | (uint32_t((*ip)[1]) << 16) |
+                  (uint32_t((*ip)[2]) << 8) | (*ip)[3]);
+        if (source.sin_addr.s_addr != value || !seen_acks.insert(value).second)
+          continue;
+        {
+          std::lock_guard<std::mutex> lock(management);
+          ++provision_join_acks;
+        }
+        sender.stop();
+        acknowledged = true;
+      }
+    }
+    auto now = now_ms();
+    auto packet = sender.peek(now);
+    if (acknowledged || !packet) {
+      sleep_ms(5);
+      continue;
+    }
+    auto group = packet->group;
+    std::string destination = "234." + std::to_string(group) + "." +
+                              std::to_string(group) + "." +
+                              std::to_string(group);
+    sockaddr_in target{};
+    target.sin_family = AF_INET;
+    target.sin_port = htons(7001);
+    target.sin_addr.s_addr = inet_addr(destination.c_str());
+    auto n = sendto(udp, payload.data(), packet->length, 0,
+                    reinterpret_cast<sockaddr *>(&target), sizeof(target));
+    if (n == packet->length) {
+      sender.sent(now_ms());
+      backpressure_since = 0;
+      std::lock_guard<std::mutex> lock(management);
+      ++provision_packets;
+      if (++burst_packets == burst_size) {
+        ++provision_bursts;
+        burst_packets = 0;
+      }
+      // No intentional packet delay. The UDP/driver queue supplies
+      // backpressure.
+    } else if (again() || errno == ENOMEM || errno == ENOBUFS) {
+      if (!backpressure_since)
+        backpressure_since = now;
+      if (now - backpressure_since >= 1000) {
+        std::lock_guard<std::mutex> lock(management);
+        provision_error = "Provisioning UDP backpressure exceeded one second";
+        provisioning.fail();
+      }
+      sleep_ms(1);
+    } else {
+      auto error = errno;
+      std::lock_guard<std::mutex> lock(management);
+      provision_error =
+          "Provisioning UDP send failed: " + std::to_string(error);
+      provisioning.fail();
+    }
   }
 }
+
 } // namespace
 std::shared_ptr<Endpoint> tcp_endpoint(const std::string &serial,
                                        unsigned model) {
@@ -345,7 +471,7 @@ void start_rd_network() {
                return Response{200, status(now)};
              });
   node->bind(
-      "startRdProvisioning", [](const Json &, const Headers &, uint64_t now) {
+      "startRdProvisioning", [](const Json &j, const Headers &, uint64_t now) {
         if (!node->quiescent(now) || wifi_network_busy())
           return problem(409, "Stop/release instruments and finish Wi-Fi "
                               "changes before provisioning");
@@ -354,8 +480,10 @@ void start_rd_network() {
           if (!listening || !listener_error.empty())
             return problem(503, "RD network service unavailable");
           try {
+            provision_error.clear();
             provisioning.start(
                 random_id() + "-p" + std::to_string(++session_number), now);
+            provision_profile = j.text("profile", "pc_v22");
           } catch (const std::invalid_argument &e) {
             return problem(409, e.what());
           }
