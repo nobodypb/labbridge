@@ -1,7 +1,7 @@
 /*
  * output_request.h
  *
- * 
+ * Output intent, optionally with a bridge-local deadline for this activation. Sending a setpoint never implicitly enables an output.
  */
 
 #ifndef _output_request_H_

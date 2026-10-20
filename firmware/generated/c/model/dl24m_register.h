@@ -1,7 +1,7 @@
 /*
  * dl24m_register.h
  *
- * 
+ * One audited passive DL24M numeric read. Values are unsigned 24-bit raw payloads; meaning and scaling depend on command. Missing values indicate unavailable data, not zero.
  */
 
 #ifndef _dl24m_register_H_

@@ -1,7 +1,7 @@
 /*
  * wifi_state.h
  *
- * 
+ * Station provisioning/connection snapshot. A successful credential-save response does not imply that the station is already connected.
  */
 
 #ifndef _wifi_state_H_

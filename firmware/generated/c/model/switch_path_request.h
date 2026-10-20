@@ -1,7 +1,7 @@
 /*
  * switch_path_request.h
  *
- * 
+ * Desired circuit path for a feedback-verified interlock, with both paths opened before a direction change.
  */
 
 #ifndef _switch_path_request_H_

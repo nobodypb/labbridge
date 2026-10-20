@@ -1,7 +1,7 @@
 /*
  * interlock_configuration.h
  *
- * 
+ * GPIO polarity and break-before-make configuration for a feedback-verified charge/discharge switch. Wiring and feedback must be commissioned on the actual board.
  */
 
 #ifndef _interlock_configuration_H_

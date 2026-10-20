@@ -1,7 +1,7 @@
 /*
  * cell_temperature_guard.h
  *
- * 
+ * Node-local guard for a cell or external-probe temperature channel. Require fresh valid degrees-Celsius data and minimum_c &lt; maximum_c. The guard stops the associated actor on stale/missing/out-of-range data.
  */
 
 #ifndef _cell_temperature_guard_H_

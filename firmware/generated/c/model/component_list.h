@@ -1,7 +1,7 @@
 /*
  * component_list.h
  *
- * 
+ * All actor/sensor descriptors for one physical device.
  */
 
 #ifndef _component_list_H_

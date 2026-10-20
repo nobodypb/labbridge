@@ -1,7 +1,7 @@
 /*
  * node_configuration.h
  *
- * 
+ * Complete persistent bridge configuration. Replace conditionally using the current ETag; the node assigns the next revision and reboots after accepting a replacement.
  */
 
 #ifndef _node_configuration_H_

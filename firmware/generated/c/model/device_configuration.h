@@ -1,7 +1,7 @@
 /*
  * device_configuration.h
  *
- * 
+ * One configured physical endpoint. Select a driver-supported transport, stable identity and explicitly approved pins. Resource conflicts and invalid driver calibration are rejected before allocation. Read-only sensors need no actuator limits.
  */
 
 #ifndef _device_configuration_H_

@@ -1,7 +1,7 @@
 /*
  * wifi_request.h
  *
- * 
+ * Target station credentials, separate from the password-free provisioning AP. Credentials are persisted locally and never returned by the state API.
  */
 
 #ifndef _wifi_request_H_

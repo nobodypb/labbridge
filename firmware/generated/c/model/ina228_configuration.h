@@ -1,7 +1,7 @@
 /*
  * ina228_configuration.h
  *
- * 
+ * INA228 shunt calibration for direct ESP I2C. Use endpoint 64..79 (decimal address) and explicitly approved pins [SDA, SCL]; I2C0 instances share the same pin pair and need unique addresses. Voltage/current/power, epoch-relative energy/charge and internal die temperature use the common sensor API. Hardware accuracy commissioning remains open.
  */
 
 #ifndef _ina228_configuration_H_

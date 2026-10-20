@@ -1,7 +1,7 @@
 /*
  * sensor_reading.h
  *
- * 
+ * Scalar measurement with units, sign and continuity metadata. Require valid quality and acceptable age before control/integration. boot_id changes on node reboot; epoch can change when only the upstream meter restarts or calibration history is reset.
  */
 
 #ifndef _sensor_reading_H_

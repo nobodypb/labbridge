@@ -1,7 +1,7 @@
 /*
  * wifi_scan.h
  *
- * 
+ * Current asynchronous scan status and cached networks. Poll while scanning; an empty list does not imply a completed scan.
  */
 
 #ifndef _wifi_scan_H_

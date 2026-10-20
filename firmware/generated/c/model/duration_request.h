@@ -1,7 +1,7 @@
 /*
  * duration_request.h
  *
- * 
+ * Instrument run timer in seconds, separate from the bridge-local activation deadline. Zero disables the instrument timer; hardware granularity still applies.
  */
 
 #ifndef _duration_request_H_

@@ -1,7 +1,7 @@
 /*
  * component.h
  *
- * 
+ * Discoverable source, sink or scalar sensor within one physical device. Actions describe supported mutations; sensors expose quantity/unit instead. IDs need only be unique within the device.
  */
 
 #ifndef _component_H_

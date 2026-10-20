@@ -1,7 +1,7 @@
 /*
  * actuator_settings.h
  *
- * 
+ * Available cached settings for one source/sink. Omitted values are unknown or unsupported, not zero. Settings do not imply that output is enabled.
  */
 
 #ifndef _actuator_settings_H_

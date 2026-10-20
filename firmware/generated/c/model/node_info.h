@@ -1,7 +1,7 @@
 /*
  * node_info.h
  *
- * 
+ * Identity and version boundary for one bridge boot. Scope device IDs to a node, and scope leases, operations and monotonic timestamps to boot_id.
  */
 
 #ifndef _node_info_H_

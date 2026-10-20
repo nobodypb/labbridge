@@ -1,7 +1,7 @@
 /*
  * sensor_readings.h
  *
- * 
+ * Cached readings for one physical device. Individual channels may have different validity/age; use sequence/epoch to avoid combining unrelated samples.
  */
 
 #ifndef _sensor_readings_H_

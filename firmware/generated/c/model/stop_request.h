@@ -1,7 +1,7 @@
 /*
  * stop_request.h
  *
- * 
+ * Optional diagnostic reason. Send {} when no reason is needed; this body is also used by lease heartbeats and counter reset.
  */
 
 #ifndef _stop_request_H_

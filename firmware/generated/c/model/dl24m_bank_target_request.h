@@ -1,7 +1,7 @@
 /*
  * dl24m_bank_target_request.h
  *
- * 
+ * Inactive bank target in raw register units. This interface does not claim that the corresponding active CV/CR/CP behavior or scales are commissioned.
  */
 
 #ifndef _dl24m_bank_target_request_H_
