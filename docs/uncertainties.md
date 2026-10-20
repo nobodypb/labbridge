@@ -20,8 +20,11 @@ mappings. This file records the remaining decisions, not a complete chronology.
   is not established.
 - FF55 counter/energy units and numeric counter scaling need calibration against
   host integration. Do not use guessed scaling for battery capacity claims.
-- RD6024 CC/CV register 17 is probable; external NTC mapping and Bluetooth-module
-  transport remain uncommissioned. USB codec tests are not PSU hardware tests.
+- Ordinary RD6018 operating telemetry, including external NTC and register 17
+  regulation state, is implemented and its no-load transport is physically
+  commissioned. Loaded CC/CV transitions, RD6024 hardware and optional
+  Bluetooth-module transport remain uncommissioned. Portable codec tests alone
+  are not PSU hardware evidence.
 - Reference GPIO switching and DS18B20 scratchpad decoding have portable tests;
   actual wiring, power-up behavior, contact feedback and probe identity require
   commissioning. No battery run has been validated on the physical bench.
@@ -50,11 +53,12 @@ first validated sample after initialization, avoiding historical counts under a
 different calibration without clearing hardware counters.
 
 
-The user's sources are RD6018, correcting the earlier RD6024 assumption. Ordinary
-RD6018 register scales/model selection are characterized in portable tests;
-actual USB/TCP identity/readback and original-module pairing still need physical
-acceptance. RD6018P is explicitly excluded. The original app working does not
-prove that all module revisions behave identically on reconnect.
+Ordinary RD6018 register scales/model selection are characterized in portable
+tests. W01 pairing, TCP identity/readback, voltage/current targets, output
+switching and the complete operating telemetry have physical no-load acceptance
+through the bridge's USB and HTTP interfaces. RD6018P is explicitly excluded.
+These results do not commission a second source, loaded CC/CV behavior or every
+module revision; see [acceptance](acceptance.md).
 
 The W01 module showed no server IP in open-AP UDP trials, a direct AP broadcast
 trial, or a WPA2 AP-origin trial with an associated phone. The direct trial had

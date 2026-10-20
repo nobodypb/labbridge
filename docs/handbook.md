@@ -19,6 +19,12 @@ No manufacturer firmware update is needed for the confirmed DL24M protocol.
 | ESP32-S3-USB-OTG | BLE, up to two AP TCP sources and up to two USB serial RD60xx endpoints | Powered USB hub for two instruments; separate UART console. Internal USB PHY cannot serve console and host simultaneously. |
 | Classic ESP32 devkit | BLE and UART | Bluetooth Classic hardware exists, but SPP is not enabled in this runtime. No native USB host. |
 
+The StickS3 build enables its 8 MB octal PSRAM, tests it at boot and makes it
+available to the application allocator. See the [manufacturer's board
+specification](https://docs.m5stack.com/en/core/StickS3). Do not disable PSRAM in
+that profile: API configuration and retained operation results also need heap.
+Other board profiles must be commissioned for their own memory budget.
+
 Resource profiles reject excess connections, duplicate instrument identities
 and shared pins before creating drivers. GPIO/1-Wire pins must be explicitly
 approved in a board profile; an empty pin allowlist is intentional. Do not infer
@@ -143,13 +149,41 @@ CRC low byte first. Validate address, function, payload length and CRC.
 | 8 / 9 | set voltage / current | /100 V, /100 A |
 | 10 / 11 | measured voltage / current | /100 V, /100 A |
 | 12–13 | measured power | combined 32-bit /100 W |
+| 14 | input supply voltage | /100 V |
 | 16 | protection | raw enum |
-| 17 | CC/CV | probable 0=CV, 1=CC; commissioning required |
+| 17 | CC/CV | 0=CV, 1=CC; sustained loaded CC acceptance remains open |
 | 18 | output | 0/1 |
+| 32 / 33 | battery detected / sensed battery voltage | nonzero / /100 V |
+| 34–35 | external NTC temperature | sign, magnitude °C |
+| 38–39 | native charge counter | combined 32-bit /1000 Ah |
+| 40–41 | native energy counter | combined 32-bit /1000 Wh |
 
 Before writing, re-read and match instrument serial/model. Require function-06
-byte-for-byte echo, then fresh register readback with the same identity. The
-external NTC channel is not mapped yet; internal temperature cannot substitute.
+byte-for-byte echo, then fresh register readback with the same identity. Reads
+cover registers 0–41 in one CRC-checked response, including identity, operating
+state and auxiliary measurements. Discovery uses the shorter 0–19 identity read.
+An external NTC reading below −40 °C (including the disconnected −89 °C sentinel),
+an invalid sign or a reading above 100 °C is unavailable, with no numeric value.
+Internal temperature cannot substitute for this external channel.
+
+The response deadline is one second; a successful reply advances immediately.
+There is no mandatory one-second pause between commands. Missing pre-activation
+reads can be retried within the ten-second operation budget. Once an ON write
+has been sent, uncertain echo or mismatched readback fails the operation and
+requests recovery OFF; ON is not repeated. OFF and setpoint recovery remain
+bounded. Confirmed ON describes the output-enable register, not settled terminal
+voltage. A workflow that requires a settled voltage must check fresh measurements.
+
+The source API exposes voltage/current setpoints, output, V/I/power, input and
+battery voltage, battery presence, native Ah/Wh counters, regulation mode,
+protection status and both temperature channels. Common sensor component IDs
+are `voltage`, `current`, `power`, `input-voltage`, `battery-voltage`,
+`battery-detected` (dimensionless 0/1), `charge` (Ah), `energy` (Wh),
+`temperature-internal` and `temperature-external`. All use the same reading and
+freshness contract. Native counters can reset with device actions; detect a
+decrease and start a new integration segment rather than inventing a delta.
+OVP/OCP settings, presets and front-panel settings are not yet exposed by this
+driver. Calibration is not an automation operation.
 
 The ordinary RD6018 and RD6024 profiles use 0.01 V/A setpoint steps. RD6018
 model ceilings are 60 V / 18 A / 1080 W; RD6024 ceilings are 60 V / 24 A /
@@ -187,7 +221,7 @@ requests OFF before allowing work; it never resumes ON.
 
 ### Pairing through LabBridge
 
-**Commissioning status:** The RIDEN PC profile below paired a W01 RD6018 successfully from the ESP AP using WPA2 and an associated phone, including the displayed server address, UDP join result and TCP identity. Earlier general-profile open/WPA2 attempts failed. Open-network compatibility, which profile changes are essential, source control and the coexistence soak remain unvalidated. See [compatibility notes](uncertainties.md).
+**Commissioning status:** The RIDEN PC profile below paired a W01 RD6018 successfully from the ESP AP using WPA2 and an associated phone, including the displayed server address, UDP join result and TCP identity. No-load setpoint writes/readback, output switching, independent STOP, local activation duration and lease-expiry shutdown are commissioned on ordinary RD6018 firmware 1.39. Loaded CC/CV, a second physical source, open-network compatibility, essential profile differences and the coexistence soak remain unvalidated. See [acceptance](acceptance.md) and [compatibility notes](uncertainties.md).
 
 The AP is open by default. `core.configure_access_point` (`PUT /api/v1/wifi/ap`) accepts only `{"psk":"..."}`: 8..63 printable ASCII characters enable WPA2-PSK/CCMP; an explicit empty string restores the open AP. This requires quiescent instruments and authenticated HTTP or trusted USB, including when called through the open AP. The change disconnects AP clients after the response; use USB or the station address to retain management access. Station credentials and the configured AP SSID are unchanged. Secrets are never returned. `getWifiState.ap_secured` reports current authentication; poll after the delayed change. Supply secrets through a private CLI args file or stdin, not shell command history.
 
@@ -218,6 +252,24 @@ are blocked while pairing; independent STOP remains available.
    Discovery/registration never enables an output.
 
 The same operations are generated for HTTP and USB CLI:
+
+For unattended phase handoff, use the host workflow after confirming physical
+OFF, entering the PSU's Wi-Fi setup and connecting a client to the ESP AP:
+
+```sh
+PYTHONPATH=host/src:host/generated python tools/rd_wifi_pair.py --endpoint "$BRIDGE_ENDPOINT" --confirm-outputs-off
+```
+
+`BRIDGE_ENDPOINT` accepts `serial:` or HTTP; HTTP reads its bearer token from
+`LABBRIDGE_TOKEN`. The helper uses the PC-compatible profile, sends the server
+address for its 60-second window and then sends stored AP credentials
+automatically. It never waits for a display confirmation or reads the PSK onto
+the host. It exits successfully only when the firmware confirms a new TCP
+instrument identity. Cancellation and a bounded overall timeout stop only the
+session it started. `labbridge.provisioning.pair_rd_wifi(node,
+confirm_outputs_off=True)` exposes the same workflow to scripts.
+
+Individual operations remain available for protocol diagnostics:
 
 ```sh
 labbridge --endpoint serial:/dev/ttyACM0 call rd60xx.get_rd_provisioning
