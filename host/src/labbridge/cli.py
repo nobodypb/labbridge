@@ -110,7 +110,10 @@ def main(argv=None):
         elif args.command == "pair":
             if not node.client.configuration.host == "http://usb":
                 parser.error("Pairing is only available over serial:")
-            result = node.core.get_management_token()
+            # Pairing explicitly returns this credential over physically trusted USB.
+            result = {
+                "token": node.core.get_management_token().token.get_secret_value()
+            }
         elif args.command == "operations":
             result = {
                 name: sorted(

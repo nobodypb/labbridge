@@ -93,7 +93,7 @@ Portable tests cover ordinary RD6018/RD6024 selection and ceilings, explicit
 RD6018P rejection, independent identities/two sources, corrupt/fragmented RTU
 frames, duplicate/wrong-model binding, interrupted ON without replay, provisioning
 packet vectors/checksums and session/phase/replay/deadline behavior. Generated
-CLI tests exercise provisioning requests; browser scenarios cover physical-OFF
+CLI tests exercise provisioning requests and usable USB token pairing; browser scenarios cover physical-OFF
 confirmation, both phases, cancellation and ETag/explicit-limit registration.
 The StickS3 firmware builds with the AP TCP service and provisioning sender.
 
@@ -111,3 +111,11 @@ It records boot IDs, measurement freshness, configuration and connection counter
 an unexpected disconnect/rejection, stale sample or restart fails the run. Files
 contain hardware identities and remain ignored/private. Active bench writes and
 intentional fault injection are separate checks; this runner makes no mutations.
+
+StickS3 bench smoke acceptance on firmware `0.1.0+026063a`: AP listener starts,
+status/invalid-session handling works over USB and authenticated LAN, the updated
+UI asset is served, and port 8080 is not reachable through the station address.
+The original DL24M settings matched the pre-flash snapshot; CC 0.100 A, fresh
+measurements and confirmed output OFF were preserved. A private system/application
+backup was taken before flashing. No RD source was paired or actuated in these
+checks, and no AP-client/BLE coexistence result is claimed from them.
