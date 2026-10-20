@@ -1,0 +1,19 @@
+{
+  "source": {
+    "node": "source-node",
+    "device": "supply"
+  },
+  "load": {
+    "node": "load-node",
+    "device": "load"
+  },
+  "interlock": {
+    "node": "switch-node",
+    "device": "paths"
+  },
+  "cell_probe": {
+    "node": "switch-node",
+    "device": "probe",
+    "channel": "cell"
+  }
+}

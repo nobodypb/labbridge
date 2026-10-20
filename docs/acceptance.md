@@ -1,30 +1,57 @@
 # Acceptance status
 
-## Portable checks
+This is a development baseline, not a fully commissioned battery-test system.
 
-The migration currently has passing behavior tests for resource allocation,
-DL24M framing and interleaved notifications, bounded transactions, local guards,
-node leases/idempotency, RD6024 CRC/register decoding, interlock transitions,
-DS18B20 CRC, typed SDK transport and distributed-acquisition rollback.
-The frozen baseline's existing tests remain part of the check command.
+## Automated acceptance
 
-## Hardware baseline
+- 18 portable C++ behavior executables cover framing, queued transactions,
+  connection changes, resource validation, driver identity, leases, idempotency,
+  local guards, per-activation deadlines, interlock feedback and temperature.
+- Python tests validate actual runtime responses against OpenAPI, generated
+  request models, USB chunk framing, distributed lease rollback and error
+  propagation. Host tests include both chemistries through complete simulated
+  cycles, cleanup and reboot rejection, plus the CLI.
+- The frozen baseline's codec/controller and 13 Python tests remain mandatory.
+- Three UI policy tests and four browser scenarios cover Wi-Fi scan/select/PSK,
+  operation polling, lease/output behavior, unknown-state STOP and mixed modules.
+- CI regenerates the API, checks drift, builds Python/TypeScript/C and firmware
+  for StickS3, ESP32-S3-USB-OTG and classic ESP32. Board builds do not establish
+  that every peripheral combination has been physically commissioned.
 
-Before migration, the StickS3 and DL24M Ver 2.0 were exercised with a 24 V source
-limited to 1 A, DL24M CC 0.100 A, bridge limits 25 V / 0.2 A / 5 W. BLE telemetry,
-short load pulses, 22 audited reads and reversible setting changes were observed.
-All tested settings were restored and the load output confirmed OFF. The final
-baseline firmware remains the rollback image outside this public tree.
+## DL24M bench acceptance
 
-## Required before a release
+New asynchronous runtime on StickS3; actual display firmware Ver 2.0. Bench source
+24 V, current limited to 1 A; bridge limits 25 V / 0.2 A / 5 W; CC 0.100 A.
 
-- Build the new ESP adapters for each declared supported board.
-- Repeat DL24M bench reads and bounded writes with the new asynchronous runtime;
-  record latency, retries, error rate, final OFF and restored settings.
-- Verify open-AP Wi-Fi scan, configuration, STA reconnect and USB management.
-- Exercise disconnect during ON, stale measurements and lease expiry on hardware.
-- Commission RD6024 serial binding and verified CC/CV writes on actual sources.
-- Commission interlock feedback and external cell temperature before a battery run.
+- All 22 audited register queries answered over BLE.
+- 33 setting/output/counter operations succeeded with fresh readback and bounded
+  bridge recovery. CC 0.150 → 0.100 A, a measured 23.992 V / 0.101 A pulse, then
+  independent OFF were included. All 14 setting families were changed/restored.
+- Median host operation latency 0.851 s, maximum 1.655 s in that run. The timer
+  required three writes on change and restoration; some other operations needed
+  an extra write/read. The caller received successful confirmed operations.
+- All three inactive setpoint banks were read, changed by one raw unit, restored,
+  and returned to CC with the original CC target. Active non-CC regulation is
+  intentionally uncommissioned and cannot be enabled through this driver.
+- Original settings, CC 0.100 A and confirmed output OFF were restored. OVP was
+  temporarily raised from its original 21 V to 25 V for the 24 V pulse, then
+  restored to 21 V. Counter reset was explicitly authorized.
 
-Uncommissioned modules must remain visibly experimental. No full battery hardware
-acceptance is implied by simulated tests or by the old baseline evidence.
+The old NVS namespace and source application are preserved. The rollback image
+and private pre-migration backup remain outside the public repository.
+
+## Remaining physical acceptance
+
+- Local lease expiry confirmed OFF on the final runtime. Reset during ON returned
+  confirmed OFF without resuming. Reset during a multi-setting operation restored
+  the original values. All 14 settings were subsequently re-read and matched;
+  CC 0.100 A and OFF were confirmed. New-firmware USB Wi-Fi scan completed.
+- Open-AP UI scan/select/PSK was confirmed by the operator in the earlier setup;
+  new UI browser tests pass. Actual STA provisioning/reconnect needs a configured
+  target network; it is not established by browser fixtures.
+- Commission RD6024 serial identity, CC/CV register behavior and verified writes
+  on actual sources; determine the optional Bluetooth module's transport.
+- Commission relay polarity, feedback, power-up behavior, Kelvin voltage sensing,
+  source reverse-current protection and external cell probe before any battery run.
+
+Hardware acceptance stays open in LB-014; no simulated result closes it.

@@ -6,20 +6,20 @@ checks pass and its hardware claims match the evidence.
 
 | ID | Story | Depends on | Status |
 |---|---|---|---|
-| LB-001 | As a contributor, I can reproduce the baseline and run CI without private artifacts. | — | In progress |
-| LB-002 | As an integrator, I generate clients and firmware types from the same API contract. | LB-001 | TODO |
-| LB-003 | As an operator, I configure multiple instrument instances within board limits. | LB-001 | In progress |
-| LB-004 | As a driver author, I use isolated transport endpoints and add a module without core changes. | LB-003 | TODO |
-| LB-005 | As a DL24M user, I retain the confirmed codec, readback and persistent shutdown behavior. | LB-004 | TODO |
-| LB-006 | As an automation author, I receive confirmed results after bounded on-node recovery. | LB-005 | TODO |
-| LB-007 | As an operator, I use multiple RD60xx sources with independent identities and CC/CV telemetry. | LB-004 | TODO |
-| LB-008 | As a battery tester, I select interchangeable interlocks and cell-temperature channels. | LB-004 | TODO |
-| LB-009 | As an operator, I retain local limits and safe shutdown when host or network fails. | LB-005, LB-007, LB-008 | TODO |
-| LB-010 | As a script author, I address devices across named nodes over HTTP or USB using the SDK/CLI. | LB-002, LB-009 | TODO |
-| LB-011 | As an operator, I provision Wi-Fi and operate device capabilities through modular UI panels. | LB-002, LB-003 | TODO |
-| LB-012 | As a cell tester, I run external charge/discharge/rest/pulse scripts and export traceable results. | LB-010 | TODO |
-| LB-013 | As an integrator, I read one factual hardware/API/protocol handbook rather than an investigation diary. | LB-002, LB-005 | TODO |
-| LB-014 | As a maintainer, I release only with explicit simulation and hardware acceptance results. | all | TODO |
+| LB-001 | As a contributor, I can reproduce the baseline and run CI without private artifacts. | — | Done |
+| LB-002 | As an integrator, I generate clients and firmware types from the same API contract. | LB-001 | Done |
+| LB-003 | As an operator, I configure multiple instrument instances within board limits. | LB-001 | Done |
+| LB-004 | As a driver author, I use isolated transport endpoints and add a module without core changes. | LB-003 | Done |
+| LB-005 | As a DL24M user, I retain the confirmed codec, readback and persistent shutdown behavior. | LB-004 | Done |
+| LB-006 | As an automation author, I receive confirmed results after bounded on-node recovery. | LB-005 | Done |
+| LB-007 | As an operator, I use multiple RD60xx sources with independent identities and CC/CV telemetry. | LB-004 | Hardware acceptance open |
+| LB-008 | As a battery tester, I select interchangeable interlocks and cell-temperature channels. | LB-004 | Hardware acceptance open |
+| LB-009 | As an operator, I retain local limits and safe shutdown when host or network fails. | LB-005, LB-007, LB-008 | Done |
+| LB-010 | As a script author, I address devices across named nodes over HTTP or USB using the SDK/CLI. | LB-002, LB-009 | Done |
+| LB-011 | As an operator, I provision Wi-Fi and operate device capabilities through modular UI panels. | LB-002, LB-003 | Done |
+| LB-012 | As a cell tester, I run external charge/discharge/rest/pulse scripts and export traceable results. | LB-010 | Done |
+| LB-013 | As an integrator, I read one factual hardware/API/protocol handbook rather than an investigation diary. | LB-002, LB-005 | Done |
+| LB-014 | As a maintainer, I release only with explicit simulation and hardware acceptance results. | all | Hardware acceptance open |
 
 ## Acceptance criteria
 
@@ -43,3 +43,12 @@ checks pass and its hardware claims match the evidence.
 Observed red test → implementation → green tests → refactor → required checks →
 reviewable PR. Update this status and evidence with the same change. Do not mark
 a story done using a narrower test than its acceptance criteria.
+
+## Delivery evidence
+
+The runtime and board adapters are delivered in PR #15. CLI, complete simulated
+battery workflows, profiles and consolidated documentation follow in the workflow
+PR. [Acceptance](acceptance.md) separates actual DL24M bench evidence from portable
+and browser tests. LB-007/008 have software implementations; their physical
+commissioning, and the complete battery circuit in LB-014, remain open. There is
+no claim of a production-ready battery test system or of tested optional PSU BT.

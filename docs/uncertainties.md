@@ -13,7 +13,11 @@ mappings. This file records the remaining decisions, not a complete chronology.
 - Zero-pause writes were mostly successful but intermittently failed even
   after ATT acknowledgement. The cause may include internal device state.
   Parsing alone does not guarantee execution. Bounded readback/retry is required.
-  The new 60/200-ms policy must be measured against the preserved implementation.
+  The new 60/200-ms policy passed the recorded bench checks. Foreground/background
+  overlap was also a concrete cause: the new queue waits for the application
+  reply rather than treating an ATT ACK as completion. Remaining sporadic
+  failures are recovered by bounded readback/retry; their device-internal cause
+  is not established.
 - FF55 counter/energy units and numeric counter scaling need calibration against
   host integration. Do not use guessed scaling for battery capacity claims.
 - RD6024 CC/CV register 17 is probable; external NTC mapping and Bluetooth-module

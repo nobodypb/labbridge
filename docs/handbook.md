@@ -6,7 +6,7 @@ node runs the same application source, with a board build and a validated device
 configuration. Scripts own experimental sequences; nodes own instrument access,
 readback, local limits and shutdown obligations.
 
-This is a migration in progress. Consult [acceptance](acceptance.md) and the
+The DL24M driver is bench-tested; other hardware modules require commissioning. Consult [acceptance](acceptance.md) and the
 [backlog](backlog.md) before relying on a module with real hardware. The preserved
 implementation is in `reference/`; new drivers live under `firmware/drivers/`.
 No manufacturer firmware update is needed for the confirmed DL24M protocol.
@@ -17,7 +17,7 @@ No manufacturer firmware update is needed for the confirmed DL24M protocol.
 |---|---|---|
 | M5Stack StickS3 / ESP32-S3 | BLE DL24M | Native USB remains the console. USB host disabled. No Bluetooth Classic. |
 | ESP32-S3-USB-OTG | BLE and up to two USB serial RD6024 endpoints | Powered USB hub for two instruments; separate UART console. Internal USB PHY cannot serve console and host simultaneously. |
-| Classic ESP32 devkit | UART; Classic Bluetooth hardware available | Numeric SPP integration remains experimental. No native USB host. |
+| Classic ESP32 devkit | BLE and UART | Bluetooth Classic hardware exists, but SPP is not enabled in this runtime. No native USB host. |
 
 Resource profiles reject excess connections, duplicate instrument identities
 and shared pins before creating drivers. GPIO/1-Wire pins must be explicitly
@@ -113,8 +113,11 @@ mode and menu-exit writes; one multi-parameter sequence separates writes by
 200 ms. Its selected write handlers have no observed general retry mechanism.
 The new transaction engine uses these write timings, immediate ordinary reads,
 readback, bounded retries and a 10-second upper bound. A fixed 500 ms around every
-request is not justified by parsing needs. The faster policy still needs the
-new hardware acceptance described in [acceptance](acceptance.md).
+request is not justified by parsing needs. The policy is bench-tested with bounded retries; see [acceptance](acceptance.md).
+Foreground work waits for an in-flight background application reply. A timed-out
+exchange is drained and followed by a 250 ms recovery quiet period. Normal
+requests do not pay this recovery cost. Do not cancel a poll after its ATT ACK
+and immediately overlap a new application request.
 
 No request ID means a sufficiently late reply to an identical read can be
 ambiguous. Drain old receive data before a transaction, serialize requests per
@@ -164,7 +167,9 @@ Reserve devices with `POST /leases`, heartbeat at least every second (TTL up to
 10 seconds), and send `X-Lab-Lease` with writes. Use an `Idempotency-Key` per
 logical mutation. A 202 response contains an operation ID and Location; poll to
 a terminal state. Reusing the key with different content is a conflict. Keys
-and operation IDs are scoped to one boot and bounded in memory. Do not replay
+and operation IDs are scoped to one boot. Terminal operations are retained for
+five minutes in a 128-entry bounded cache; priority STOP remains available when
+that cache is full. Do not replay
 an uncertain write after reboot. `POST /devices/{id}/stop` needs no lease.
 Errors use `application/problem+json`, including final output and restoration
 state when known. A failed operation can still have changed the instrument.
@@ -206,3 +211,151 @@ including configuration, device identities, boot IDs and errors. Integrate
 capacity/energy by trapezoids only across consecutive fresh samples with
 acceptable gaps. Never integrate stale periods or infer zero current during
 missing data. Raw instrument counters remain supplementary.
+
+
+### Host SDK
+
+```python
+import uuid
+from labbridge.sdk import Node, Cluster
+from labbridge_generated.models.current_request import CurrentRequest
+from labbridge_generated.models.output_request import OutputRequest
+
+with Node("serial:/dev/ttyACM0") as node:
+    with Cluster({"bench": node}).lease({"bench": ["load"]}) as session:
+        args = dict(device_id="load", x_lab_lease=session.token("bench"))
+        node.wait(node.dl24m.set_load_current(
+            **args, idempotency_key=uuid.uuid4().hex,
+            current_request=CurrentRequest(current_a=0.1)))
+        # Optional bounded enable, after commissioning the connected circuit:
+        # node.wait(node.core.set_output(
+        #     **args, idempotency_key=uuid.uuid4().hex,
+        #     output_request=OutputRequest(enabled=True, max_duration_ms=1000)))
+        node.stop("load")
+```
+
+The session heartbeats and attempts independent STOP on exit. Each actual device
+must be ready, fresh and within configured limits. A failed cleanup is an error,
+not a confirmed safe output. `node.apis` discovers generated modules for generic
+CLI calls; convenience attributes expose the current instrument APIs.
+
+### Persistent and local safeguards
+
+Before ON, persist that the instrument may be on; clear this only after confirmed
+OFF. Reconnect/reboot does not resume ON. Incomplete multi-step setting changes
+retain their original register snapshot and menu-exit obligation in NVS; stop,
+leave the menu and restore before accepting new work. Configuration changes are
+blocked while such an obligation could abandon a live output.
+
+A lease-group fault stops all devices in that lease. Freshness cannot be extended
+by transaction recovery. Optional local cell guards bind a fresh external channel
+to each controlled device; missing/stale/out-of-range cell temperature stops the
+lease group. `OutputRequest.max_duration_ms` provides a per-activation local cap
+(100 ms to 24 h), bounded by any configured static cap. Time starts when enable
+is accepted; it is an upper bound, not a precision pulse trigger.
+
+### Battery wiring and workflow
+
+Keep the load's Kelvin voltage-sense connection on the cell independently of
+switched current paths, so rest measurements remain meaningful. Commission this
+wiring against a meter before running. A source path must use a verified battery
+connection and reverse-current protection suitable for the source; an isolated
+or powered-down ordinary PSU output is not automatically safe to backfeed.
+Switch feedback must represent the actual current path, not just an output pin.
+
+Every controlled node needs a local temperature guard and cell-sized voltage,
+current and power limits. Host profile ceilings are separate from requested
+charge voltage/current to allow measurement headroom. A fresh internal heatsink
+reading never satisfies the cell-probe requirement. The DS18B20 adapter uses the
+Espressif [sensor driver](https://components.espressif.com/components/espressif/ds18b20/versions/0.4.0/readme?language=en)
+and [1-Wire bus driver](https://components.espressif.com/components/espressif/onewire_bus/versions/1.1.1/readme?language=en),
+with nonblocking node access to a conversion worker and explicit probe identity.
+
+The Python runner performs preflight, snapshots original source/load settings,
+reserves nodes, charges in CC/CV to termination, rests, pulses and discharges to
+cutoff for each cycle. It keeps the source path isolated until the source is
+configured and enabled. STOP requests to source, load and interlock are attempted
+independently. Active phases supply local duration caps. Host/lease failures do
+not start another phase. There is no distributed atomic transaction across nodes.
+
+`run.json` is checkpointed before actuation and includes original settings,
+identities, configuration, boot IDs and final restoration status. A process crash
+can leave restoration pending; use the saved snapshot after confirming OFF.
+Lease loss can prevent automatic settings restoration and is reported explicitly.
+CSV integration excludes stale samples, repeated sequences, long gaps and stage
+boundaries; a node reboot aborts the run. The simulator is deterministic workflow
+coverage, not a cell model or proof of relay/charger behavior.
+
+## Firmware images and PC updater
+
+The manufacturer pages for [DL24M](http://en.atorch.cn/ProDetail.aspx?ProID=17)
+and related [modular products](http://en.atorch.cn/ProDetail.aspx?ProID=12) /
+[loads](http://en.atorch.cn/ProDetail.aspx?ProID=16) led to 2.1 and 2.2 images.
+These contain a Cortex-M Thumb application starting at flash address `0x1000`.
+Their numeric parser belongs to the same 9-byte request / 10-byte reply family.
+The 2.1 and 2.2 binaries differ; matching parser structure does not prove complete
+hardware compatibility. A genuine Ver 2.0 image has not been obtained.
+
+The PC v2.0.8 updater uses a separate `6D AC … A6 DA` framed protocol, sequence
+and complement, length, command, 32-bit address, payload and reflected CRC with
+polynomial `0x8408`. Upgrade entry command `26` writes the flag `0x67890123` at
+flash `0x0F00` and requests a system reset. The application then hands over to a
+separate bootloader. The PC sequence initializes (`26/11`, `20/11`), erases
+(`24/12`), transfers blocks up to 512 bytes (`22/12`), checks CRC (`25/12`) and
+finishes (`21/11`), with roughly 1–5 s stage timeouts and a final device CRC check.
+The bootloader is absent from the application image, so erase/recovery behavior
+cannot be established from that image alone. No manufacturer update was flashed
+on the tested load. This updater is not an automation transport.
+
+### Configuration examples
+
+`examples/configuration/` includes a StickS3 load, two independent USB sources,
+and a single-node battery layout on a bare classic ESP32. All identities are
+synthetic placeholders. The battery example's GPIO numbers are an illustrative
+bare-board allocation, not StickS3 wiring: approve them in the board build only
+after checking the exact hardware. UART requires a verified compatible electrical
+interface; do not connect RS-232 levels or assume an unknown PSU connector pinout.
+For distributed battery nodes, configure a local fresh cell channel on every
+controlled node; a remote host reading alone cannot enforce a local safeguard.
+
+Read the current configuration before updating. Replace the template revision
+and board with the actual values; use its current ETag as `If-Match`:
+
+```python
+import json
+from labbridge_generated.models.node_configuration import NodeConfiguration
+current = node.core.get_configuration()
+requested = NodeConfiguration(**json.load(open("configured-node.json")))
+requested.revision = current.revision
+node.core.set_configuration(f'"{current.revision}"', requested)
+# A successful update reboots the node. Reopen USB and rediscover its boot ID.
+```
+
+The IDs in workflow bindings must match configured IDs. The single-node binding
+example uses `battery-node` for all roles; `examples/battery/bindings.json` shows
+three nodes. Lease identities remain node-scoped in both layouts.
+
+### Reproducing a bounded DL24M bench check
+
+With the host package installed, `python tools/hil_dl24m.py` performs a read-only
+audit. For an explicitly prepared 24 V / 1 A-limited bench source, confirmed
+CC/OFF and bridge limits 25 V / 0.2 A / 5 W:
+
+```sh
+python tools/hil_dl24m.py --bench-profile examples/bench/dl24m-24v.json \
+  --output results/bench-pulse.json
+```
+
+The profile enables a bounded 0.100 A pulse, records readback and restores the
+original current/OVP with output OFF. Local duration and lease limits still
+apply. A failed cleanup is reported and the original snapshot stays in the
+result. This bench procedure does not commission a battery circuit.
+
+### Legacy telemetry framing
+
+The 36-byte `FF 55` reports have a checksum in byte 35 (zero-based): the sum of
+bytes 2–34 modulo 256, XOR `0x44`. Types 01/02 occur on the tested device.
+Their voltage/current fields are coarser than numeric replies; capacity/energy
+scales remain uncalibrated. Use the audited numeric registers and host V/I
+integration for quantitative automation. Numeric replies may be interleaved
+with these notifications and must be parsed as an independent frame stream.

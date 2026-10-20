@@ -1,0 +1,94 @@
+{
+  "revision": 1,
+  "node_id": "battery-node",
+  "board": "esp32-devkit",
+  "devices": [
+    {
+      "id": "load",
+      "driver": "dl24m",
+      "transport": "ble",
+      "endpoint": "02:00:00:00:00:01",
+      "limits": {
+        "voltage_v": 4.2,
+        "current_a": 0.6,
+        "power_w": 3,
+        "max_age_ms": 3000
+      },
+      "cell_temperature": {
+        "sensor_device_id": "probe",
+        "channel_id": "cell",
+        "minimum_c": 5,
+        "maximum_c": 40,
+        "max_age_ms": 3000
+      }
+    },
+    {
+      "id": "supply",
+      "driver": "rd60xx",
+      "transport": "uart",
+      "endpoint": "123456",
+      "limits": {
+        "voltage_v": 4.2,
+        "current_a": 0.6,
+        "power_w": 3,
+        "max_age_ms": 3000
+      },
+      "pins": [
+        16,
+        17
+      ],
+      "cell_temperature": {
+        "sensor_device_id": "probe",
+        "channel_id": "cell",
+        "minimum_c": 5,
+        "maximum_c": 40,
+        "max_age_ms": 3000
+      }
+    },
+    {
+      "id": "paths",
+      "driver": "gpio_interlock",
+      "transport": "gpio",
+      "endpoint": "reference-relay",
+      "limits": {
+        "voltage_v": 4.2,
+        "current_a": 0.6,
+        "power_w": 3,
+        "max_age_ms": 3000
+      },
+      "pins": [
+        25,
+        26,
+        27,
+        32
+      ],
+      "interlock": {
+        "active_high": true,
+        "feedback_active_high": true,
+        "break_ms": 50
+      },
+      "cell_temperature": {
+        "sensor_device_id": "probe",
+        "channel_id": "cell",
+        "minimum_c": 5,
+        "maximum_c": 40,
+        "max_age_ms": 3000
+      }
+    },
+    {
+      "id": "probe",
+      "driver": "ds18b20",
+      "transport": "onewire",
+      "endpoint": "2800000000000001",
+      "limits": {
+        "voltage_v": 4.2,
+        "current_a": 0.6,
+        "power_w": 3,
+        "max_age_ms": 3000
+      },
+      "pins": [
+        4
+      ]
+    }
+  ]
+}
