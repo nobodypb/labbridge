@@ -26,6 +26,14 @@ char* rd_provisioning_state_ToString(labbridge_api_rd_provisioning_STATE_e state
 
 labbridge_api_rd_provisioning_STATE_e rd_provisioning_state_FromString(char* state);
 
+// Enum PROFILE for rd_provisioning
+
+typedef enum  { labbridge_api_rd_provisioning_PROFILE_NULL = 0, labbridge_api_rd_provisioning_PROFILE_pc_v22, labbridge_api_rd_provisioning_PROFILE_pc_v22_target_ssid } labbridge_api_rd_provisioning_PROFILE_e;
+
+char* rd_provisioning_profile_ToString(labbridge_api_rd_provisioning_PROFILE_e profile);
+
+labbridge_api_rd_provisioning_PROFILE_e rd_provisioning_profile_FromString(char* profile);
+
 
 
 typedef struct rd_provisioning_t {
@@ -41,6 +49,7 @@ typedef struct rd_provisioning_t {
     char *error; // string
     long ap_clients; //numeric
     long ap_channel; //numeric
+    labbridge_api_rd_provisioning_PROFILE_e profile; //enum
 
     int _library_owned; // Is the library responsible for freeing this object?
 } rd_provisioning_t;
@@ -57,7 +66,8 @@ __attribute__((deprecated)) rd_provisioning_t *rd_provisioning_create(
     rd_wifi_metrics_t *metrics,
     char *error,
     long ap_clients,
-    long ap_channel
+    long ap_channel,
+    labbridge_api_rd_provisioning_PROFILE_e profile
 );
 
 void rd_provisioning_free(rd_provisioning_t *rd_provisioning);

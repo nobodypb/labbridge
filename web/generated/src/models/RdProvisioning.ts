@@ -106,6 +106,12 @@ export interface RdProvisioning {
      * @memberof RdProvisioning
      */
     apChannel?: number;
+    /**
+     * Selected wire profile for the current or most recent session. pc_v22 is the hardware-accepted baseline; pc_v22_target_ssid is the controlled phase-one SSID comparison.
+     * @type {string}
+     * @memberof RdProvisioning
+     */
+    profile?: RdProvisioningProfileEnum;
 }
 
 
@@ -123,6 +129,15 @@ export const RdProvisioningStateEnum = {
     Failed: 'failed'
 } as const;
 export type RdProvisioningStateEnum = typeof RdProvisioningStateEnum[keyof typeof RdProvisioningStateEnum];
+
+/**
+ * @export
+ */
+export const RdProvisioningProfileEnum = {
+    PcV22: 'pc_v22',
+    PcV22TargetSsid: 'pc_v22_target_ssid'
+} as const;
+export type RdProvisioningProfileEnum = typeof RdProvisioningProfileEnum[keyof typeof RdProvisioningProfileEnum];
 
 
 /**
@@ -161,6 +176,7 @@ export function RdProvisioningFromJSONTyped(json: any, ignoreDiscriminator: bool
         'error': json['error'] == null ? undefined : json['error'],
         'apClients': json['ap_clients'] == null ? undefined : json['ap_clients'],
         'apChannel': json['ap_channel'] == null ? undefined : json['ap_channel'],
+        'profile': json['profile'] == null ? undefined : json['profile'],
     };
 }
 
@@ -187,6 +203,7 @@ export function RdProvisioningToJSONTyped(value?: RdProvisioning | null, ignoreD
         'error': value['error'],
         'ap_clients': value['apClients'],
         'ap_channel': value['apChannel'],
+        'profile': value['profile'],
     };
 }
 

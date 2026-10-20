@@ -41,13 +41,24 @@ class RdProvisioning(BaseModel):
     error: Optional[StrictStr] = Field(default=None, description="Network service error when provisioning/listening cannot operate.")
     ap_clients: Optional[Annotated[int, Field(le=4, strict=True, ge=0)]] = Field(default=None, description="Number of stations currently associated with the ESP AP. Diagnostic only; an association is not RD identity or protocol readiness.")
     ap_channel: Optional[Annotated[int, Field(le=14, strict=True, ge=1)]] = Field(default=None, description="Current shared AP/STA primary Wi-Fi channel, for commissioning.")
-    __properties: ClassVar[List[str]] = ["state", "session_id", "deadline_ms", "ap_ssid", "ap_address", "tcp_port", "listener_running", "candidates", "metrics", "error", "ap_clients", "ap_channel"]
+    profile: Optional[StrictStr] = Field(default=None, description="Selected wire profile for the current or most recent session. pc_v22 is the hardware-accepted baseline; pc_v22_target_ssid is the controlled phase-one SSID comparison.")
+    __properties: ClassVar[List[str]] = ["state", "session_id", "deadline_ms", "ap_ssid", "ap_address", "tcp_port", "listener_running", "candidates", "metrics", "error", "ap_clients", "ap_channel", "profile"]
 
     @field_validator('state')
     def state_validate_enum(cls, value):
         """Validates the enum"""
         if value not in set(['idle', 'server_address', 'wifi', 'waiting_connection', 'complete', 'cancelled', 'timed_out', 'failed']):
             raise ValueError("must be one of enum values ('idle', 'server_address', 'wifi', 'waiting_connection', 'complete', 'cancelled', 'timed_out', 'failed')")
+        return value
+
+    @field_validator('profile')
+    def profile_validate_enum(cls, value):
+        """Validates the enum"""
+        if value is None:
+            return value
+
+        if value not in set(['pc_v22', 'pc_v22_target_ssid']):
+            raise ValueError("must be one of enum values ('pc_v22', 'pc_v22_target_ssid')")
         return value
 
     model_config = ConfigDict(
@@ -123,7 +134,8 @@ class RdProvisioning(BaseModel):
             "metrics": RdWifiMetrics.from_dict(obj["metrics"]) if obj.get("metrics") is not None else None,
             "error": obj.get("error"),
             "ap_clients": obj.get("ap_clients"),
-            "ap_channel": obj.get("ap_channel")
+            "ap_channel": obj.get("ap_channel"),
+            "profile": obj.get("profile")
         })
         return _obj
 
