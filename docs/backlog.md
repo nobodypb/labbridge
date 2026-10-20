@@ -24,6 +24,7 @@ checks pass and its hardware claims match the evidence.
 | LB-016 | As a cell tester, I optionally use direct source/load switching and independent meters/additional temperature channels. | LB-012, LB-015 | Done |
 | LB-017 | As an operator, I configure INA228 I²C and Yocto-Watt-V2-C measurement providers. | LB-015 | Implemented; hardware acceptance open |
 | LB-018 | As an API consumer, I understand operations, units, prerequisites and failure handling directly from OpenAPI and generated clients. | LB-002, LB-015 | Done |
+| LB-021 | As a DL24M operator, I use verified modes, native telemetry and passive diagnostics over one authenticated WebSocket connection. | LB-020 | Accepted; implementation and commissioning in progress |
 | LB-020 | As a DL24M operator, I use the complete Bench interface on the ESP with confirmed backend control and retained future features. | LB-005, LB-011 | Implemented; OFF-only hardware acceptance passed |
 
 | LB-019 | As an operator, I provision and automate RD6018 sources on the ESP AP alongside DL24M BLE, with bounded recovery and measured coexistence acceptance. | LB-007, LB-011 | PC provisioning profile correction and hardware acceptance open |
@@ -104,3 +105,36 @@ OFF were restored. Real HTTP resets under parallel polling led to a single-reque
 queue with priority STOP/heartbeat and cancellation of queued commands. Loaded
 operation through the new page and battery testing were not performed (0 V input);
 the existing physical limitations in LB-014 remain open.
+
+## LB-021 — DL24M capabilities and one-connection Bench (accepted)
+
+Provide a factual supported/unverified/unavailable status for every retained
+Bench feature. Extend the typed API, DL24M driver and UI for confirmed modes,
+measurements, passive frame/register diagnostics and supported maintenance.
+Reuse the same authenticated dispatch/leases/operations over a single WebSocket
+connection, including explicit lease heartbeats. HTTP/USB remain compatible.
+
+Acceptance: red tests before behavior changes; existing codec/recovery and OFF
+journal preserved; no fabricated HID mappings, gains, sensor values or counter
+scales. Mode changes snapshot and restore on failure, require OFF and verified
+readback; active operation enforces local limits and bounded deadlines. Diagnostics
+are passive and bounded. Maintenance functions without proven semantics
+remain explicitly unavailable. WebSocket authenticates before any data, validates
+messages, shares API authorization, prioritizes STOP/replies, bounds buffering,
+reports gaps and never replays writes after loss/reboot. One authenticated UI
+session per board; socket resources are board-owned. UI uses pushed snapshots and
+operation events with no steady-state HTTP polling. Portable/generated/browser
+checks and all board builds pass. Physical StickS3 tests record/restore settings;
+mode pulses use a manually limited <=25 V / <=0.15 A source, no battery. No external
+reference is available, so absolute accuracy/calibration are not commissioned.
+
+
+LB-021 capability evidence and restrictions: [protocol/stream matrix](dl24m-bench-extension.md).
+Remaining physical limits are explicit: external probe mapping and fan RPM;
+calibration 46/4F reference, full data backup
+and restore; no-load zero effects; full factory-reset restoration. No destructive
+maintenance operation is exposed merely because its command number is known.
+Legacy inactive-bank transactions occasionally timed out on hardware after mode
+trials; checked STOP/recovery was retained. Typed mode/target operations and
+explicit readback restored the original banks. Further BLE timing/soak evidence
+is a follow-up, rather than a reason to relax recovery or replay writes.

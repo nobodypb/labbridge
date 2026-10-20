@@ -7,7 +7,7 @@
       "name": "MIT",
       "url": "https://opensource.org/licenses/MIT"
     },
-    "description": "Configure and automate laboratory instruments through one ESP32 bridge. Physical devices expose discoverable source, sink and scalar sensor components; prefer their common routes for portable scripts. Driver-specific routes remain available for specialized settings and compatibility.\n\n## Typical automation sequence\n1. Read node identity/boot_id and discover devices, components, actions and limits.\n2. Reserve all actor devices on this node with createLease and heartbeat at least once per second. Ownership is per physical device, not per component.\n3. Send a setting/output mutation with X-Lab-Lease and a new Idempotency-Key. A 202 response is only acceptance: poll Location until a terminal Operation, checking final_output and restore_pending.\n4. Use valid, fresh sensor readings; preserve sign and units. Integrate only across consecutive samples with unchanged boot_id/epoch and bounded gaps.\n5. Request independent STOP when finished or uncertain, verify OFF, then release the lease. Output OFF is not electrical isolation.\n\n## Failure and retry contract\nThe bridge performs bounded device retries, write/readback verification and recovery. Never infer hardware success from an ATT acknowledgement, an HTTP 202 or a saved setpoint. A terminal failure can still have changed hardware. Device/component STOP requires no lease. Reconnect/reboot never resumes ON. Leases, operation IDs and idempotency keys are boot-local; do not replay an uncertain mutation after a reboot. Monotonic timestamps are not Unix time and cannot be compared across nodes/boots.\n\n## Access and provisioning\nLAN HTTP uses Authorization: Bearer <token> on a trusted network. Obtain the secret using getManagementToken over physically trusted USB. The open LabBridge-Setup AP at 192.168.4.1 allows Wi-Fi setup/scan without bearer credentials; it does not grant laboratory control. The separate UI pages are /wifi, /devices and /dl24 (DL24M Bench). The Bench page uses these same authenticated APIs; unsupported original controls remain visible but disabled. USB uses the same methods/paths with JSON-line requests {id, method, path, headers, body} and replies prefixed LABJSON; ignore other boot/log lines and correlate IDs. Target Wi-Fi PSKs are never returned.\n\n## Local safeguards and hardware scope\nConfigured limits, lease expiry, measurement freshness, activation deadlines and optional external cell-temperature guards operate on the node. They supplement instrument protections and an explicit external battery test profile/wiring arrangement. Read-only sensors may omit actuator limits. Supported endpoint/pin combinations depend on the board. DL24M BLE behavior is commissioned on display Ver: 2.0; RD6018/RD6024, INA228 and Yocto physical commissioning is tracked separately. RD6018 original Wi-Fi modules connect to the ESP AP using RTU-over-TCP; use the module provisioning operations to configure them. Native Yocto USB on ESP is not implemented (use native PC USB or HTTP VirtualHub/YoctoHub)."
+    "description": "Configure and automate laboratory instruments through one ESP32 bridge. Physical devices expose discoverable source, sink and scalar sensor components; prefer their common routes for portable scripts. Driver-specific routes remain available for specialized settings and compatibility.\n\n## Typical automation sequence\n1. Read node identity/boot_id and discover devices, components, actions and limits.\n2. Reserve all actor devices on this node with createLease and heartbeat at least once per second. Ownership is per physical device, not per component.\n3. Send a setting/output mutation with X-Lab-Lease and a new Idempotency-Key. A 202 response is only acceptance: poll Location until a terminal Operation, checking final_output and restore_pending.\n4. Use valid, fresh sensor readings; preserve sign and units. Integrate only across consecutive samples with unchanged boot_id/epoch and bounded gaps.\n5. Request independent STOP when finished or uncertain, verify OFF, then release the lease. Output OFF is not electrical isolation.\n\n## Failure and retry contract\nThe bridge performs bounded device retries, write/readback verification and recovery. Never infer hardware success from an ATT acknowledgement, an HTTP 202 or a saved setpoint. A terminal failure can still have changed hardware. Device/component STOP requires no lease. Reconnect/reboot never resumes ON. Leases, operation IDs and idempotency keys are boot-local; do not replay an uncertain mutation after a reboot. Monotonic timestamps are not Unix time and cannot be compared across nodes/boots.\n\n## Access and provisioning\nLAN HTTP uses Authorization: Bearer <token> on a trusted network. Obtain the secret using getManagementToken over physically trusted USB. The open LabBridge-Setup AP at 192.168.4.1 allows Wi-Fi setup/scan without bearer credentials; it does not grant laboratory control. The separate UI pages are /wifi, /devices and /dl24 (DL24M Bench). The Bench page uses these same authenticated APIs; unsupported original controls remain visible but disabled. USB uses the same methods/paths with JSON-line requests {id, method, path, headers, body} and replies prefixed LABJSON; ignore other boot/log lines and correlate IDs. Target Wi-Fi PSKs are never returned.\n\n## Local safeguards and hardware scope\nConfigured limits, lease expiry, measurement freshness, activation deadlines and optional external cell-temperature guards operate on the node. They supplement instrument protections and an explicit external battery test profile/wiring arrangement. Read-only sensors may omit actuator limits. Supported endpoint/pin combinations depend on the board. DL24M BLE behavior is commissioned on display Ver: 2.0; RD6018/RD6024, INA228 and Yocto physical commissioning is tracked separately. RD6018 original Wi-Fi modules connect to the ESP AP using RTU-over-TCP; use the module provisioning operations to configure them. Native Yocto USB on ESP is not implemented (use native PC USB or HTTP VirtualHub/YoctoHub).\n\n## WebSocket\nConnect /api/v1/ws, authenticate with StreamAuth as the first text message, then use StreamRpc (the USB envelope) and StreamSubscription. Initial/full StreamSnapshot events include boot_id, stream sequence, measurement sequences, output, settings and tracked operations. Continue explicit lease heartbeats over RPC. See x-labbridge-websocket for message schemas and bounded resource rules. /dl24 uses this connection without HTTP polling."
   },
   "servers": [
     {
@@ -1045,6 +1045,13 @@
               "$ref": "#/components/schemas/Component"
             },
             "description": "Actor and sensor descriptors exposed by this physical device."
+          },
+          "features": {
+            "type": "array",
+            "description": "Discoverable per-feature support, restrictions and commissioning scope. Missing features are not supported.",
+            "items": {
+              "$ref": "#/components/schemas/FeatureStatus"
+            }
           }
         },
         "required": [
@@ -1198,12 +1205,12 @@
           "capacity_ah": {
             "type": "number",
             "format": "double",
-            "description": "Native instrument capacity counter in Ah when its scale is supported; do not assume DL24M raw counter scales are commissioned."
+            "description": "Native instrument capacity counter in Ah, emitted only while its own reading is fresh. DL24M read 14 counts integer mAh (divide by 1000); native_readings[id=capacity] provides origin and individual age. Native counters and browser/host integrals are separate; absolute accuracy is not certified."
           },
           "energy_wh": {
             "type": "number",
             "format": "double",
-            "description": "Native instrument energy counter in Wh when its scale is supported. Prefer traceable host integration where native scaling is uncertain."
+            "description": "Native instrument energy counter in Wh, emitted only while its own reading is fresh. DL24M read 15 counts integer mWh (divide by 1000); native_readings[id=energy] provides origin and individual age. This is separate from host/browser integration; absolute accuracy is not certified."
           },
           "temperature_channels": {
             "type": "array",
@@ -1227,9 +1234,11 @@
             "enum": [
               "cc",
               "cv",
+              "cr",
+              "cp",
               "unknown"
             ],
-            "description": "Observed/selected regulation mode where available: cc (constant current), cv (constant voltage), or unknown. Do not infer it solely from a setpoint."
+            "description": "Observed/selected regulation mode: CC (A), CV (V), CR (Ohm), CP (W), or unknown. Targets alone do not confirm active output."
           },
           "protection_code": {
             "type": "integer",
@@ -1240,6 +1249,26 @@
           "boot_id": {
             "type": "string",
             "description": "Opaque identifier for this node boot. A change invalidates prior monotonic timestamps, leases and operation IDs."
+          },
+          "native_readings": {
+            "type": "array",
+            "description": "Independent native readings; browser integrals are not device counters.",
+            "items": {
+              "$ref": "#/components/schemas/NativeReading"
+            }
+          },
+          "load_mode": {
+            "type": "string",
+            "description": "Confirmed selected native load mode.",
+            "enum": [
+              "cc",
+              "cv",
+              "cr",
+              "cp"
+            ]
+          },
+          "load_target": {
+            "$ref": "#/components/schemas/Dl24mTargetRequest"
           }
         },
         "required": [
@@ -1817,6 +1846,244 @@
             "description": "Empty to restore the open AP, otherwise 8..63 printable ASCII characters. Supply through stdin or a private args file, not a command-line argument recorded in shell history."
           }
         }
+      },
+      "FeatureStatus": {
+        "type": "object",
+        "description": "Per-device evidence and prerequisites. Unverified is not enabled merely because a wire command is known.",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "Stable feature identifier."
+          },
+          "status": {
+            "type": "string",
+            "description": "Backend evidence state.",
+            "enum": [
+              "supported",
+              "unverified",
+              "unavailable"
+            ]
+          },
+          "reason": {
+            "type": "string",
+            "description": "Concrete restriction or evidence summary."
+          },
+          "unit": {
+            "type": "string",
+            "description": "Physical unit or raw if uncommissioned."
+          },
+          "operation": {
+            "type": "string",
+            "description": "API operation identifier, where implemented."
+          },
+          "requires_off": {
+            "type": "boolean",
+            "description": "Confirmed OFF required."
+          },
+          "requires_lease": {
+            "type": "boolean",
+            "description": "Active device lease required."
+          },
+          "evidence": {
+            "type": "string",
+            "description": "Protocol and hardware evidence scope."
+          }
+        },
+        "required": [
+          "id",
+          "status",
+          "reason"
+        ],
+        "additionalProperties": false
+      },
+      "NativeReading": {
+        "type": "object",
+        "description": "Native instrument reading with independent freshness, explicit unit and origin. Reception quality is not calibration accuracy. Keep device counters separate from browser/host session integrals; any uncommissioned counter scale remains raw.",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "Reading name."
+          },
+          "value": {
+            "type": "number",
+            "description": "Native value; omitted if invalid/unavailable."
+          },
+          "unit": {
+            "type": "string",
+            "description": "s, Ah, Wh, degC, rpm or raw."
+          },
+          "origin": {
+            "type": "string",
+            "description": "Protocol register/source."
+          },
+          "quality": {
+            "type": "string",
+            "description": "Quality at snapshot time.",
+            "enum": [
+              "valid",
+              "stale",
+              "unavailable"
+            ]
+          },
+          "received_ms": {
+            "type": "integer",
+            "description": "Monotonic bridge receive time in current boot.",
+            "minimum": 0
+          },
+          "age_ms": {
+            "type": "integer",
+            "description": "Age of the register observation.",
+            "minimum": 0
+          }
+        },
+        "required": [
+          "id",
+          "unit",
+          "origin",
+          "quality"
+        ],
+        "additionalProperties": false
+      },
+      "StreamAuth": {
+        "type": "object",
+        "description": "First WebSocket text message within three seconds. Bearer token is never placed in URL or subprotocol.",
+        "properties": {
+          "type": {
+            "type": "string",
+            "description": "Message kind.",
+            "enum": [
+              "auth"
+            ]
+          },
+          "token": {
+            "type": "string",
+            "description": "Existing LAN bearer token.",
+            "minLength": 1,
+            "maxLength": 255
+          }
+        },
+        "required": [
+          "type",
+          "token"
+        ],
+        "additionalProperties": false
+      },
+      "StreamSubscription": {
+        "type": "object",
+        "description": "Select one device and measurement interval. Snapshot also contains output, settings and tracked operations. Ping/open socket does not renew leases.",
+        "properties": {
+          "type": {
+            "type": "string",
+            "description": "Message kind.",
+            "enum": [
+              "subscribe"
+            ]
+          },
+          "device_id": {
+            "type": "string",
+            "description": "Configured device ID.",
+            "maxLength": 48
+          },
+          "interval_ms": {
+            "type": "integer",
+            "description": "Measurement push period in milliseconds.",
+            "enum": [
+              500,
+              1000,
+              2000
+            ]
+          },
+          "id": {
+            "type": "string",
+            "description": "Correlation ID."
+          }
+        },
+        "required": [
+          "type",
+          "device_id"
+        ],
+        "additionalProperties": false
+      },
+      "StreamRpc": {
+        "type": "object",
+        "description": "USB-compatible request envelope. API routes, validation, leases, operation execution and idempotency are shared; no write replay on reconnect.",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "Correlation ID."
+          },
+          "method": {
+            "type": "string",
+            "description": "HTTP method.",
+            "enum": [
+              "GET",
+              "POST",
+              "PUT",
+              "DELETE"
+            ]
+          },
+          "path": {
+            "type": "string",
+            "description": "Local /api/v1 path only."
+          },
+          "headers": {
+            "type": "object",
+            "description": "X-Lab-Lease, Idempotency-Key and If-Match; Authorization is session-owned.",
+            "additionalProperties": {
+              "type": "string"
+            }
+          },
+          "body": {
+            "type": "object",
+            "description": "Normal API request body.",
+            "additionalProperties": true
+          }
+        },
+        "required": [
+          "id",
+          "method",
+          "path"
+        ],
+        "additionalProperties": false
+      },
+      "StreamSnapshot": {
+        "type": "object",
+        "description": "Full initial snapshot after subscription, then cached state/settings/operation snapshots with periodic measurements. Node/device catalogue is repeated every five seconds and may be absent from intervening snapshots. sequence increases per offered snapshot; gap reports coalescing or skipped intervals. Each measurement keeps its native sequence/receive time. Boot change invalidates all leases and operations.",
+        "properties": {
+          "type": {
+            "type": "string",
+            "description": "Message kind.",
+            "enum": [
+              "snapshot"
+            ]
+          },
+          "boot_id": {
+            "type": "string",
+            "description": "Bridge boot identity."
+          },
+          "sequence": {
+            "type": "integer",
+            "description": "Monotonic stream sequence, independent of measurement sequence.",
+            "minimum": 1
+          },
+          "gap": {
+            "type": "boolean",
+            "description": "A pending snapshot was replaced."
+          },
+          "body": {
+            "type": "object",
+            "description": "node (NodeInfo), devices (Device[]), device_id, measurements (Measurements), actors (ActuatorState[]), details (driver settings) and operations (Operation[]).",
+            "additionalProperties": true
+          }
+        },
+        "required": [
+          "type",
+          "boot_id",
+          "sequence",
+          "gap",
+          "body"
+        ],
+        "additionalProperties": false
       }
     }
   },
@@ -1849,5 +2116,18 @@
   "externalDocs": {
     "description": "Consolidated hardware, API and protocol handbook, including supported boards and driver-specific wire formats.",
     "url": "https://github.com/nobodypb/labbridge/blob/main/docs/handbook.md"
+  },
+  "x-labbridge-websocket": {
+    "path": "/api/v1/ws",
+    "auth_schema": "StreamAuth",
+    "request_schema": "StreamRpc",
+    "subscription_schema": "StreamSubscription",
+    "event_schema": "StreamSnapshot",
+    "max_message_bytes": 16384,
+    "max_sessions": 1,
+    "description": "One authenticated UI session per board. Reliable RPC replies precede telemetry. Bounded latest-snapshot slot; gap or connection close under overload. Authentication failure closes the socket. No device data before authentication. Network sends never hold the node safety mutex. Reconnect explicitly, re-read state, never replay mutations. HTTP remains available. Completed operation IDs leave the stream send list after their confirmation frame is queued for transmission; normal HTTP/USB lookup remains unchanged. Exceeding the outstanding-operation budget returns the newly accepted operation ID before closing, so results can be read over HTTP without replaying writes. Input JSON nesting is limited to 16 before parsing, including the envelope.",
+    "max_outbound_message_bytes": 32768,
+    "max_outstanding_operations": 16,
+    "max_json_depth": 16
   }
 }
