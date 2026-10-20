@@ -153,3 +153,8 @@ field. It is not a commissioned alternative to `pc_v22`. Use a fresh setup
 state and session; confirm the displayed server IP and advance before the
 management deadline. A retained candidate listing does not prove a new join
 or identity exchange.
+
+Target-SSID trials displayed the server IP but did not establish new join/TCP
+evidence. A late transition affected one trial; a same-session repeat had the
+same outcome. Different transition delays and receiver-state uncertainty
+prevent a universal conclusion about the SSID field. Retain the full-PC default.

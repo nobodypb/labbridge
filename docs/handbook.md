@@ -235,7 +235,10 @@ comparison, trusted USB/CLI may explicitly select `pc_v22_target_ssid` in the
 start request. That variant changes only the phase-one SSID field to the AP
 SSID, with the resulting CRC/XOR/length changes; phase two, multicast and timing
 are identical. It is experimental until a repeated hardware comparison succeeds.
-Status returns the selected `profile`. Start a new session for each comparison;
+Status returns the selected `profile`. Confirm the displayed server IP and
+advance within the 120-second management phase; the sender itself runs for
+up to 60 seconds. A stale candidate listing does not prove a new pairing: check
+for a new join result and TCP identity exchange. Start a new session for each comparison;
 never change profiles midway through a phase. Keep the known working baseline
 and re-pair the module with it after a failed comparison.
 

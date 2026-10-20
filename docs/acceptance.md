@@ -128,3 +128,11 @@ The optional target-SSID profile changes only phase one's SSID field;
 phase two remains identical. Codec and generated-client tests cover that
 invariance. The default remains the PC-compatible profile.
 
+Native ESP USB line-control behavior was verified through symbolic paths;
+UART adapters retain their reset wait. Tests use synthetic aliases and USB
+metadata. Physical setup details and installed host rules are not published.
+
+A target-SSID trial displayed the server address but produced no new join
+result or TCP identity. Its late management transition prevents a clean
+end-to-end comparison.
+
