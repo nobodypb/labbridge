@@ -11,6 +11,7 @@ src/apis/GpioInterlockApi.ts
 src/apis/Rd60xxApi.ts
 src/apis/index.ts
 src/index.ts
+src/models/AccessPointRequest.ts
 src/models/ActuatorSettings.ts
 src/models/ActuatorState.ts
 src/models/CellTemperatureGuard.ts

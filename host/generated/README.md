@@ -121,6 +121,7 @@ Class | Method | HTTP request | Description
 *ComponentsApi* | [**set_component_output**](docs/ComponentsApi.md#set_component_output) | **PUT** /api/v1/devices/{deviceId}/components/{componentId}/output | Enable or disable one actor
 *ComponentsApi* | [**set_component_voltage**](docs/ComponentsApi.md#set_component_voltage) | **PUT** /api/v1/devices/{deviceId}/components/{componentId}/voltage | Set a source voltage target
 *ComponentsApi* | [**stop_component**](docs/ComponentsApi.md#stop_component) | **POST** /api/v1/devices/{deviceId}/components/{componentId}/stop | Request priority STOP for an actor
+*CoreApi* | [**configure_access_point**](docs/CoreApi.md#configure_access_point) | **PUT** /api/v1/wifi/ap | Set access-point security independently
 *CoreApi* | [**configure_wifi**](docs/CoreApi.md#configure_wifi) | **PUT** /api/v1/wifi | Save Wi-Fi credentials and connect
 *CoreApi* | [**create_lease**](docs/CoreApi.md#create_lease) | **POST** /api/v1/leases | Reserve a group of physical devices
 *CoreApi* | [**get_configuration**](docs/CoreApi.md#get_configuration) | **GET** /api/v1/configuration | Read persistent node configuration
@@ -157,6 +158,7 @@ Class | Method | HTTP request | Description
 
 ## Documentation For Models
 
+ - [AccessPointRequest](docs/AccessPointRequest.md)
  - [ActuatorSettings](docs/ActuatorSettings.md)
  - [ActuatorState](docs/ActuatorState.md)
  - [CellTemperatureGuard](docs/CellTemperatureGuard.md)

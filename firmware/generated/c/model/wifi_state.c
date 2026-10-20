@@ -25,7 +25,8 @@ labbridge_api_wifi_state_STATE_e wifi_state_state_FromString(char* state){
 static wifi_state_t *wifi_state_create_internal(
     labbridge_api_wifi_state_STATE_e state,
     char *hostname,
-    char *address
+    char *address,
+    int ap_secured
     ) {
     wifi_state_t *wifi_state_local_var = malloc(sizeof(wifi_state_t));
     if (!wifi_state_local_var) {
@@ -34,6 +35,7 @@ static wifi_state_t *wifi_state_create_internal(
     wifi_state_local_var->state = state;
     wifi_state_local_var->hostname = hostname;
     wifi_state_local_var->address = address;
+    wifi_state_local_var->ap_secured = ap_secured;
 
     wifi_state_local_var->_library_owned = 1;
     return wifi_state_local_var;
@@ -42,12 +44,14 @@ static wifi_state_t *wifi_state_create_internal(
 __attribute__((deprecated)) wifi_state_t *wifi_state_create(
     labbridge_api_wifi_state_STATE_e state,
     char *hostname,
-    char *address
+    char *address,
+    int ap_secured
     ) {
     return wifi_state_create_internal (
         state,
         hostname,
-        address
+        address,
+        ap_secured
         );
 }
 
@@ -97,6 +101,14 @@ cJSON *wifi_state_convertToJSON(wifi_state_t *wifi_state) {
     if(wifi_state->address) {
     if(cJSON_AddStringToObject(item, "address", wifi_state->address) == NULL) {
     goto fail; //String
+    }
+    }
+
+
+    // wifi_state->ap_secured
+    if(wifi_state->ap_secured) {
+    if(cJSON_AddBoolToObject(item, "ap_secured", wifi_state->ap_secured) == NULL) {
+    goto fail; //Bool
     }
     }
 
@@ -156,11 +168,24 @@ wifi_state_t *wifi_state_parseFromJSON(cJSON *wifi_stateJSON){
     }
     }
 
+    // wifi_state->ap_secured
+    cJSON *ap_secured = cJSON_GetObjectItemCaseSensitive(wifi_stateJSON, "ap_secured");
+    if (cJSON_IsNull(ap_secured)) {
+        ap_secured = NULL;
+    }
+    if (ap_secured) { 
+    if(!cJSON_IsBool(ap_secured))
+    {
+    goto end; //Bool
+    }
+    }
+
 
     wifi_state_local_var = wifi_state_create_internal (
         stateVariable,
         strdup(hostname->valuestring),
-        address && !cJSON_IsNull(address) ? strdup(address->valuestring) : NULL
+        address && !cJSON_IsNull(address) ? strdup(address->valuestring) : NULL,
+        ap_secured ? ap_secured->valueint : 0
         );
 
     return wifi_state_local_var;

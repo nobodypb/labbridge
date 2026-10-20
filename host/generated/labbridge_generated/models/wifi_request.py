@@ -25,7 +25,7 @@ from typing_extensions import Self
 
 class WifiRequest(BaseModel):
     """
-    Target station credentials, separate from the password-free provisioning AP. Credentials are persisted locally and never returned by the state API.
+    Target station credentials, independent of AP security. Credentials are persisted locally and never returned by the state API.
     """ # noqa: E501
     ssid: Annotated[str, Field(min_length=1, strict=True, max_length=32)] = Field(description="Target station network name (1..32 bytes accepted by the firmware).")
     psk: Annotated[str, Field(strict=True, max_length=64)] = Field(description="Target network secret: empty/omitted for an open network, 8..63 characters, or exactly 64 hexadecimal digits. Never returned by the API.")

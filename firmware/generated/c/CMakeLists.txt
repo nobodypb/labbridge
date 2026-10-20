@@ -48,6 +48,7 @@ set(SRCS
     src/binary.c
     external/cJSON.c
     model/object.c
+    model/access_point_request.c
     model/actuator_settings.c
     model/actuator_state.c
     model/cell_temperature_guard.c
@@ -106,6 +107,7 @@ set(HDRS
     external/cJSON.h
     model/object.h
     model/any_type.h
+    model/access_point_request.h
     model/actuator_settings.h
     model/actuator_state.h
     model/cell_temperature_guard.h

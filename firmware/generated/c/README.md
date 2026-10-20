@@ -69,6 +69,7 @@ Category | Method | HTTP request | Description
 
 ## Documentation for Models
 
+ - [access_point_request_t](docs/access_point_request.md)
  - [actuator_settings_t](docs/actuator_settings.md)
  - [actuator_state_t](docs/actuator_state.md)
  - [cell_temperature_guard_t](docs/cell_temperature_guard.md)

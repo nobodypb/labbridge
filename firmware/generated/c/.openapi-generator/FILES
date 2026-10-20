@@ -11,6 +11,8 @@ include/binary.h
 include/keyValuePair.h
 include/list.h
 libcurl.licence
+model/access_point_request.c
+model/access_point_request.h
 model/actuator_settings.c
 model/actuator_settings.h
 model/actuator_state.c
