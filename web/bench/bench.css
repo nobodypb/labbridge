@@ -133,6 +133,10 @@
 a{color:var(--v)} :focus-visible{outline:2px solid var(--v);outline-offset:3px}
 .connection{display:flex;flex-wrap:wrap;align-items:center;gap:10px;padding:10px 16px;border-bottom:1px solid var(--line)}
 .connection input,.connection select{background:var(--panel2);border:1px solid var(--line);border-radius:6px;padding:5px;max-width:190px}
+#benchAuth{flex-basis:100%}#benchAuth section>p{margin:6px 0}
+#benchAuth form{display:flex;flex-wrap:wrap;gap:8px;align-items:end;padding:6px 0}
+#benchAuth label{display:flex;flex-direction:column;gap:4px}
+#benchAuth button{background:var(--panel2);border:1px solid var(--line);border-radius:6px;padding:6px 10px;cursor:pointer}
 #benchStatus{flex-basis:100%;overflow-wrap:anywhere}#benchStatus.error{color:var(--bad)}
 .app{height:auto;min-height:calc(100vh - 175px);padding-bottom:25px}.main{min-height:550px}.screen{min-height:300px}
 button:disabled,input:disabled,select:disabled{opacity:.5;cursor:not-allowed}.mode{font:inherit;color:var(--ink)}

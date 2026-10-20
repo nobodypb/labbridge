@@ -35,11 +35,11 @@
 </div>
 <div class="connection">
  <nav><a href="/devices">Instruments</a> · <a href="/wifi">Wi-Fi setup</a></nav>
- <label>API bearer token <input id="apiToken" type="password" autocomplete="off"></label>
+ <div id="benchAuth" aria-label="Device sign-in"></div>
  <label>DL24M device <select id="deviceSelect" aria-label="DL24M device"></select></label>
  <button id="reserve" class="btn" disabled>Reserve device</button>
  <button id="stop" class="btn danger" disabled>STOP</button>
- <span id="benchStatus" role="status" aria-live="polite">Enter an API token and connect. Recording lasts for this browser session.</span>
+ <span id="benchStatus" role="status" aria-live="polite">Sign in with the device password. Recording lasts for this browser session.</span>
 </div>
 <div class="app">
   <aside class="rail">

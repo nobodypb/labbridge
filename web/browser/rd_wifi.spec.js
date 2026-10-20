@@ -1,10 +1,11 @@
+import {mockAuth,signIn} from './auth-helper.js';
 import {test,expect} from '@playwright/test';
 async function mock(page){
  let state='idle', configured=false;const requests=[];
  await page.route('**/api/v1/**',async route=>{
   const r=route.request(),path=new URL(r.url()).pathname,body=r.postDataJSON(),method=r.method();
   const send=(value,status=200,headers={})=>route.fulfill({status,headers,contentType:'application/json',body:JSON.stringify(value)});
-  if(r.headers().authorization!=='Bearer test-token')return send({type:'about:blank',title:'Unauthorized',status:401,detail:'Token required'},401);
+  if(!r.headers().cookie?.includes('LabBridgeSession=synthetic-session'))return send({type:'about:blank',title:'Unauthorized',status:401,detail:'Token required'},401);
   if(path==='/api/v1/devices')return send({devices:[]});
   if(path==='/api/v1/configuration'){
    if(method==='PUT'){requests.push({path,body,headers:r.headers()});configured=true;return send(body);}
@@ -21,9 +22,10 @@ async function mock(page){
   }
   return send({type:'about:blank',title:'Unknown',status:404,detail:'Unmocked route'},404);
  });
+ await mockAuth(page);
  return requests;
 }
-async function auth(page){await page.goto('/devices');await page.getByLabel('API bearer token').fill('test-token');await page.getByRole('button',{name:'Refresh',exact:true}).click();await page.getByText('RD60xx Wi-Fi setup',{exact:true}).click();}
+async function auth(page){await page.goto('/devices');await signIn(page);await page.getByText('RD60xx Wi-Fi setup',{exact:true}).click();}
 test('RD pairing requires physical confirmation, advances explicitly and saves serial-bound limits using ETag',async({page})=>{
  const writes=await mock(page);await auth(page);
  await expect(page.getByRole('button',{name:'Start RD pairing',exact:true})).toBeDisabled();

@@ -166,3 +166,35 @@ while preserving live-duplicate rejection and configured-device recovery.
 A physical source power cycle verified discovery release/reconnection without
 restarting the bridge; see acceptance.md. Configured-source STOP/reconnect and
 full coexistence acceptance remain open.
+
+## UI password commissioning (LB-020)
+
+Portable access-policy and browser tests cover AP/LAN isolation, password login,
+CSRF, expiry, logout, recovery and nonblocking authorization during hashing.
+StickS3 commissioning now establishes actual LAN login/scan, a wireless AP scan
+through an additional ESP32, and HTTP/USB STOP with confirmed OFF during real
+600,000-iteration password jobs. The discovered dual-stack socket classification
+failure was reproduced, corrected and covered by a shared transport test.
+
+The original version-one verifier took approximately 114–116 seconds for setup,
+login and USB recovery on a 160 MHz StickS3. Version two uses 6,000 rounds under
+the operator-approved basic-protection policy; repeated hardware login timing
+is being rechecked against the three-second limit. STOP
+acceptance remained below 100 ms in the final HTTP-login run, with the load
+already OFF. Shutdown from ON under hashing was not exercised. One earlier real
+browser scan wait timed out without a captured cause; an instrumented repeat
+passed. Repetition and coexistence soak evidence remains open.
+
+Further hardware work uses only the dedicated test bridge, without laboratory
+connections while other tests continue. AP first-
+password setup and final live-device verification after NVS restoration remain
+open. Original DL24M-stick NVS and the additional test ESP32's overwritten flash
+were restored and hash-verified; temporary passwords and raw backups/logs remain
+private. Hardware expiry/session-capacity, post-reboot session revocation and
+UI old-password replacement were not separately commissioned; their
+deterministic portable checks pass.
+
+HTTPS/mTLS remains a separate planned story (LB-021); HTTP credentials and
+cookies are currently unencrypted. mTLS is intended as optional alternative
+authentication for both browser and API clients. Certificate provisioning,
+trust anchors, renewal and revocation still need their own acceptance evidence.

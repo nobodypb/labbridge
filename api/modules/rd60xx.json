@@ -243,7 +243,7 @@
         },
         "requestBody": {
           "required": true,
-          "description": "Typed provisioning request; unknown fields are rejected. Requires LAN bearer authentication or trusted USB, including when accessed through the open AP.",
+          "description": "Typed provisioning request; unknown fields are rejected. Requires a LAN bearer token, a UI session with X-Lab-CSRF, or trusted USB, including when accessed through the open AP.",
           "content": {
             "application/json": {
               "schema": {
@@ -286,7 +286,7 @@
         },
         "requestBody": {
           "required": true,
-          "description": "Typed provisioning request; unknown fields are rejected. Requires LAN bearer authentication or trusted USB, including when accessed through the open AP.",
+          "description": "Typed provisioning request; unknown fields are rejected. Requires a LAN bearer token, a UI session with X-Lab-CSRF, or trusted USB, including when accessed through the open AP.",
           "content": {
             "application/json": {
               "schema": {
@@ -329,7 +329,7 @@
         },
         "requestBody": {
           "required": true,
-          "description": "Typed provisioning request; unknown fields are rejected. Requires LAN bearer authentication or trusted USB, including when accessed through the open AP.",
+          "description": "Typed provisioning request; unknown fields are rejected. Requires a LAN bearer token, a UI session with X-Lab-CSRF, or trusted USB, including when accessed through the open AP.",
           "content": {
             "application/json": {
               "schema": {

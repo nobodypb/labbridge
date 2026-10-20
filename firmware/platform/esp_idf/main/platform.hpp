@@ -31,6 +31,7 @@ std::shared_ptr<Endpoint> tcp_endpoint(const std::string &, unsigned model);
 Response dispatch(const std::string &, const std::string &, const Json &,
                   const Headers &, bool local = false);
 void start_console();
+void console_respond(const std::string &id, Response);
 } // namespace labbridge::esp
 namespace labbridge::esp {
 std::vector<int> pins(const Json &);

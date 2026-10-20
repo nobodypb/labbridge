@@ -1,4 +1,5 @@
 #include "dl24m_driver.hpp"
+#include "labbridge/auth.hpp"
 #include "labbridge/node.hpp"
 #include <iostream>
 using namespace labbridge;
@@ -31,6 +32,19 @@ struct Instrument : Endpoint {
   }
 };
 int main() {
+  Auth auth(
+      "synthetic", Json(), [] { return std::string(64, 'a'); },
+      [](const std::string &, const std::string &, unsigned) {
+        return std::string(64, 'b');
+      },
+      [](const Json &) {}, [] { return 15000; });
+  auto auth_response = auth.request("GET", "/api/v1/auth/status", Json(), {},
+                                    {false, false, "http://node.local"});
+  Json auth_fixture;
+  auth_fixture.set("operation", "getAuthStatus")
+      .set("status", double(auth_response.status))
+      .set("body", auth_response.body);
+  std::cout << auth_fixture.dump() << '\n';
   Instrument wire;
   Node n("fixture", "boot", "sim");
   auto d = std::make_shared<Dl24mDriver>(
