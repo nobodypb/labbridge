@@ -128,3 +128,15 @@ RD commissioning or coexistence acceptance. An intermittent USB request timeout
 was also observed; later status remained available without a confirmed reset.
 The documented SmartConfig/open-network incompatibility requires a protected
 network comparison. Output actuation was not performed.
+
+WPA2 comparison preparation on firmware `0.1.0+4af9dc4`: the USB API rejected a
+short passphrase with 422, then accepted an AP-only WPA2 configuration. LAN
+status confirmed the security change without a boot-ID change, station address
+change or station disconnect. The AP secret was absent from Wi-Fi, provisioning
+and full-configuration responses. All original DL24M settings were re-read and
+unchanged; CC 0.100 A, output OFF and fresh BLE measurements were preserved.
+The protected-network server-address phase subsequently ran its full 120-second
+deadline with one associated client and 11,991 accepted UDP submissions. It
+timed out without a phase acknowledgement; the operator display observation is
+still pending, so this does not establish whether the server address was decoded.
+The AP remains protected for the unfinished comparison; no RD actuation occurred.
