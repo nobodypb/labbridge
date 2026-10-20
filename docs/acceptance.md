@@ -414,24 +414,34 @@ or a newly established login. Request/session tracking and disposal of obsolete
 scan views fix both cases; the final real-browser run succeeds without delays
 inserted to hide the race.
 
-Final version-two commissioning used the actual embedded assets from source
-`2d11b24` (application SHA-256 prefix `c9ca3960940abd7d`), with zero configured
-instruments throughout:
+Integration with the current main branch exposed a separate USB regression:
+resetting a 128-code-point Unicode password timed out when its JSON-escaped
+password and confirmation exceeded the new 2 KiB receive buffer. The request
+was sent as one ordinary USB JSON frame; HTTP remained responsive. The console
+receive buffer now accommodates the complete permitted 16 KiB request plus its
+delimiter, so descheduling the reader cannot truncate that frame in the ISR.
+The same unchunked recovery request then passed on hardware.
+
+Final version-two commissioning was repeated after integrating current main's
+console, automatic provisioning, telemetry and StickS3 PSRAM changes. It used
+the actual embedded assets from source `de6856d` (application SHA-256 prefix
+`52223e798ee032ce`), with zero configured instruments throughout:
 
 | Check | Observed result |
 | --- | --- |
-| Browser login on `/` | 0.945 s; cookie reload and CSRF logout pass |
-| Browser login on `/wifi` | 1.207 s; cookie reload and CSRF logout pass |
-| Browser login on `/devices` | 1.055 s; cookie reload and CSRF logout pass |
-| Browser login on `/dl24` | 0.987 s; cookie reload and CSRF logout pass |
-| Browser login on `/dl24/` | 0.932 s; cookie reload and CSRF logout pass |
-| 17 correct API logins | 0.817–0.984 s; all below 3 s |
-| 6 incorrect passwords | `401`, maximum 0.868 s; sixth attempt limited with `429` |
+| Browser login on `/` | 0.975 s; cookie reload and CSRF logout pass |
+| Browser login on `/wifi` | 0.960 s; cookie reload and CSRF logout pass |
+| Browser login on `/devices` | 0.933 s; cookie reload and CSRF logout pass |
+| Browser login on `/dl24` | 0.999 s; cookie reload and CSRF logout pass |
+| Browser login on `/dl24/` | 1.020 s; cookie reload and CSRF logout pass |
+| Shared session across pages | One `/wifi` login, then `/dl24`, `/devices` and `/dl24/` without another login; reload and logout pass |
+| 17 correct API logins | 0.841–0.955 s; all below 3 s |
+| Incorrect passwords and throttling | Six `401` responses across separate runs, maximum 0.920 s; after five consecutive failures the next attempt receives `429` |
 | 128 Unicode code points / 512 UTF-8 bytes | Correct password succeeds; altered final character rejected |
-| Password change with current password | 1.678 s; previous sessions invalidated |
+| Password change with current password | 1.696 s; previous sessions invalidated |
 | Session cap and recovery | Eight valid sessions, ninth rejected, existing cookie retained; USB recovery revokes sessions |
-| STOP route during an active password job | HTTP 31.4 ms / USB 41.4 ms |
-| ESP reboot | Old session rejected; persisted password logs in again in 0.861 s |
+| STOP route during an active password job | HTTP 27.7 ms / USB 21.9 ms |
+| ESP reboot | Old session rejected; persisted password logs in again in 0.885 s |
 
 The STOP probes deliberately address an unconfigured synthetic ID and receive
 `404`; they establish route/authorization/dispatch responsiveness, **not** a new
@@ -448,7 +458,7 @@ firmware did not provide a correlated USB JSON status response before or after
 testing; restoration evidence is the complete image comparison, not an invented
 post-restore API readback. Credentials, deployment identity, backups and raw
 logs remain private. The final software checks pass: 23 C++ executables, three
-contract tests, 31 host tests, the reference suites, 11 Web unit tests and 45
+contract tests, 37 host tests, the reference suites, 11 Web unit tests and 45
 browser scenarios. Generation drift, Black and public-tree checks pass, and
 ESP-IDF 5.5.2 builds fit StickS3, USB-OTG and ESP32 with the final frontend and
 socket policy. Remaining AP-first-setup and laboratory commissioning limits are

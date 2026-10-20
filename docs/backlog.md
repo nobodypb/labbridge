@@ -139,9 +139,10 @@ the existing physical limitations in LB-014 remain open.
   rules, five-failure/minute throttling, CSRF and session limits. Experimental
   600,000-round records require trusted USB recovery and are never silently
   reinterpreted or verified slowly. All five published entry URLs now pass real
-  browser login/reload/logout on an isolated bridge: maximum 1.207 s. Seventeen
-  API logins stay below 0.985 s, including the maximum-length Unicode password;
-  eight sessions survive HTTP connection reclamation. The original full test
+  browser login/reload/logout on an isolated bridge: maximum 1.020 s. A single
+  WLAN-page login also survives navigation to both Bench URLs and devices.
+  Seventeen API logins stay below 0.956 s, including the maximum-length Unicode
+  password; eight sessions survive HTTP connection reclamation. The original full test
   image was restored and device-verified. No laboratory devices were connected.
   AP first-password setup and broader device/coexistence commissioning remain
   open; further hardware work uses only the dedicated test bridge without
