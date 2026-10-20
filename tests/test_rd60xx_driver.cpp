@@ -8,6 +8,7 @@ struct Rtu : Endpoint {
   unsigned enables = 0;
   bool online = true;
   size_t chunk = 256;
+  bool drop_on_echo = false, ignore_on = false;
   Rtu() {
     regs[0] = 60241;
     regs[2] = 123;
@@ -32,6 +33,10 @@ struct Rtu : Endpoint {
       if (r == 18 && v)
         ++enables;
       rx = b;
+      if (r == 18 && v && ignore_on)
+        regs[18] = 0;
+      if (r == 18 && v && drop_on_echo)
+        rx.clear();
     }
     return true;
   }
@@ -43,6 +48,36 @@ struct Rtu : Endpoint {
   }
 };
 int main() {
+  // LB-019: a lost background read may be recovered before the first ON
+  // write. Neither an uncertain ON echo nor a mismatched readback permits
+  // a second activation write.
+  for (int fault = 0; fault < 3; ++fault) {
+    Rtu w;
+    w.regs[0] = 60181;
+    Rd60xxDriver source(
+        "psu", 123, w, {5, 1, 5, 3000, 0}, [](const Json &) {}, Json(), "tcp",
+        6018);
+    uint64_t now = 0;
+    for (; now < 1000; now += 5)
+      source.tick(now);
+    assert(source.describe(now).text("state") == "ready");
+    while (w.rx.empty()) {
+      source.tick(now);
+      now += 5;
+    }
+    if (fault == 0)
+      w.rx.clear();
+    w.drop_on_echo = fault == 1;
+    w.ignore_on = fault == 2;
+    source.execute("setOutput", Json::parse(R"({"enabled":true})"), now);
+    for (auto end = now + 2500; now < end; now += 5)
+      source.tick(now);
+    assert(w.enables == 1);
+    assert(source.operation(now).text("status") ==
+           (fault == 0 ? "succeeded" : "failed"));
+    if (fault != 0)
+      assert(source.describe(now).text("output") == "off");
+  }
   Rtu wire;
   Rd60xxDriver d(
       "source", 123, wire, {5, 1, 5, 3000, 0}, [](const Json &) {}, Json());

@@ -5,7 +5,7 @@ file(GLOB RD "${ROOT}/drivers/rd60xx/*.cpp")
 file(GLOB METERS "${ROOT}/drivers/meters/*.cpp")
 set(REQUIRES nvs_flash esp_wifi esp_event esp_netif esp_http_server json bt esp_driver_gpio esp_driver_uart esp_driver_i2c esp_http_client esp_timer esp_system esp_app_format esp_rom lwip)
 if(IDF_TARGET STREQUAL "esp32s3")
- list(APPEND REQUIRES usb)
+ list(APPEND REQUIRES usb esp_driver_usb_serial_jtag)
 endif()
 idf_component_register(SRCS "main.cpp" "network.cpp" "rd_network.cpp" "console.cpp" "ble.cpp" "usb.cpp" "gpio.cpp" "meters.cpp" ${METERS} ${CORE} ${DL} ${RD}
  INCLUDE_DIRS "." "${ROOT}/core/include" "${ROOT}/drivers/dl24m" "${ROOT}/drivers/meters" "${ROOT}/drivers/rd60xx" "${ROOT}/generated"
