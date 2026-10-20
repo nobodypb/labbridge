@@ -14,6 +14,7 @@
 
 
 # import models into model package
+from labbridge_generated.models.access_point_request import AccessPointRequest
 from labbridge_generated.models.actuator_settings import ActuatorSettings
 from labbridge_generated.models.actuator_state import ActuatorState
 from labbridge_generated.models.cell_temperature_guard import CellTemperatureGuard

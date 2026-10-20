@@ -50,13 +50,13 @@ export interface RdWifiMetrics {
      */
     txBytes: number;
     /**
-     * ESPTouch frames accepted by the AP radio submission API. This is not a transmission-completion or receiver acknowledgement.
+     * ESPTouch packets accepted by the selected send API: UDP on a WPA2 AP, direct unencrypted frames on the open-AP diagnostic path. This is not a receiver acknowledgement.
      * @type {number}
      * @memberof RdWifiMetrics
      */
     provisionPackets: number;
     /**
-     * ESPTouch AP frames for which the Wi-Fi driver reported successful transmission. Broadcasts have no receiver acknowledgement; this does not prove PSU reception.
+     * ESPTouch AP frames for which the Wi-Fi driver reported successful transmission. Broadcasts have no receiver acknowledgement; this does not prove PSU reception. Populated only for the direct unencrypted diagnostic path; normal WPA2 UDP transmissions have no callback in this counter.
      * @type {number}
      * @memberof RdWifiMetrics
      */

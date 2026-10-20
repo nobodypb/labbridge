@@ -24,7 +24,7 @@ from typing_extensions import Self
 
 class WifiNetwork(BaseModel):
     """
-    One network discovered by the asynchronous station scan. The setup AP itself remains open.
+    One network discovered by the asynchronous station scan. AP security is configured independently.
     """ # noqa: E501
     ssid: StrictStr = Field(description="Advertised network name.")
     rssi_dbm: StrictInt = Field(description="Received signal strength in dBm; a larger (less negative) value is stronger.")

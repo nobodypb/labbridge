@@ -14,7 +14,7 @@
 
 import { mapValues } from '../runtime';
 /**
- * Target station credentials, separate from the password-free provisioning AP. Credentials are persisted locally and never returned by the state API.
+ * Target station credentials, independent of AP security. Credentials are persisted locally and never returned by the state API.
  * @export
  * @interface WifiRequest
  */

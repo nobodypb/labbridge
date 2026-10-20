@@ -14,7 +14,7 @@
 
 import { mapValues } from '../runtime';
 /**
- * One network discovered by the asynchronous station scan. The setup AP itself remains open.
+ * One network discovered by the asynchronous station scan. AP security is configured independently.
  * @export
  * @interface WifiNetwork
  */

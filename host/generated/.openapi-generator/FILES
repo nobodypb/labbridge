@@ -18,6 +18,7 @@ labbridge_generated/api_response.py
 labbridge_generated/configuration.py
 labbridge_generated/exceptions.py
 labbridge_generated/models/__init__.py
+labbridge_generated/models/access_point_request.py
 labbridge_generated/models/actuator_settings.py
 labbridge_generated/models/actuator_state.py
 labbridge_generated/models/cell_temperature_guard.py

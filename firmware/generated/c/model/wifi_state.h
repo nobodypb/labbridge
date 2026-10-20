@@ -30,6 +30,7 @@ typedef struct wifi_state_t {
     labbridge_api_wifi_state_STATE_e state; //enum
     char *hostname; // string
     char *address; // string
+    int ap_secured; //boolean
 
     int _library_owned; // Is the library responsible for freeing this object?
 } wifi_state_t;
@@ -37,7 +38,8 @@ typedef struct wifi_state_t {
 __attribute__((deprecated)) wifi_state_t *wifi_state_create(
     labbridge_api_wifi_state_STATE_e state,
     char *hostname,
-    char *address
+    char *address,
+    int ap_secured
 );
 
 void wifi_state_free(wifi_state_t *wifi_state);
