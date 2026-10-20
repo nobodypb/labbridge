@@ -145,7 +145,7 @@ export class BenchAdapter {
  }
  async current(currentA:number){const p=this.params();if(!this.supports('current')||this.settings.mode!==0)throw Error('CC current is unavailable');return this.perform(()=>this.components.setComponentCurrent({...p,currentRequest:{currentA}}));}
  async modeWrite(mode:'cc'|'cv'|'cr'|'cp'){if(!this.off||!this.device?.features?.some(f=>f.id===mode&&f.status==='supported'))throw Error('Mode is not supported or OFF is not confirmed');const p=this.params();return this.perform(()=>this.dl.setDl24mMode({...p,dl24mModeRequest:{mode}}));}
- async target(value:number){if(!this.off||!this.modeSupported||!this.mode)throw Error('Target requires supported mode and confirmed OFF');if(this.mode==='cc')return this.current(value);const p=this.params(),mode=this.mode,unit=({cv:'V',cr:'Ohm',cp:'W'} as const)[mode];return this.perform(()=>this.dl.setDl24mTarget({...p,dl24mTargetRequest:{mode,value,unit}}));}
+ async target(value:number){if(this.mode==='cc')return this.current(value);if(!this.off||!this.modeSupported||!this.mode)throw Error('Target requires supported mode and confirmed OFF');const p=this.params(),mode=this.mode,unit=({cv:'V',cr:'Ohm',cp:'W'} as const)[mode];return this.perform(()=>this.dl.setDl24mTarget({...p,dl24mTargetRequest:{mode,value,unit}}));}
  async enable(){if(!this.canOn||!this.supports('output'))throw Error('ON requires a supported mode, fresh state and confirmed OFF');const p=this.params();return this.perform(()=>this.components.setComponentOutput({...p,outputRequest:{enabled:true}}));}
  async stop(){
   this.requests.cancelPending(Error('Cancelled by priority STOP'),job=>job.priority===2);

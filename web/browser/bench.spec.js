@@ -198,3 +198,12 @@ test('explicit STOP falls back to HTTP when the WebSocket session is unavailable
  expect(http.some(p=>p.endsWith('/stop'))).toBe(true);expect(s.writes.filter(w=>w.path.endsWith('/output'))).toHaveLength(0);
  await expect(page.locator('#loadBtn')).toBeDisabled();
 });
+
+test('CC current remains adjustable while ON through the common current operation',async({page})=>{
+ const s=await backend(page);await connect(page);await page.locator('#reserve').click();s.output='on';
+ await expect(page.locator('#loadBtn')).toContainText('LOAD ON');await expect(page.locator('#setBtn')).toBeEnabled();
+ await page.locator('#setVal').fill('.12');await page.locator('#setBtn').click();
+ await expect.poll(()=>s.writes.find(w=>w.path.endsWith('/current'))?.body).toEqual({current_a:.12});
+ await expect(page.locator('#benchStatus')).toContainText('succeeded');
+ expect(s.writes.filter(w=>w.path.endsWith('/dl24m/target'))).toHaveLength(0);
+});
