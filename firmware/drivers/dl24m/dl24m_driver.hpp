@@ -22,6 +22,7 @@ public:
   }
 
 private:
+  uint64_t active_duration_ms_ = 0;
   enum class Work { none, stop, drain, poll, snapshot, user, restore };
   std::string id_, identity_;
   Endpoint &wire_;

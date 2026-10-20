@@ -1792,6 +1792,14 @@
               "cv",
               "unknown"
             ]
+          },
+          "protection_code": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 65535
+          },
+          "boot_id": {
+            "type": "string"
           }
         },
         "required": [
@@ -1884,6 +1892,12 @@
         "properties": {
           "enabled": {
             "type": "boolean"
+          },
+          "max_duration_ms": {
+            "type": "integer",
+            "minimum": 100,
+            "maximum": 86400000,
+            "description": "Optional local activation time cap; cannot exceed configured device duration."
           }
         },
         "required": [

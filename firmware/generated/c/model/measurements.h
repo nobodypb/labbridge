@@ -50,6 +50,8 @@ typedef struct measurements_t {
     double set_voltage_v; //numeric
     double set_current_a; //numeric
     labbridge_api_measurements_REGULATIONMODE_e regulation_mode; //enum
+    int protection_code; //numeric
+    char *boot_id; // string
 
     int _library_owned; // Is the library responsible for freeing this object?
 } measurements_t;
@@ -68,7 +70,9 @@ __attribute__((deprecated)) measurements_t *measurements_create(
     list_t *temperature_channels,
     double set_voltage_v,
     double set_current_a,
-    labbridge_api_measurements_REGULATIONMODE_e regulation_mode
+    labbridge_api_measurements_REGULATIONMODE_e regulation_mode,
+    int protection_code,
+    char *boot_id
 );
 
 void measurements_free(measurements_t *measurements);

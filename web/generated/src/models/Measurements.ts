@@ -111,6 +111,18 @@ export interface Measurements {
      * @memberof Measurements
      */
     regulationMode?: MeasurementsRegulationModeEnum;
+    /**
+     * 
+     * @type {number}
+     * @memberof Measurements
+     */
+    protectionCode?: number;
+    /**
+     * 
+     * @type {string}
+     * @memberof Measurements
+     */
+    bootId?: string;
 }
 
 
@@ -172,6 +184,8 @@ export function MeasurementsFromJSONTyped(json: any, ignoreDiscriminator: boolea
         'setVoltageV': json['set_voltage_v'] == null ? undefined : json['set_voltage_v'],
         'setCurrentA': json['set_current_a'] == null ? undefined : json['set_current_a'],
         'regulationMode': json['regulation_mode'] == null ? undefined : json['regulation_mode'],
+        'protectionCode': json['protection_code'] == null ? undefined : json['protection_code'],
+        'bootId': json['boot_id'] == null ? undefined : json['boot_id'],
     };
 }
 
@@ -200,6 +214,8 @@ export function MeasurementsToJSONTyped(value?: Measurements | null, ignoreDiscr
         'set_voltage_v': value['setVoltageV'],
         'set_current_a': value['setCurrentA'],
         'regulation_mode': value['regulationMode'],
+        'protection_code': value['protectionCode'],
+        'boot_id': value['bootId'],
     };
 }
 

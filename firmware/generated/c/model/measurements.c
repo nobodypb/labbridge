@@ -53,7 +53,9 @@ static measurements_t *measurements_create_internal(
     list_t *temperature_channels,
     double set_voltage_v,
     double set_current_a,
-    labbridge_api_measurements_REGULATIONMODE_e regulation_mode
+    labbridge_api_measurements_REGULATIONMODE_e regulation_mode,
+    int protection_code,
+    char *boot_id
     ) {
     measurements_t *measurements_local_var = malloc(sizeof(measurements_t));
     if (!measurements_local_var) {
@@ -73,6 +75,8 @@ static measurements_t *measurements_create_internal(
     measurements_local_var->set_voltage_v = set_voltage_v;
     measurements_local_var->set_current_a = set_current_a;
     measurements_local_var->regulation_mode = regulation_mode;
+    measurements_local_var->protection_code = protection_code;
+    measurements_local_var->boot_id = boot_id;
 
     measurements_local_var->_library_owned = 1;
     return measurements_local_var;
@@ -92,7 +96,9 @@ __attribute__((deprecated)) measurements_t *measurements_create(
     list_t *temperature_channels,
     double set_voltage_v,
     double set_current_a,
-    labbridge_api_measurements_REGULATIONMODE_e regulation_mode
+    labbridge_api_measurements_REGULATIONMODE_e regulation_mode,
+    int protection_code,
+    char *boot_id
     ) {
     return measurements_create_internal (
         device_id,
@@ -108,7 +114,9 @@ __attribute__((deprecated)) measurements_t *measurements_create(
         temperature_channels,
         set_voltage_v,
         set_current_a,
-        regulation_mode
+        regulation_mode,
+        protection_code,
+        boot_id
         );
 }
 
@@ -131,6 +139,10 @@ void measurements_free(measurements_t *measurements) {
         }
         list_freeList(measurements->temperature_channels);
         measurements->temperature_channels = NULL;
+    }
+    if (measurements->boot_id) {
+        free(measurements->boot_id);
+        measurements->boot_id = NULL;
     }
     free(measurements);
 }
@@ -266,6 +278,22 @@ cJSON *measurements_convertToJSON(measurements_t *measurements) {
     if(cJSON_AddStringToObject(item, "regulation_mode", measurements_regulation_mode_ToString(measurements->regulation_mode)) == NULL)
     {
     goto fail; //Enum
+    }
+    }
+
+
+    // measurements->protection_code
+    if(measurements->protection_code) {
+    if(cJSON_AddNumberToObject(item, "protection_code", measurements->protection_code) == NULL) {
+    goto fail; //Numeric
+    }
+    }
+
+
+    // measurements->boot_id
+    if(measurements->boot_id) {
+    if(cJSON_AddStringToObject(item, "boot_id", measurements->boot_id) == NULL) {
+    goto fail; //String
     }
     }
 
@@ -486,6 +514,30 @@ measurements_t *measurements_parseFromJSON(cJSON *measurementsJSON){
     regulation_modeVariable = measurements_regulation_mode_FromString(regulation_mode->valuestring);
     }
 
+    // measurements->protection_code
+    cJSON *protection_code = cJSON_GetObjectItemCaseSensitive(measurementsJSON, "protection_code");
+    if (cJSON_IsNull(protection_code)) {
+        protection_code = NULL;
+    }
+    if (protection_code) { 
+    if(!cJSON_IsNumber(protection_code))
+    {
+    goto end; //Numeric
+    }
+    }
+
+    // measurements->boot_id
+    cJSON *boot_id = cJSON_GetObjectItemCaseSensitive(measurementsJSON, "boot_id");
+    if (cJSON_IsNull(boot_id)) {
+        boot_id = NULL;
+    }
+    if (boot_id) { 
+    if(!cJSON_IsString(boot_id) && !cJSON_IsNull(boot_id))
+    {
+    goto end; //String
+    }
+    }
+
 
     measurements_local_var = measurements_create_internal (
         strdup(device_id->valuestring),
@@ -501,7 +553,9 @@ measurements_t *measurements_parseFromJSON(cJSON *measurementsJSON){
         temperature_channelsList,
         set_voltage_v ? set_voltage_v->valuedouble : 0,
         set_current_a ? set_current_a->valuedouble : 0,
-        regulation_mode ? regulation_modeVariable : labbridge_api_measurements_REGULATIONMODE_NULL
+        regulation_mode ? regulation_modeVariable : labbridge_api_measurements_REGULATIONMODE_NULL,
+        protection_code ? protection_code->valuedouble : 0,
+        boot_id && !cJSON_IsNull(boot_id) ? strdup(boot_id->valuestring) : NULL
         );
 
     return measurements_local_var;

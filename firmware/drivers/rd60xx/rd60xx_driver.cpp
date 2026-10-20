@@ -25,6 +25,7 @@ Rd60xxDriver::Rd60xxDriver(std::string id, uint32_t serial, Endpoint &wire,
   if (!serial_ || !limits_.valid() || limits_.voltage > 60 ||
       limits_.current > 24 || limits_.power > 1440)
     throw std::invalid_argument("RD6024 requires serial and positive limits");
+  active_duration_ms_ = limits_.max_duration_ms;
   if (!journal_.has("may_be_on"))
     journal_.set("may_be_on", journal_.boolean("stop_pending"));
 }
@@ -51,7 +52,10 @@ Json Rd60xxDriver::describe(uint64_t now) {
       .set("transport", transport_)
       .set("identity", std::to_string(serial_))
       .set("capabilities", a)
-      .set("state", !fresh(now)            ? "unavailable"
+      .set("state", !fresh(now) ? "unavailable"
+                    : (need_stop_ && result_.text("status") == "failed") ||
+                            measurement_.protection
+                        ? "fault"
                     : (user_ || stopping_) ? "busy"
                     : need_stop_           ? "fault"
                                            : "ready")
@@ -74,6 +78,7 @@ Json Rd60xxDriver::measurements(uint64_t now) {
         .set("regulation_mode", measurement_.cc ? "cc" : "cv");
     j.set("voltage_v", measurement_.voltage)
         .set("current_a", measurement_.current)
+        .set("protection_code", double(measurement_.protection))
         .set("power_w", measurement_.power);
     Json t;
     t.set("id", "internal")
@@ -206,6 +211,16 @@ Json Rd60xxDriver::execute(const std::string &op, const Json &body,
       v * a > limits_.power)
     throw std::invalid_argument("Source setpoint exceeds limits");
   if (reg_ == 18 && value_) {
+    if (measurement_.output || measurement_.protection)
+      throw std::invalid_argument(
+          "Source requires confirmed OFF without active protection");
+    auto duration = body.number("max_duration_ms", limits_.max_duration_ms);
+    if (body.has("max_duration_ms") &&
+        (duration < 100 || duration > 86400000 ||
+         std::floor(duration) != duration ||
+         (limits_.max_duration_ms && duration > limits_.max_duration_ms)))
+      throw std::invalid_argument("Duration outside configured limit");
+    active_duration_ms_ = duration;
     journal_.set("stop_pending", true).set("may_be_on", true);
     persist_(journal_);
     enabled_at_ = now;
@@ -234,9 +249,10 @@ void Rd60xxDriver::tick(uint64_t now) {
       (!fresh(now) || measurement_.voltage > limits_.voltage ||
        measurement_.current > limits_.current ||
        measurement_.power > limits_.power ||
-       (limits_.max_duration_ms &&
-        now - enabled_at_ >= limits_.max_duration_ms)))
+       (active_duration_ms_ && now - enabled_at_ >= active_duration_ms_))) {
     stop(now);
+    result_.set("status", "failed").set("stage", "local_guard");
+  }
   if ((user_ || stopping_) && now - started_ >= 10000) {
     fail("deadline", now);
     return;
@@ -313,9 +329,10 @@ void Rd60xxDriver::tick(uint64_t now) {
         journal_.set("stop_pending", false).set("may_be_on", false);
         persist_(journal_);
       }
-      result_.set("status", "succeeded")
-          .set("stage", "confirmed")
-          .set("duration_ms", double(now - started_));
+      if (result_.text("status") != "failed")
+        result_.set("status", "succeeded")
+            .set("stage", "confirmed")
+            .set("duration_ms", double(now - started_));
       user_ = false;
       stopping_ = false;
     }

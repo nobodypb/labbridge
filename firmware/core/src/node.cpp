@@ -347,8 +347,11 @@ Response Node::request(const std::string &method, const std::string &path,
   }
   if (op == "getDevice")
     return {200, devices_.at(device)->describe(now)};
-  if (op == "getMeasurements")
-    return {200, devices_.at(device)->measurements(now)};
+  if (op == "getMeasurements") {
+    auto value = devices_.at(device)->measurements(now);
+    value.set("boot_id", boot_);
+    return {200, value};
+  }
   if (op == "createLease") {
     std::vector<std::string> selected;
     auto a = body.at("device_ids");

@@ -42,7 +42,9 @@ class Measurements(BaseModel):
     set_voltage_v: Optional[Union[Annotated[float, Field(strict=True, ge=0)], Annotated[int, Field(strict=True, ge=0)]]] = None
     set_current_a: Optional[Union[Annotated[float, Field(strict=True, ge=0)], Annotated[int, Field(strict=True, ge=0)]]] = None
     regulation_mode: Optional[StrictStr] = None
-    __properties: ClassVar[List[str]] = ["device_id", "sequence", "received_ms", "age_ms", "quality", "voltage_v", "current_a", "power_w", "capacity_ah", "energy_wh", "temperature_channels", "set_voltage_v", "set_current_a", "regulation_mode"]
+    protection_code: Optional[Annotated[int, Field(le=65535, strict=True, ge=0)]] = None
+    boot_id: Optional[StrictStr] = None
+    __properties: ClassVar[List[str]] = ["device_id", "sequence", "received_ms", "age_ms", "quality", "voltage_v", "current_a", "power_w", "capacity_ah", "energy_wh", "temperature_channels", "set_voltage_v", "set_current_a", "regulation_mode", "protection_code", "boot_id"]
 
     @field_validator('quality')
     def quality_validate_enum(cls, value):
@@ -133,7 +135,9 @@ class Measurements(BaseModel):
             "temperature_channels": [TemperatureChannel.from_dict(_item) for _item in obj["temperature_channels"]] if obj.get("temperature_channels") is not None else None,
             "set_voltage_v": obj.get("set_voltage_v"),
             "set_current_a": obj.get("set_current_a"),
-            "regulation_mode": obj.get("regulation_mode")
+            "regulation_mode": obj.get("regulation_mode"),
+            "protection_code": obj.get("protection_code"),
+            "boot_id": obj.get("boot_id")
         })
         return _obj
 

@@ -10,7 +10,7 @@ add_library(labbridge_api_models ${API_MODELS} firmware/generated/c/src/list.c f
 target_include_directories(labbridge_api_models PUBLIC firmware/generated/c/model firmware/generated/c/include firmware/generated/c/external)
 target_link_libraries(labbridge_core PUBLIC labbridge_api_models)
 enable_testing()
-foreach(test resources dl24m_codec interlock temperature transaction guard rd60xx node dl24m_driver rd60xx_driver cell_guard interlock_delayed catalog timing driver_queue configuration_safety json)
+foreach(test resources dl24m_codec interlock temperature transaction guard rd60xx node dl24m_driver rd60xx_driver cell_guard interlock_delayed catalog timing driver_queue configuration_safety json output_deadline)
  add_executable(test_${test} tests/test_${test}.cpp)
  target_link_libraries(test_${test} PRIVATE labbridge_core)
  add_test(NAME ${test} COMMAND test_${test})

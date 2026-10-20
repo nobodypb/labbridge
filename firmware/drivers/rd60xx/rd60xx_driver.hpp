@@ -21,6 +21,7 @@ public:
   }
 
 private:
+  uint64_t active_duration_ms_ = 0;
   enum class Phase { idle, identity, echo, verify, poll, drain };
   std::string id_, transport_;
   uint32_t serial_;

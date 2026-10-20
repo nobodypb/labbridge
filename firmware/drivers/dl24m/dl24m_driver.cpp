@@ -52,6 +52,7 @@ Dl24mDriver::Dl24mDriver(std::string id, std::string identity, Endpoint &wire,
       journal_(std::move(journal)), result_(progress()) {
   if (!limits_.valid())
     throw std::invalid_argument("DL24M requires positive configured limits");
+  active_duration_ms_ = limits_.max_duration_ms;
   if (!journal_.has("may_be_on"))
     journal_.set("may_be_on", journal_.boolean("stop_pending"));
   build_restore();
@@ -305,8 +306,7 @@ void Dl24mDriver::tick(uint64_t now) {
           v > limits_.voltage || a > limits_.current || v * a > limits_.power;
     }
     if (stale || exceed ||
-        (limits_.max_duration_ms &&
-         now - enabled_at_ >= limits_.max_duration_ms)) {
+        (active_duration_ms_ && now - enabled_at_ >= active_duration_ms_)) {
       result_.set("status", "failed").set("stage", "local_guard");
       begin_stop(now);
     }
@@ -566,6 +566,13 @@ Json Dl24mDriver::execute(const std::string &op, const Json &body,
     double v = values_[0x11].first / 1000., a = values_[0x17].first / 1000.;
     if (v > limits_.voltage || a > limits_.current || v * a > limits_.power)
       throw std::invalid_argument("Setpoint exceeds limits");
+    auto duration = body.number("max_duration_ms", limits_.max_duration_ms);
+    if (body.has("max_duration_ms") &&
+        (duration < 100 || duration > 86400000 ||
+         std::floor(duration) != duration ||
+         (limits_.max_duration_ms && duration > limits_.max_duration_ms)))
+      throw std::invalid_argument("Duration outside configured limit");
+    active_duration_ms_ = duration;
     journal_.set("stop_pending", true).set("may_be_on", true);
     save();
     enabled_at_ = now;
