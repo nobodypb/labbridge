@@ -149,3 +149,10 @@ missing-response deadline, rejection of late/changed identities, serial
 release/reclaim and live-duplicate rejection. Required checks and generation
 drift checks pass; configured-device driver recovery is preserved.
 
+Physical discovery-recovery acceptance verified release of a stale serial
+claim after a source power cycle, automatic reconnection to the same identity
+and continued heartbeat replies without restarting the bridge. No duplicate
+identities were rejected after recovery. Output/setpoint writes were not part
+of this check. This validates unregistered discovery recovery only; configured
+source STOP/fault tests, battery commissioning and the full coexistence soak
+remain open. All documented board builds and required CI checks passed.

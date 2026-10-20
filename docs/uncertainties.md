@@ -163,3 +163,6 @@ Discovery-only sockets previously remained idle after one identity request.
 A silent peer restart could leave a stale serial claim and block replacements.
 Read-only identity probes with a bounded reply deadline address that lifetime
 while preserving live-duplicate rejection and configured-device recovery.
+A physical source power cycle verified discovery release/reconnection without
+restarting the bridge; see acceptance.md. Configured-source STOP/reconnect and
+full coexistence acceptance remain open.
