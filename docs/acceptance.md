@@ -113,3 +113,8 @@ Initial general-profile broadcasts did not establish W01 pairing. Radio
 submission/completion counts alone do not prove receiver acceptance. Switching
 to WPA2 alone did not resolve the general sender's protocol differences.
 
+Offline PC-profile checks independently verified all 256 CRC table entries
+and synthetic phase-one/phase-two payloads, including per-triple CRC and total
+XOR. Vendor binaries/decompiled sources are excluded. These checks establish
+encoder consistency, not RF delivery.
+
