@@ -42,6 +42,7 @@ struct Delayed : Endpoint {
 };
 struct DelayedRtu : Endpoint {
   uint64_t now = 0, due = 0;
+  uint64_t response_delay = 50;
   bool pending = false;
   unsigned overlaps = 0;
   Bytes rx;
@@ -73,7 +74,7 @@ struct DelayedRtu : Endpoint {
       rx = b;
     }
     pending = true;
-    due = now + 50;
+    due = now + response_delay;
     return true;
   }
   Bytes receive() {
@@ -86,6 +87,22 @@ struct DelayedRtu : Endpoint {
   }
 };
 int main() {
+  // LB-019: a reply exceeding 500 ms is latency, not a fixed pause required
+  // between successful commands. Initial OFF and a checked write still finish
+  // within the operation deadline, without overlapping outstanding requests.
+  DelayedRtu slow;
+  slow.response_delay = 600;
+  Rd60xxDriver slow_source(
+      "source", 123, slow, {5, 1, 5, 3000, 0}, [](const Json &) {}, Json());
+  for (; slow.now < 3500; slow.now += 5)
+    slow_source.tick(slow.now);
+  assert(slow_source.describe(slow.now).text("state") == "ready");
+  slow_source.execute("setSourceVoltage", Json::parse(R"({"voltage_v":4.1})"),
+                      slow.now);
+  for (auto end = slow.now + 3000; slow.now < end; slow.now += 5)
+    slow_source.tick(slow.now);
+  assert(slow.overlaps == 0 && slow.regs[8] == 410 &&
+         slow_source.operation(slow.now).text("status") == "succeeded");
   Delayed w;
   Dl24mDriver d(
       "load", "fake", w, {25, .2, 5, 3000, 0}, [](const Json &) {}, Json());

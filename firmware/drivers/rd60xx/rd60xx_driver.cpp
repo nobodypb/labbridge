@@ -3,6 +3,9 @@
 #include <cmath>
 namespace labbridge {
 namespace {
+// A response deadline is not a mandatory inter-command pause. W01 round trips
+// can exceed 500 ms; successful replies continue immediately.
+constexpr uint64_t response_timeout_ms = 1000;
 Json progress() {
   Json j;
   j.set("status", "running")
@@ -122,7 +125,7 @@ void Rd60xxDriver::send_read(Phase phase, uint64_t now) {
     return;
   }
   phase_ = phase;
-  due_ = now + 500;
+  due_ = now + response_timeout_ms;
   if (user_ || stopping_)
     result_.set("read_attempts", result_.number("read_attempts") + 1);
 }
@@ -136,7 +139,9 @@ void Rd60xxDriver::send_write(uint64_t now) {
     return;
   }
   phase_ = Phase::echo;
-  due_ = now + 500;
+  due_ = now + response_timeout_ms;
+  if (reg_ == 18 && value_ == 1)
+    activation_sent_ = true;
   ++attempts_;
   result_.set("write_attempts", result_.number("write_attempts") + 1);
 }
@@ -184,6 +189,7 @@ void Rd60xxDriver::stop(uint64_t now) {
   reg_ = 18;
   value_ = 0;
   attempts_ = 0;
+  activation_sent_ = false;
   started_ = now;
   result_ = progress();
   journal_.set("stop_pending", true);
@@ -236,6 +242,7 @@ Json Rd60xxDriver::execute(const std::string &op, const Json &body,
   if (!pending_poll)
     phase_ = Phase::idle;
   attempts_ = 0;
+  activation_sent_ = false;
   started_ = now;
   if (!pending_poll)
     due_ = now;
@@ -343,7 +350,7 @@ void Rd60xxDriver::tick(uint64_t now) {
                                     : double(measurement_.output);
       double requested = reg_ == 18 ? value_ : value_ / 100.;
       if (std::abs(expected - requested) > .001) {
-        if (attempts_ < 3) {
+        if (attempts_ < 3 && !activation_sent_) {
           send_read(Phase::identity, now);
           return;
         }
@@ -367,7 +374,7 @@ void Rd60xxDriver::tick(uint64_t now) {
     return;
   }
   if (now >= due_) {
-    if ((user_ || stopping_) && attempts_ < 3 && !(reg_ == 18 && value_ == 1)) {
+    if ((user_ || stopping_) && attempts_ < 3 && !activation_sent_) {
       ++attempts_;
       send_read(phase_ == Phase::poll ? Phase::poll : Phase::identity, now);
     } else

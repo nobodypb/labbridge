@@ -19,6 +19,12 @@ No manufacturer firmware update is needed for the confirmed DL24M protocol.
 | ESP32-S3-USB-OTG | BLE, up to two AP TCP sources and up to two USB serial RD60xx endpoints | Powered USB hub for two instruments; separate UART console. Internal USB PHY cannot serve console and host simultaneously. |
 | Classic ESP32 devkit | BLE and UART | Bluetooth Classic hardware exists, but SPP is not enabled in this runtime. No native USB host. |
 
+The StickS3 build enables its 8 MB octal PSRAM, tests it at boot and makes it
+available to the application allocator. See the [manufacturer's board
+specification](https://docs.m5stack.com/en/core/StickS3). Do not disable PSRAM in
+that profile: API configuration and retained operation results also need heap.
+Other board profiles must be commissioned for their own memory budget.
+
 Resource profiles reject excess connections, duplicate instrument identities
 and shared pins before creating drivers. GPIO/1-Wire pins must be explicitly
 approved in a board profile; an empty pin allowlist is intentional. Do not infer
@@ -144,12 +150,25 @@ CRC low byte first. Validate address, function, payload length and CRC.
 | 10 / 11 | measured voltage / current | /100 V, /100 A |
 | 12–13 | measured power | combined 32-bit /100 W |
 | 16 | protection | raw enum |
-| 17 | CC/CV | probable 0=CV, 1=CC; commissioning required |
+| 17 | CC/CV | 0=CV, 1=CC; sustained loaded CC acceptance remains open |
 | 18 | output | 0/1 |
 
 Before writing, re-read and match instrument serial/model. Require function-06
 byte-for-byte echo, then fresh register readback with the same identity. The
 external NTC channel is not mapped yet; internal temperature cannot substitute.
+
+The response deadline is one second; a successful reply advances immediately.
+There is no mandatory one-second pause between commands. Missing pre-activation
+reads can be retried within the ten-second operation budget. Once an ON write
+has been sent, uncertain echo or mismatched readback fails the operation and
+requests recovery OFF; ON is not repeated. OFF and setpoint recovery remain
+bounded. Confirmed ON describes the output-enable register, not settled terminal
+voltage. A workflow that requires a settled voltage must check fresh measurements.
+
+The current source API exposes voltage/current setpoints, output, V/I/power,
+regulation mode, protection status and internal temperature. OVP/OCP settings,
+presets, front-panel settings, external NTC and native counters are not yet
+exposed by this driver. Calibration is not an automation operation.
 
 The ordinary RD6018 and RD6024 profiles use 0.01 V/A setpoint steps. RD6018
 model ceilings are 60 V / 18 A / 1080 W; RD6024 ceilings are 60 V / 24 A /
@@ -187,7 +206,7 @@ requests OFF before allowing work; it never resumes ON.
 
 ### Pairing through LabBridge
 
-**Commissioning status:** The RIDEN PC profile below paired a W01 RD6018 successfully from the ESP AP using WPA2 and an associated phone, including the displayed server address, UDP join result and TCP identity. Earlier general-profile open/WPA2 attempts failed. Open-network compatibility, which profile changes are essential, source control and the coexistence soak remain unvalidated. See [compatibility notes](uncertainties.md).
+**Commissioning status:** The RIDEN PC profile below paired a W01 RD6018 successfully from the ESP AP using WPA2 and an associated phone, including the displayed server address, UDP join result and TCP identity. No-load setpoint writes/readback, output switching, independent STOP, local activation duration and lease-expiry shutdown are commissioned on ordinary RD6018 firmware 1.39. Loaded CC/CV, a second physical source, open-network compatibility, essential profile differences and the coexistence soak remain unvalidated. See [acceptance](acceptance.md) and [compatibility notes](uncertainties.md).
 
 The AP is open by default. `core.configure_access_point` (`PUT /api/v1/wifi/ap`) accepts only `{"psk":"..."}`: 8..63 printable ASCII characters enable WPA2-PSK/CCMP; an explicit empty string restores the open AP. This requires quiescent instruments and authenticated HTTP or trusted USB, including when called through the open AP. The change disconnects AP clients after the response; use USB or the station address to retain management access. Station credentials and the configured AP SSID are unchanged. Secrets are never returned. `getWifiState.ap_secured` reports current authentication; poll after the delayed change. Supply secrets through a private CLI args file or stdin, not shell command history.
 

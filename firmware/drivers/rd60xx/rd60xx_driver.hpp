@@ -33,6 +33,7 @@ private:
   Json journal_, result_;
   rd60xx::Measurement measurement_{};
   bool have_ = false, need_stop_ = true, user_ = false, stopping_ = false;
+  bool activation_sent_ = false;
   Phase phase_ = Phase::idle;
   size_t drain_size_ = 45;
   uint64_t generation_ = 0, received_ = 0, sequence_ = 0, due_ = 0,
