@@ -1,3 +1,4 @@
+import {numeric} from './context';
 import {ComponentsApi} from '../../generated/src/index';
 import type {PanelDefinition} from './context';
 export const components:PanelDefinition={id:'components',capability:'components',render(ctx,d){
@@ -8,11 +9,11 @@ export const components:PanelDefinition={id:'components',capability:'components'
   const disabled=!ctx.leased||d.state!=='ready'||d.output==='unknown';
   if(c.actions.includes('current')){
    const i=ctx.input(`${c.id} current (A)`,'number');i.min='0';i.step='any';if(d.limits)i.max=String(d.limits.currentA);
-   ctx.action(`${c.id}: set current`,async()=>ctx.wait(await api.setComponentCurrent({...request(),currentRequest:{currentA:Number(i.value)}})),disabled);
+   ctx.action(`${c.id}: set current`,async()=>ctx.wait(await api.setComponentCurrent({...request(),currentRequest:{currentA:numeric(i)}})),disabled);
   }
   if(c.actions.includes('voltage')){
    const v=ctx.input(`${c.id} voltage (V)`,'number');v.min='0';v.step='any';if(d.limits)v.max=String(d.limits.voltageV);
-   ctx.action(`${c.id}: set voltage`,async()=>ctx.wait(await api.setComponentVoltage({...request(),voltageRequest:{voltageV:Number(v.value)}})),disabled);
+   ctx.action(`${c.id}: set voltage`,async()=>ctx.wait(await api.setComponentVoltage({...request(),voltageRequest:{voltageV:numeric(v)}})),disabled);
   }
   if(c.actions.includes('output')){
    const button=ctx.action(`${c.id}: ON`,async()=>{

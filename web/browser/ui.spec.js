@@ -60,7 +60,8 @@ test('a composite device and an independent meter use common component routes',a
  meter.components=[{id:'current',kind:'sensor',actions:[],quantity:'current',unit:'A'},{id:'temperature-die',kind:'sensor',actions:[],quantity:'temperature',unit:'degC',temperature_kind:'internal'}];
  const writes=await mock(page,[combo,meter]);await page.goto('/devices');await authenticate(page);
  await expect(page.getByLabel('channel-b current (A)')).toBeVisible();
- await page.getByRole('button',{name:'Reserve instruments'}).click();
+ await page.getByRole('button',{name:'Reserve instruments'}).click();await expect(page.getByRole('button',{name:'Release and stop'})).toBeVisible();
+ await page.getByRole('button',{name:'channel-b: set current'}).click();await expect(page.locator('#status')).toContainText('valid numeric value');expect(writes).toHaveLength(0);
  await page.getByLabel('channel-b current (A)').fill('.12');await page.getByRole('button',{name:'channel-b: set current'}).click();
  await expect(page.locator('#status')).toContainText('succeeded');
  expect(writes.find(w=>w.path.endsWith('/components/channel-b/current')).body).toEqual({current_a:.12});
