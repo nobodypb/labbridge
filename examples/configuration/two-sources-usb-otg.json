@@ -1,0 +1,31 @@
+{
+  "revision": 1,
+  "node_id": "sources",
+  "board": "esp32-s3-usb-otg",
+  "devices": [
+    {
+      "id": "supply-1",
+      "driver": "rd60xx",
+      "transport": "usb",
+      "endpoint": "123456",
+      "limits": {
+        "voltage_v": 4.2,
+        "current_a": 0.6,
+        "power_w": 3,
+        "max_age_ms": 3000
+      }
+    },
+    {
+      "id": "supply-2",
+      "driver": "rd60xx",
+      "transport": "usb",
+      "endpoint": "123457",
+      "limits": {
+        "voltage_v": 4.2,
+        "current_a": 0.6,
+        "power_w": 3,
+        "max_age_ms": 3000
+      }
+    }
+  ]
+}

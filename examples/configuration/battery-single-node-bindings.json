@@ -1,0 +1,19 @@
+{
+  "source": {
+    "node": "battery-node",
+    "device": "supply"
+  },
+  "load": {
+    "node": "battery-node",
+    "device": "load"
+  },
+  "interlock": {
+    "node": "battery-node",
+    "device": "paths"
+  },
+  "cell_probe": {
+    "node": "battery-node",
+    "device": "probe",
+    "channel": "cell"
+  }
+}

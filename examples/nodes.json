@@ -1,0 +1,19 @@
+{
+  "nodes": {
+    "bench": {
+      "endpoint": "serial:/dev/ttyACM0"
+    },
+    "source-node": {
+      "endpoint": "http://source-node.local",
+      "token_env": "SOURCE_NODE_TOKEN"
+    },
+    "load-node": {
+      "endpoint": "http://load-node.local",
+      "token_env": "LOAD_NODE_TOKEN"
+    },
+    "switch-node": {
+      "endpoint": "http://switch-node.local",
+      "token_env": "SWITCH_NODE_TOKEN"
+    }
+  }
+}

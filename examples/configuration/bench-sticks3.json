@@ -1,0 +1,19 @@
+{
+  "revision": 1,
+  "node_id": "bench",
+  "board": "m5stack-sticks3",
+  "devices": [
+    {
+      "id": "load",
+      "driver": "dl24m",
+      "transport": "ble",
+      "endpoint": "02:00:00:00:00:01",
+      "limits": {
+        "voltage_v": 25,
+        "current_a": 0.2,
+        "power_w": 5,
+        "max_age_ms": 3000
+      }
+    }
+  ]
+}

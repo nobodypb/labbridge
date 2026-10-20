@@ -46,6 +46,7 @@ public:
   Response request(const std::string &method, const std::string &path,
                    const Json &body, const Headers &, uint64_t now);
   void tick(uint64_t now);
+  void inhibit(std::string reason, uint64_t now);
   bool quiescent(uint64_t now);
   bool idle(uint64_t now);
   void cell_guard(const std::string &device, CellGuard guard);
@@ -64,7 +65,7 @@ private:
   void cancel_active(const std::string &, const std::string &);
   std::map<std::string, CellGuard> cell_guards_;
   std::map<std::string, bool> guard_tripped_;
-  std::string id_, boot_, board_, version_;
+  std::string id_, boot_, board_, version_, inhibition_;
   uint64_t counter_ = 0, prune_at_ = 0;
   std::map<std::string, std::shared_ptr<Driver>> devices_;
   std::map<std::string, Handler> handlers_;

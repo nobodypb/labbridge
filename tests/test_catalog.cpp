@@ -18,4 +18,13 @@ int main() {
     fail = true;
   }
   assert(fail);
+  c = Json::parse(
+      R"({"devices":[{"id":"load","driver":"test","transport":"ble","endpoint":"a","cell_temperature":{"sensor_device_id":"load","channel_id":"cell","minimum_c":40,"maximum_c":5,"max_age_ms":3000}}]})");
+  fail = false;
+  try {
+    catalog.validate(c, b);
+  } catch (const ConfigurationError &) {
+    fail = true;
+  }
+  assert(fail); // Reject an inverted guard before any factory can be allocated.
 }
