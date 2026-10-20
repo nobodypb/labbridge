@@ -145,9 +145,13 @@ std::string header(const Headers &h, const std::string &name) {
 } // namespace
 bool validate_request(const std::string &operation, const Json &body,
                       std::string &reason) {
-  static Json rules = Json::parse(generated::constraints);
-  auto schema = field(rules.at("requests"), operation.c_str());
-  return !schema || validate(body.get(), schema, rules.at("schemas"), reason);
+  for (const auto &rule : generated::request_rules)
+    if (operation == rule.operation) {
+      auto rules = Json::parse(rule.constraints);
+      return validate(body.get(), rules.at("request"), rules.at("schemas"),
+                      reason);
+    }
+  return true;
 }
 Response problem(int status, const std::string &detail) {
   Json j;
@@ -340,8 +344,7 @@ void Node::tick(uint64_t now) {
     if (p.second.active) {
       bool unsafe = false;
       for (auto &d : p.second.devices) {
-        auto state = devices_.at(d)->describe(now).text("state");
-        if (state == "fault" || state == "unavailable")
+        if (!devices_.at(d)->available(now))
           unsafe = true;
       }
       if (unsafe)
@@ -385,13 +388,6 @@ Response Node::request(const std::string &method, const std::string &path,
     return problem(404, "Unknown device");
   if (auto handler = handlers_.find(op); handler != handlers_.end())
     return handler->second(body, headers, now);
-  auto description = [&](const std::string &id) {
-    auto d = devices_.at(id)->describe(now), caps = d.item("capabilities");
-    caps.append(std::string("components"));
-    d.set("capabilities", caps)
-        .set("components", devices_.at(id)->components(now));
-    return d;
-  };
   if (op == "listComponents") {
     Json result;
     result.set("components", devices_.at(device)->components(now));
@@ -456,25 +452,18 @@ Response Node::request(const std::string &method, const std::string &path,
       return problem(422, e.what());
     }
   }
-  if (op == "getNode") {
-    Json j;
-    j.set("id", id_)
-        .set("boot_id", boot_)
-        .set("firmware_version", version_)
-        .set("board", board_)
-        .set("api_version", "0.1.0");
-    return {200, j};
-  }
+  if (op == "getNode")
+    return {200, node_info()};
   if (op == "listDevices") {
     auto list = Json::array();
     for (auto &p : devices_)
-      list.append(description(p.first));
+      list.append(description(p.first, now));
     Json j;
-    j.set("devices", list);
-    return {200, j};
+    j.set("devices", std::move(list));
+    return {200, std::move(j)};
   }
   if (op == "getDevice")
-    return {200, description(device)};
+    return {200, description(device, now)};
   if (op == "getMeasurements") {
     auto value = devices_.at(device)->measurements(now);
     value.set("boot_id", boot_);
@@ -639,5 +628,66 @@ Response Node::request(const std::string &method, const std::string &path,
     return {202, result, {{"Location", "/api/v1/operations/" + id}}};
   }
   return problem(501, "Operation not configured on this node");
+}
+Json Node::node_info() const {
+  Json j;
+  j.set("id", id_)
+      .set("boot_id", boot_)
+      .set("firmware_version", version_)
+      .set("board", board_)
+      .set("api_version", "0.1.0");
+  return j;
+}
+Json Node::description(const std::string &id, uint64_t now) {
+  auto &driver = *devices_.at(id);
+  auto d = driver.describe(now), caps = d.item("capabilities");
+  caps.append(std::string("components"));
+  d.set("capabilities", std::move(caps))
+      .set("components", driver.components(now));
+  return d;
+}
+Json Node::stream_snapshot(const std::string &device,
+                           const std::vector<std::string> &ids, uint64_t now,
+                           bool catalogue, bool sample) {
+  Json result;
+  // Read caches directly. Routing through request() would execute tick() on the
+  // stream worker, including recovery and NVS persistence on its smaller stack.
+  if (catalogue) {
+    result.set("node", node_info());
+    auto inventory = Json::array();
+    for (const auto &entry : devices_)
+      inventory.append(description(entry.first, now));
+    result.set("devices", std::move(inventory));
+  }
+  auto found = devices_.find(device);
+  if (found != devices_.end()) {
+    auto &driver = *found->second;
+    result.set("device_id", device).set("details", driver.stream_details(now));
+    if (sample) {
+      auto measurements = driver.measurements(now);
+      measurements.set("boot_id", boot_);
+      result.set("measurements", std::move(measurements));
+    }
+    auto actors = Json::array();
+    auto components = driver.components(now);
+    for (auto p = components.get()->child; p; p = p->next) {
+      Json component(cJSON_Duplicate(p, true));
+      auto kind = component.text("kind");
+      if (kind == "source" || kind == "sink" || kind == "switch") {
+        auto actor = driver.actuator_state(component.text("id"), now);
+        actor.set("component_id", component.text("id"));
+        actors.append(std::move(actor));
+      }
+    }
+    result.set("actors", std::move(actors));
+  }
+  auto operations = Json::array();
+  for (const auto &id : ids) {
+    auto found = operations_.find(id);
+    if (found != operations_.end())
+      operations.append(found->second);
+  }
+  result.set("operations", std::move(operations));
+  return result;
 }
 } // namespace labbridge

@@ -30,6 +30,15 @@ uint32_t packed_time(uint32_t s) {
 uint32_t seconds(uint32_t packed) {
   return ((packed >> 16) & 255) * 3600 + ((packed >> 8) & 255) * 60;
 }
+const char *mode_names[] = {"cc", "cv", "cr", "cp"};
+const char *mode_units[] = {"A", "V", "Ohm", "W"};
+const double mode_scales[] = {1000, 100, 10, 10};
+unsigned mode_number(const std::string &mode) {
+  for (unsigned n = 0; n < 4; ++n)
+    if (mode == mode_names[n])
+      return n;
+  throw std::invalid_argument("Unsupported load mode");
+}
 Json progress() {
   Json j;
   j.set("status", "running")
@@ -46,8 +55,8 @@ Json progress() {
 Dl24mDriver::Dl24mDriver(std::string id, std::string identity, Endpoint &wire,
                          Limits limits, Persist persist, Json journal)
     : id_(std::move(id)), identity_(std::move(identity)), wire_(wire),
-      tx_(wire,
-          [this](uint8_t c, uint32_t v, uint64_t now) { observe(c, v, now); }),
+      trace_(wire), tx_(trace_, [this](uint8_t c, uint32_t v,
+                                       uint64_t now) { observe(c, v, now); }),
       limits_(limits), persist_(std::move(persist)),
       journal_(std::move(journal)), result_(progress()) {
   if (!limits_.valid())
@@ -132,51 +141,186 @@ int Dl24mDriver::output(uint64_t now) const {
   auto i = values_.find(0x10);
   return fresh(0x10, now) && i->second.first <= 1 ? int(i->second.first) : -1;
 }
+const char *Dl24mDriver::state(uint64_t now) const {
+  return !wire_.connected()                                 ? "unavailable"
+         : need_stop_ && result_.text("status") == "failed" ? "fault"
+         : (journal_.boolean("menu_exit_pending") ||
+            queued_work_ != Work::none || work_ == Work::user ||
+            work_ == Work::snapshot || work_ == Work::stop ||
+            work_ == Work::drain || work_ == Work::restore)
+             ? "busy"
+         : need_stop_ || !restore_.empty()      ? "fault"
+         : fresh(0x11, now) && fresh(0x12, now) ? "ready"
+                                                : "unavailable";
+}
+Json Dl24mDriver::components(uint64_t) {
+  auto list = Json::array();
+  list.append(Json::parse(
+      R"({"id":"sink","kind":"sink","actions":["current","output","cutoff","duration"]})"));
+  for (auto field :
+       {std::make_pair("voltage", "V"), std::make_pair("current", "A"),
+        std::make_pair("power", "W"), std::make_pair("energy", "Wh"),
+        std::make_pair("charge", "Ah")})
+    list.append(Json()
+                    .set("id", field.first)
+                    .set("kind", "sensor")
+                    .set("actions", Json::array())
+                    .set("quantity", field.first)
+                    .set("unit", field.second));
+  if (values_.count(0x16))
+    list.append(Json::parse(
+        R"({"id":"temperature-internal","kind":"sensor","actions":[],"quantity":"temperature","unit":"degC","temperature_kind":"internal"})"));
+  return list;
+}
+Json Dl24mDriver::component_reading(const std::string &id, uint64_t now) {
+  if (id != "charge" && id != "energy")
+    return Driver::component_reading(id, now);
+  uint8_t command = id == "charge" ? 0x14 : 0x15;
+  auto found = values_.find(command);
+  Json result;
+  result.set("component_id", id)
+      .set("device_id", id_)
+      .set("quantity", id)
+      .set("unit", id == "charge" ? "Ah" : "Wh")
+      .set("quality", found == values_.end() ? "unavailable"
+                      : fresh(command, now)  ? "valid"
+                                             : "stale")
+      .set("sequence", double(sequence_))
+      .set("received_ms",
+           found == values_.end() ? 0. : double(found->second.second))
+      .set("age_ms",
+           found == values_.end() ? 0. : double(now - found->second.second));
+  if (found != values_.end())
+    result.set("value", found->second.first / 1000.);
+  return result;
+}
+Json Dl24mDriver::actuator_state(const std::string &id, uint64_t now) {
+  auto out = output(now);
+  return Json()
+      .set("state", state(now))
+      .set("output", out == 0   ? "off"
+                     : out == 1 ? "on"
+                                : "unknown")
+      .set("settings", actuator_settings(id, now));
+}
 bool Dl24mDriver::supports(const std::string &op) const {
   return op == "setSinkCutoff" || op == "setSinkDuration" ||
          op == "setOutput" || op == "setLoadCurrent" ||
          op == "getDl24mSettings" || op == "getDl24mRegisters" ||
-         op == "setDl24mBankTarget" || op == "readDl24mBankTarget" ||
-         op == "setDl24mSettings" || op == "resetDl24mCounters";
+         op == "getDl24mDiagnostics" || op == "setDl24mBankTarget" ||
+         op == "readDl24mBankTarget" || op == "setDl24mSettings" ||
+         op == "setDl24mMode" || op == "setDl24mTarget" ||
+         op == "resetDl24mCounters";
 }
 Json Dl24mDriver::describe(uint64_t now) {
   Json j, lim;
   auto caps = Json::array();
   for (auto c : {"load.cc", "output", "voltage.measure", "current.measure",
-                 "power.measure", "counters", "load.cutoff", "dl24m.settings"})
+                 "power.measure", "energy.measure", "charge.measure",
+                 "counters", "load.cutoff", "dl24m.settings"})
     caps.append(std::string(c));
   lim.set("voltage_v", limits_.voltage)
       .set("current_a", limits_.current)
       .set("power_w", limits_.power)
       .set("max_age_ms", double(limits_.max_age_ms));
+  auto features = Json::array();
+  auto feature = [&](const char *id, const char *status, const char *reason,
+                     const char *unit, const char *operation, bool off,
+                     bool lease) {
+    Json value;
+    value.set("id", id).set("status", status).set("reason", reason);
+    if (*unit)
+      value.set("unit", unit);
+    if (*operation)
+      value.set("operation", operation);
+    if (off)
+      value.set("requires_off", true);
+    if (lease)
+      value.set("requires_lease", true);
+    features.append(std::move(value));
+  };
+  feature("cc", "supported",
+          "CC 0.001 A steps; configured current and power limits apply", "A",
+          "setComponentCurrent", false, true);
+  feature("settings", "supported",
+          "Audited settings with original-value journal and checked readback",
+          "", "setDl24mSettings", true, true);
+  feature("counter-reset", "supported",
+          "Command 05, OFF required; original counters cannot be restored", "",
+          "resetDl24mCounters", true, true);
+  feature(
+      "diagnostics", "supported",
+      "Passive bounded BLE byte chunks and cached registers; no extra commands",
+      "raw", "getDl24mDiagnostics", false, false);
+  feature("elapsed", "supported",
+          "Read 13: packed HH MM SS; individual freshness applies", "s",
+          "getMeasurements", false, false);
+  feature("capacity", "supported",
+          "Read 14 counts mAh; Ah scale checked against a bounded CC integral. "
+          "Absolute accuracy unverified",
+          "Ah", "getMeasurements", false, false);
+  feature("energy", "supported",
+          "Read 15 counts mWh; Wh scale checked against a bounded CC integral. "
+          "Absolute accuracy unverified",
+          "Wh", "getMeasurements", false, false);
+  feature("cv", "supported",
+          "0.01 V steps; ON requires fresh OCP/OPP within local limits. "
+          "Verified on a 24 V / 0.15 A bench source",
+          "V", "setDl24mMode", true, true);
+  feature("cr", "supported",
+          "0.1 Ohm steps; current/power checked at configured maximum voltage. "
+          "Verified at 240 Ohm on a 24 V / 0.15 A source",
+          "Ohm", "setDl24mMode", true, true);
+  feature(
+      "cp", "supported",
+      "0.1 W steps; requires fresh nonzero cutoff and current/power bounds. "
+      "Verified at 2.4 W on a 24 V / 0.15 A source",
+      "W", "setDl24mMode", true, true);
+  feature("external-temperature", "unavailable",
+          "No audited BLE external probe register on this protocol revision; "
+          "internal temperature is not cell temperature",
+          "degC", "", false, false);
+  feature("fan-rpm", "unavailable",
+          "No audited RPM telemetry in this protocol revision", "rpm", "",
+          false, false);
+  feature("calibration", "unverified",
+          "Commands 46/4F alter calibration; backup/restore and reference "
+          "measurement not established",
+          "", "", true, true);
+  feature(
+      "zero", "unverified",
+      "No-load zero effect and reversible calibration backup not established",
+      "", "", true, true);
+  feature("factory-reset", "unverified",
+          "Command 4B resets settings; full calibration backup and restoration "
+          "not established",
+          "", "", true, true);
   auto out = output(now);
   j.set("id", id_)
       .set("driver", "dl24m")
       .set("identity", identity_)
       .set("transport", "ble")
       .set("capabilities", caps)
-      .set("state", !wire_.connected() ? "unavailable"
-                    : need_stop_ && result_.text("status") == "failed" ? "fault"
-                    : (journal_.boolean("menu_exit_pending") ||
-                       queued_work_ != Work::none || work_ == Work::user ||
-                       work_ == Work::snapshot || work_ == Work::stop ||
-                       work_ == Work::drain || work_ == Work::restore)
-                        ? "busy"
-                    : need_stop_ || !restore_.empty()      ? "fault"
-                    : fresh(0x11, now) && fresh(0x12, now) ? "ready"
-                                                           : "unavailable")
+      .set("features", std::move(features))
+      .set("state", state(now))
       .set("output", out == 0   ? "off"
                      : out == 1 ? "on"
                                 : "unknown")
       .set("limits", lim);
   return j;
 }
-Json Dl24mDriver::actuator_settings(const std::string &id, uint64_t now) {
-  auto s = Driver::actuator_settings(id, now),
-       settings = execute("getDl24mSettings", Json(), now);
-  for (auto key : {"cutoff_voltage_v", "time_limit_s"})
-    if (settings.has(key))
-      s.set(key, settings.number(key));
+Json Dl24mDriver::actuator_settings(const std::string &, uint64_t) {
+  Json s;
+  if (values_.count(0x21) && values_[0x21].first <= 3 && values_.count(0x17)) {
+    auto mode = values_[0x21].first;
+    s.set("regulation_mode", mode_names[mode]);
+    if (mode == 0)
+      s.set("current_a", values_[0x17].first / 1000.);
+  }
+  if (values_.count(0x18))
+    s.set("cutoff_voltage_v", values_[0x18].first / 100.);
+  if (values_.count(0x19))
+    s.set("time_limit_s", double(seconds(values_[0x19].first)));
   return s;
 }
 Json Dl24mDriver::measurements(uint64_t now) {
@@ -208,8 +352,50 @@ Json Dl24mDriver::measurements(uint64_t now) {
   if (values_.count(0x17) && values_.count(0x21) && values_[0x21].first == 0)
     j.set("set_current_a", values_[0x17].first / 1000.)
         .set("regulation_mode", "cc");
-  // Counter scaling is not independently calibrated. Host integrates V/I
-  // itself.
+  if (values_.count(0x21) && values_[0x21].first <= 3 && values_.count(0x17)) {
+    auto mode = values_[0x21].first;
+    j.set("regulation_mode", mode_names[mode])
+        .set("load_mode", mode_names[mode])
+        .set("load_target",
+             Json()
+                 .set("mode", mode_names[mode])
+                 .set("value", values_[0x17].first / mode_scales[mode])
+                 .set("unit", mode_units[mode]));
+  }
+  auto readings = Json::array();
+  for (auto entry : {std::make_pair(uint8_t(0x13), "elapsed"),
+                     std::make_pair(uint8_t(0x14), "capacity"),
+                     std::make_pair(uint8_t(0x15), "energy")}) {
+    Json reading;
+    auto c = entry.first;
+    reading.set("id", entry.second)
+        .set("unit", c == 0x13   ? "s"
+                     : c == 0x14 ? "Ah"
+                                 : "Wh")
+        .set("origin", c == 0x13   ? "dl24m.ble.13"
+                       : c == 0x14 ? "dl24m.ble.14"
+                                   : "dl24m.ble.15");
+    auto found = values_.find(c);
+    bool valid_value = found != values_.end();
+    if (valid_value && c == 0x13)
+      valid_value = ((found->second.first >> 8) & 255) < 60 &&
+                    (found->second.first & 255) < 60;
+    reading.set("quality", !valid_value    ? "unavailable"
+                           : fresh(c, now) ? "valid"
+                                           : "stale");
+    if (valid_value) {
+      auto value = found->second.first;
+      auto scaled =
+          c == 0x13 ? double(seconds(value) + (value & 255)) : value / 1000.;
+      reading.set("value", scaled)
+          .set("received_ms", double(found->second.second))
+          .set("age_ms", double(now - found->second.second));
+      if (c != 0x13 && fresh(c, now))
+        j.set(c == 0x14 ? "capacity_ah" : "energy_wh", scaled);
+    }
+    readings.append(reading);
+  }
+  j.set("native_readings", std::move(readings));
   j.set("temperature_channels", temps);
   return j;
 }
@@ -270,6 +456,7 @@ Json Dl24mDriver::operation(uint64_t now) {
   return j;
 }
 void Dl24mDriver::tick(uint64_t now) {
+  trace_.clock(now);
   if (generation_ != wire_.generation()) {
     generation_ = wire_.generation();
     menu_checked_ = false;
@@ -371,7 +558,7 @@ void Dl24mDriver::tick(uint64_t now) {
         snapshot_ready_ = true;
         work_ = Work::none;
         try {
-          execute("setDl24mSettings", snapshot_body_, now);
+          execute(snapshot_operation_, snapshot_body_, now);
         } catch (const std::exception &e) {
           snapshot_ready_ = false;
           result_.set("status", "failed").set("stage", e.what());
@@ -431,18 +618,26 @@ void Dl24mDriver::tick(uint64_t now) {
   }
   // Fast safety cycle between audited settings reads; settings never starve
   // V/I.
-  static constexpr uint8_t fast[] = {0x10, 0x11, 0x12, 0x16, 0x17, 0x21};
-  if (poll_ % 7 < 6)
-    polling_ = fast[poll_ % 7];
+  static constexpr uint8_t fast[] = {0x10, 0x11, 0x12, 0x16, 0x17, 0x21,
+                                     0x18, 0x38, 0x39, 0x13, 0x14, 0x15};
+  if (poll_ % 13 < 12)
+    polling_ = fast[poll_ % 13];
   else
     polling_ =
-        dl24m::dl24m_reads[(poll_ / 7) % dl24m::dl24m_reads.size()].command;
+        dl24m::dl24m_reads[(poll_ / 13) % dl24m::dl24m_reads.size()].command;
   ++poll_;
   work_ = Work::poll;
   tx_.start({{0, 0, polling_, {}, 0}}, now, false);
 }
 Json Dl24mDriver::execute(const std::string &op, const Json &body,
                           uint64_t now) {
+  trace_.clock(now);
+  if (op == "getDl24mDiagnostics") {
+    auto result = trace_.diagnostics();
+    result.set("registers",
+               execute("getDl24mRegisters", Json(), now).item("registers"));
+    return result;
+  }
   if (op == "setSinkCutoff" || op == "setSinkDuration")
     return execute("setDl24mSettings", body, now);
 
@@ -527,9 +722,84 @@ Json Dl24mDriver::execute(const std::string &op, const Json &body,
     sequence.push_back(std::move(cc));
     sequence.push_back({0, 0, 0x11, {}, 0});
     sequence.push_back({0, 0, 0x12, {}, 0});
+    sequence.push_back({0, 0, 0x10, 0, 0});
     result_ = progress();
     result_.set("stage", "bank_snapshot");
     foreground(Work::user, std::move(sequence), now);
+    return operation(now);
+  }
+  if (op == "setDl24mMode" || op == "setDl24mTarget") {
+    auto mode = mode_number(body.text("mode"));
+    if (output(now) != 0)
+      throw std::invalid_argument("Mode/target changes require confirmed OFF");
+    if (op == "setDl24mTarget") {
+      if (!fresh(0x21, now) || values_[0x21].first != mode)
+        throw std::invalid_argument(
+            "Fresh matching selected mode required before target changes");
+      double value = body.number("value", -1);
+      if (body.text("unit") != mode_units[mode] || !std::isfinite(value) ||
+          value < 0 ||
+          std::abs(value * mode_scales[mode] -
+                   std::round(value * mode_scales[mode])) > 1e-6 ||
+          (mode == 0 && value > limits_.current) ||
+          (mode == 1 && (value < .5 || value > limits_.voltage)) ||
+          (mode == 2 && (value < .1 || value > 240)) ||
+          (mode == 3 && (value < .1 || value > limits_.power)))
+        throw std::invalid_argument(
+            "Target unit, range or native resolution invalid");
+    }
+    if (!snapshot_ready_) {
+      bank_operation_ = false;
+      operation_started_ = now;
+      snapshot_reads_ = snapshot_writes_ = 0;
+      snapshot_body_ = body;
+      snapshot_operation_ = op;
+      result_ = progress();
+      std::vector<Step> reads{{0, 0, 0x10, 0, 0},
+                              {0, 0, 0x21, {}, 0},
+                              {0, 0, 0x17, {}, 0},
+                              {0, 0, 0x10, 0, 0}};
+      if (op == "setDl24mTarget")
+        reads[1].expected = mode;
+      foreground(Work::snapshot, std::move(reads), now);
+      return operation(now);
+    }
+    snapshot_ready_ = false;
+    unsigned original_mode = values_[0x21].first;
+    if (original_mode > 3 || (op == "setDl24mTarget" && original_mode != mode))
+      throw std::invalid_argument(
+          "Selected mode changed before target snapshot");
+    auto original_target = values_[0x17].first;
+    auto records = Json::array();
+    records.append(Json()
+                       .set("write", 6.)
+                       .set("wire", double(original_mode))
+                       .set("read", 33.)
+                       .set("expected", double(original_mode)));
+    records.append(Json()
+                       .set("write", 2.)
+                       .set("wire", double(original_target))
+                       .set("read", 23.)
+                       .set("expected", double(original_target)));
+    journal_.set("restore", records).set("requires_menu", false);
+    save();
+    build_restore();
+    std::vector<Step> steps{{0, 0, 0x10, 0, 0}};
+    if (op == "setDl24mMode") {
+      steps.push_back({6, mode, 0x21, mode, 60});
+      steps.push_back({0, 0, 0x17, {}, 0});
+    } else {
+      auto target =
+          uint32_t(std::lround(body.number("value") * mode_scales[mode]));
+      steps.push_back({0, 0, 0x21, mode, 0});
+      steps.push_back({2, target, 0x17, target, 60});
+    }
+    steps.push_back({0, 0, 0x10, 0, 0});
+    steps.push_back({0, 0, 0x11, {}, 0});
+    steps.push_back({0, 0, 0x12, {}, 0});
+    result_ = progress();
+    result_.set("stage", "mode_target_readback");
+    foreground(Work::user, std::move(steps), now);
     return operation(now);
   }
   bank_operation_ = false;
@@ -556,6 +826,7 @@ Json Dl24mDriver::execute(const std::string &op, const Json &body,
       reads.push_back({0x4c, 0, 0, {}, 60});
     }
     reads.push_back({0, 0, 0x10, 0, 0});
+    snapshot_operation_ = op;
     snapshot_body_ = body;
     result_ = progress();
     result_.set("stage", "snapshot");
@@ -572,12 +843,45 @@ Json Dl24mDriver::execute(const std::string &op, const Json &body,
       return operation(now);
     }
     if (output(now) != 0 || !fresh(0x11, now) || !fresh(0x12, now) ||
-        !fresh(0x17, now) || !fresh(0x21, now) || values_[0x21].first != 0)
+        !fresh(0x17, now) || !fresh(0x21, now) || values_[0x21].first > 3)
       throw std::invalid_argument(
-          "Fresh OFF state, CC mode and measurements required");
-    double v = values_[0x11].first / 1000., a = values_[0x17].first / 1000.;
-    if (v > limits_.voltage || a > limits_.current || v * a > limits_.power)
-      throw std::invalid_argument("Setpoint exceeds limits");
+          "Fresh OFF, known mode/target and measurements required");
+    auto mode = values_[0x21].first;
+    double v = values_[0x11].first / 1000.,
+           target = values_[0x17].first / mode_scales[mode];
+    double predicted_a = 0, predicted_w = 0;
+    if (mode == 0) {
+      predicted_a = target;
+      predicted_w = v * target;
+    }
+    if (mode == 1) {
+      if (target < .5 || target > limits_.voltage || !fresh(0x38, now) ||
+          !fresh(0x39, now) || values_[0x38].first == 0 ||
+          values_[0x39].first == 0)
+        throw std::invalid_argument("CV requires a valid voltage target and "
+                                    "fresh device OCP/OPP ceilings");
+      predicted_a = values_[0x38].first / 1000.;
+      predicted_w = values_[0x39].first / 1000.;
+    }
+    if (mode == 2) {
+      if (target <= 0)
+        throw std::invalid_argument("CR requires positive resistance");
+      predicted_a = limits_.voltage / target;
+      predicted_w = limits_.voltage * predicted_a;
+    }
+    if (mode == 3) {
+      if (target <= 0 || !fresh(0x18, now) || values_[0x18].first == 0 ||
+          v < values_[0x18].first / 100.)
+        throw std::invalid_argument("CP requires a positive target and fresh "
+                                    "nonzero cutoff below present voltage");
+      predicted_a = target / (values_[0x18].first / 100.);
+      predicted_w = target;
+    }
+    if (v > limits_.voltage || predicted_a > limits_.current + 1e-9 ||
+        predicted_w > limits_.power + 1e-9)
+      throw std::invalid_argument(
+          "Mode target/protection ceilings exceed configured current, voltage "
+          "or power limits");
     auto duration = body.number("max_duration_ms", limits_.max_duration_ms);
     if (body.has("max_duration_ms") &&
         (duration < 100 || duration > 86400000 ||
@@ -588,7 +892,7 @@ Json Dl24mDriver::execute(const std::string &op, const Json &body,
     journal_.set("stop_pending", true).set("may_be_on", true);
     save();
     enabled_at_ = now;
-    steps = {{0, 0, 0x21, 0, 0},        {0, 0, 0x17, values_[0x17].first, 0},
+    steps = {{0, 0, 0x21, mode, 0},     {0, 0, 0x17, values_[0x17].first, 0},
              {1, 0x010000, 0x10, 1, 0}, {0, 0, 0x11, {}, 0},
              {0, 0, 0x12, {}, 0},       {0, 0, 0x10, 1, 60}};
   } else if (op == "setLoadCurrent") {
@@ -645,6 +949,8 @@ Json Dl24mDriver::execute(const std::string &op, const Json &body,
       throw std::invalid_argument("No supported settings supplied");
     if (menu)
       steps.push_back({0x4c, 0, 0, {}, 60});
+    if (body.has("mode"))
+      steps.push_back({0, 0, 0x17, {}, 0});
     journal_.set("restore", records)
         .set("requires_menu", menu)
         .set("menu_exit_pending", menu);
@@ -659,6 +965,11 @@ Json Dl24mDriver::execute(const std::string &op, const Json &body,
     steps.push_back({0, 0, 0x11, {}, 0});
     steps.push_back({0, 0, 0x12, {}, 0});
   }
+  // Long menu/settings batches can outlive the cached OFF freshness window.
+  // Complete them only with a final OFF read, independently of earlier
+  // snapshots.
+  if (op == "setDl24mSettings" || op == "resetDl24mCounters")
+    steps.push_back({0, 0, 0x10, 0, 0});
   result_ = progress();
   foreground(Work::user, std::move(steps), now, enabling);
   return operation(now);

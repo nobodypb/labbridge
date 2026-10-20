@@ -16,10 +16,15 @@ public:
   virtual ~Driver() = default;
   virtual Json describe(uint64_t) = 0;
   virtual Json measurements(uint64_t) = 0;
+  virtual bool available(uint64_t now) {
+    auto state = describe(now).text("state");
+    return state != "fault" && state != "unavailable";
+  }
   virtual bool supports(const std::string &) const = 0;
   virtual void tick(uint64_t) = 0;
   virtual void stop(uint64_t) = 0;
   virtual Json execute(const std::string &, const Json &, uint64_t) = 0;
+  virtual Json stream_details(uint64_t) { return Json(); }
   virtual Json operation(uint64_t) { return Json(); }
   virtual Json components(uint64_t now);
   virtual Json sensor_readings(uint64_t now);
@@ -54,6 +59,9 @@ public:
   }
   Response request(const std::string &method, const std::string &path,
                    const Json &body, const Headers &, uint64_t now);
+  Json stream_snapshot(const std::string &device,
+                       const std::vector<std::string> &operations, uint64_t now,
+                       bool catalogue = true, bool sample = true);
   void tick(uint64_t now);
   void inhibit(std::string reason, uint64_t now);
   bool quiescent(uint64_t now);
@@ -61,6 +69,8 @@ public:
   void cell_guard(const std::string &device, CellGuard guard);
 
 private:
+  Json node_info() const;
+  Json description(const std::string &, uint64_t);
   struct Lease {
     std::vector<std::string> devices;
     uint64_t deadline, ttl;

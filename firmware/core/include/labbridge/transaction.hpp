@@ -8,9 +8,16 @@ namespace labbridge {
 using Bytes = dl24m::Bytes;
 // Send must enqueue or finish promptly. ATT waits belong in a transport worker,
 // never in the node's safety loop. Each endpoint owns its receive stream.
+struct WireObservation {
+  uint64_t sequence, received_ms, generation;
+  bool transmitted, truncated;
+  Bytes bytes;
+};
 class Endpoint {
 public:
   virtual ~Endpoint() = default;
+  virtual bool trace_supported() const { return false; }
+  virtual std::vector<WireObservation> traffic() const { return {}; }
   virtual bool connected() const = 0;
   virtual uint64_t generation() const = 0;
   virtual bool writable() const { return true; }
