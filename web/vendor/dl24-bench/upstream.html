@@ -1,0 +1,744 @@
+<!doctype html>
+<!-- SPDX-License-Identifier: GPL-3.0-or-later -->
+<!-- SPDX-FileCopyrightText: © 2026 DL24 reverse-engineering project contributors -->
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>DL24 Bench — Control panel</title>
+<style>
+  html[data-theme="dark"]{
+    --bg:#0c1116;--panel:#121922;--panel2:#0a0e13;--bezel:#1d2630;
+    --line:#2a3744;--ink:#e8eef2;--dim:#74848f;--rail:#0e141b;
+    --grid:#19222c;--tile:#0a0e13;
+    --v:#37d0b6;--i:#f2a33c;--w:#7aa2ff;--t:#e0556f;--r:#b48ce0;
+    --ok:#37d0b6;--warn:#f2c14e;--bad:#e0556f;
+    --accent:#1e6f63;--accent2:#15534b;--accentbd:#1d8073;--accentink:#eafffb;
+  }
+  html[data-theme="light"]{
+    --bg:#eef2f5;--panel:#ffffff;--panel2:#f6f8fa;--bezel:#d4dde4;
+    --line:#dbe3e9;--ink:#1b2730;--dim:#5f717e;--rail:#f6f8fa;
+    --grid:#e6ecf0;--tile:#f6f8fa;
+    --v:#0e8f7c;--i:#c9760f;--w:#2e62d8;--t:#c23552;--r:#7a47b8;
+    --ok:#0e8f7c;--warn:#b8860b;--bad:#c23552;
+    --accent:#1683b8;--accent2:#0f6f9e;--accentbd:#1683b8;--accentink:#ffffff;
+  }
+  *{box-sizing:border-box} html,body{margin:0;height:100%}
+  body{background:var(--bg);color:var(--ink);
+    font:14px/1.4 ui-sans-serif,system-ui,"Segoe UI",Roboto,sans-serif;-webkit-font-smoothing:antialiased}
+  .mono{font-family:ui-monospace,"SF Mono",Menlo,Consolas,monospace}
+  .top{display:flex;align-items:center;gap:14px;padding:10px 16px;background:var(--panel);border-bottom:1px solid var(--bezel)}
+  .mark{font:700 16px/1 ui-monospace,Menlo,Consolas,monospace;letter-spacing:.14em}
+  .mark b{color:var(--v)} .sub{color:var(--dim);font-size:12px} .spacer{flex:1}
+  button,select,input{font:inherit;color:var(--ink)}
+  .btn{background:var(--panel2);border:1px solid var(--line);border-radius:8px;padding:8px 13px;cursor:pointer}
+  .btn:hover{border-color:var(--dim)} .btn:active{transform:translateY(1px)}
+  .btn.primary{background:linear-gradient(var(--accent),var(--accent2));border-color:var(--accentbd);color:var(--accentink)}
+  .btn[disabled]{opacity:.45;cursor:not-allowed}
+  /* Connect button doubles as the connection lamp: red LED+outline when off,
+     green when connected. No separate status text (keeps the top bar steady). */
+  .connbtn{display:inline-flex;align-items:center;gap:8px}
+  .connbtn .led{width:9px;height:9px;border-radius:50%;background:currentColor;
+    box-shadow:0 0 7px currentColor;flex:none}
+  .connbtn.off{color:var(--bad);border-color:var(--bad)}
+  .connbtn.on{color:var(--ok);border-color:var(--ok)}
+  .toggle{display:flex;border:1px solid var(--line);border-radius:8px;overflow:hidden}
+  .toggle button{background:var(--panel2);border:0;padding:8px 11px;cursor:pointer;color:var(--dim)}
+  .toggle button.sel{background:var(--accent);color:var(--accentink)}
+  .app{display:grid;grid-template-columns:248px 1fr;height:calc(100vh - 53px - 24px)}
+  @media(max-width:820px){.app{grid-template-columns:1fr;height:auto}}
+  /* bottom hint bar: quiet context help shown on hover (desktop-app style) */
+  #helpbar{position:fixed;left:0;right:0;bottom:0;height:24px;line-height:24px;z-index:40;
+    background:var(--panel);border-top:1px solid var(--bezel);color:var(--dim);
+    font-size:11.5px;padding:0 14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  @media(max-width:820px){#helpbar{display:none}}
+  .rail{background:var(--rail);border-right:1px solid var(--bezel);padding:14px;overflow:auto}
+  .main{display:flex;flex-direction:column;min-width:0;padding:14px;gap:12px}
+  .grp{margin-bottom:16px}
+  .glab{color:var(--dim);font-size:11px;letter-spacing:.16em;text-transform:uppercase;margin-bottom:8px}
+  /* collapsible config group: <details class="grp">, summary styled like .glab */
+  details.grp>summary{color:var(--dim);font-size:11px;letter-spacing:.16em;text-transform:uppercase;
+    margin-bottom:8px;cursor:pointer;list-style:none;display:flex;align-items:center;gap:6px;user-select:none}
+  details.grp>summary::-webkit-details-marker{display:none}
+  details.grp>summary::before{content:"\25B8";font-size:10px;color:var(--dim);transition:transform .12s}
+  details.grp[open]>summary::before{transform:rotate(90deg)}
+  .modes{display:grid;grid-template-columns:repeat(4,1fr);gap:6px}
+  .mode{background:var(--panel2);border:1px solid var(--line);border-radius:8px;padding:10px 0;text-align:center;cursor:pointer;letter-spacing:.05em}
+  .mode.sel{background:linear-gradient(var(--accent),var(--accent2));border-color:var(--accentbd);color:var(--accentink)}
+  .setrow{display:grid;grid-template-columns:1fr auto;gap:8px;align-items:end}
+  label.fld{display:block;color:var(--dim);font-size:11px;letter-spacing:.1em;text-transform:uppercase;margin:0 0 5px}
+  input[type=number]{width:100%;background:var(--panel2);border:1px solid var(--line);border-radius:8px;padding:9px;font-variant-numeric:tabular-nums}
+  /* Picoscope-style load toggle: a coloured edge stripe (the "lamp") shows
+     state at a glance — red stripe on the left = stopped, green stripe on the
+     right = running — while the centre label says what is on. */
+  .loadbtn{position:relative;display:flex;align-items:center;justify-content:center;width:100%;
+    padding:0;margin-top:4px;border:1px solid var(--line);border-radius:8px;background:var(--panel2);
+    cursor:pointer;font-weight:600;letter-spacing:.1em;overflow:hidden;color:var(--dim)}
+  .loadbtn:active{transform:translateY(1px)}
+  /* stripe is absolutely positioned so it never shifts the centred label */
+  .loadbtn .ind{position:absolute;top:0;bottom:0;width:14px;background:var(--dim);transition:background .12s}
+  .loadbtn .lbl{padding:13px 22px}
+  .loadbtn.stopped{color:var(--bad);border-color:var(--bad)}
+  .loadbtn.stopped .ind{left:0;background:var(--bad)}
+  .loadbtn.running{color:var(--ok);border-color:var(--ok)}
+  .loadbtn.running .ind{right:0;background:var(--ok)}
+  .loadbtn[disabled]{opacity:.5;cursor:not-allowed;color:var(--dim);border-color:var(--line)}
+  .loadbtn[disabled] .ind{background:var(--dim)}
+  .sel-input{background:var(--panel2);border:1px solid var(--line);border-radius:8px;padding:5px 7px;cursor:pointer}
+  .limits{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+  .limits .small{font-size:11px;color:var(--dim);margin-bottom:3px}
+  .limits input{padding:7px}
+  .hint{color:var(--dim);font-size:12px;line-height:1.5;margin-top:6px}
+  .screen{flex:1;min-height:240px;background:
+    repeating-linear-gradient(0deg,transparent,transparent 39px,var(--grid) 39px,var(--grid) 40px),
+    repeating-linear-gradient(90deg,transparent,transparent 39px,var(--grid) 39px,var(--grid) 40px),
+    var(--panel2);border:1px solid var(--bezel);border-radius:12px;position:relative}
+  .legend{position:absolute;top:12px;left:16px;display:flex;gap:14px;font-size:12px;z-index:2}
+  .legend span{cursor:pointer;user-select:none} .legend span.off{opacity:.35;text-decoration:line-through}
+  .chartbtn{position:absolute;top:10px;right:12px;z-index:2;background:var(--panel2);
+    border:1px solid var(--line);border-radius:7px;color:var(--dim);font-size:11px;padding:3px 9px;cursor:pointer}
+  .chartbtn:hover{border-color:var(--dim);color:var(--ink)} .chartbtn:active{transform:translateY(1px)}
+  .meas{display:grid;grid-template-columns:repeat(8,1fr);gap:1px;background:var(--line);border:1px solid var(--bezel);border-radius:12px;overflow:hidden}
+  @media(max-width:1100px){.meas{grid-template-columns:repeat(4,1fr)}}
+  .cell{background:var(--tile);padding:11px 12px 10px}
+  .cell .lab{color:var(--dim);font-size:10px;letter-spacing:.12em;text-transform:uppercase}
+  .cell .val{font:600 22px/1.05 ui-monospace,Menlo,Consolas,monospace;margin-top:5px;font-variant-numeric:tabular-nums}
+  .cell .un{font-size:12px;color:var(--dim);margin-left:3px}
+  .cell.v .val{color:var(--v)} .cell.i .val{color:var(--i)} .cell.w .val{color:var(--w)} .cell.t .val{color:var(--t)} .cell.r .val{color:var(--r)}
+  .toast{position:fixed;left:50%;bottom:34px;transform:translateX(-50%);background:var(--panel);border:1px solid var(--line);border-left:3px solid var(--warn);border-radius:10px;padding:14px 16px;max-width:520px;box-shadow:0 12px 40px #0006;display:none}
+  .toast.show{display:block} .toast h4{margin:0 0 6px;font-size:13px} .toast p{margin:0 0 10px;color:var(--dim);font-size:13px}
+  .toast .acts{display:flex;gap:8px;justify-content:flex-end}
+  /* gear button: compact icon, same chrome as .btn */
+  .iconbtn{background:var(--panel2);border:1px solid var(--line);border-radius:8px;width:36px;height:36px;
+    display:inline-flex;align-items:center;justify-content:center;cursor:pointer;padding:0;color:var(--ink)}
+  .iconbtn:hover{border-color:var(--dim)} .iconbtn:active{transform:translateY(1px)}
+  .iconbtn svg{width:18px;height:18px;display:block}
+  /* centered Settings modal */
+  .modal{position:fixed;inset:0;z-index:60;display:flex;align-items:center;justify-content:center}
+  .modal[hidden]{display:none}
+  .modal .backdrop{position:absolute;inset:0;background:#0009}
+  .modal .card{position:relative;background:var(--panel);border:1px solid var(--bezel);border-radius:14px;
+    width:min(720px,94vw);max-height:90vh;display:flex;flex-direction:column;box-shadow:0 24px 70px #000a}
+  .modal .head{display:flex;align-items:center;gap:10px;padding:14px 16px;border-bottom:1px solid var(--bezel)}
+  .modal .head h3{margin:0;font-size:15px;letter-spacing:.04em} .modal .head .spacer{flex:1}
+  .modal .body{padding:6px 16px 16px;overflow:auto}
+  /* settings sections + rows — copy a .srow to add an item */
+  .sgrp{padding:14px 0;border-bottom:1px solid var(--line)} .sgrp:last-child{border-bottom:0}
+  .sgrp>.glab{margin-bottom:10px}
+  .srow{display:grid;grid-template-columns:1fr auto auto;gap:8px;align-items:center;margin-bottom:8px}
+  .srow.calrow{grid-template-columns:1fr auto auto auto}  /* label · live value · input · Set */
+  .srow:last-child{margin-bottom:0}
+  .srow label{color:var(--dim);font-size:12px} .srow .now{color:var(--ink);font-variant-numeric:tabular-nums;min-width:62px;text-align:right}
+  .srow input,.srow select{width:110px;background:var(--panel2);border:1px solid var(--line);border-radius:8px;padding:7px;font-variant-numeric:tabular-nums}
+  .srow .btn{padding:7px 12px}
+  .danger{color:var(--bad)} .danger-row{border:1px solid var(--bad);border-radius:8px;padding:8px;margin-top:6px}
+  .actions{display:flex;flex-wrap:wrap;gap:8px}
+  .chkrow{display:flex;align-items:center;gap:8px;color:var(--dim);font-size:12px;margin:4px 0 10px}
+</style>
+</head>
+<body>
+<div class="top">
+  <div class="mark">DL<b>24</b></div>
+  <div class="sub">Control panel · HID 0483:5750</div>
+  <div class="spacer"></div>
+  <div class="toggle" id="pollMode"
+       data-help="Live: poll continuously while connected. Load: poll only while the load is ON — the readout & chart freeze and hold when the load is off (intentional, not a bug)."
+       title="Live = poll continuously while connected. Load = poll only while the load is on (readout freezes when off).">
+    <button data-pm="live" class="sel">Live</button><button data-pm="load">Load</button></div>
+  <label class="sub" style="display:flex;align-items:center;gap:6px"
+         data-help="How often to poll the device. Live and settings frames alternate, so each block refreshes at twice this rate."
+         title="Send interval. Live + settings blocks alternate, so each block refreshes at twice this period.">Poll
+    <select id="pollRate" class="sel-input">
+      <option value="100">100 ms</option><option value="150" selected>150 ms</option>
+      <option value="250">250 ms</option><option value="500">500 ms</option>
+      <option value="1000">1 s</option>
+    </select></label>
+  <div class="toggle" id="theme" data-help="Switch between light and dark themes."><button data-th="light">Light</button><button data-th="dark" class="sel">Dark</button></div>
+  <button id="connect" class="btn connbtn off" data-help="Connect to a DL24 over USB (WebHID, Chromium only). The LED is the connection lamp: red = off, green = connected."><span class="led"></span><span id="connLbl">Connect</span></button>
+  <button id="export" class="btn" disabled data-help="Download all logged samples (time, V/I/W, temps, Wh, mAh) as a CSV file.">Export CSV</button>
+  <button id="gear" class="iconbtn" title="Settings" aria-label="Settings" data-help="Settings: brightness, standby, language, protection limits, calibration, and device resets.">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <circle cx="12" cy="12" r="3"></circle>
+      <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09a1.65 1.65 0 0 0 1.51-1 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
+    </svg>
+  </button>
+</div>
+<div class="app">
+  <aside class="rail">
+    <div class="grp"><div class="glab">Mode</div>
+      <div class="modes">
+        <div class="mode" data-mode="cc" data-help="Constant Current — the load draws a fixed current (A) you set.">CC</div><div class="mode" data-mode="cv" data-help="Constant Voltage — the load holds a fixed terminal voltage (V).">CV</div>
+        <div class="mode" data-mode="cr" data-help="Constant Resistance — the load acts like a fixed resistor (Ω).">CR</div><div class="mode" data-mode="cp" data-help="Constant Power — the load draws a fixed wattage (W).">CP</div>
+      </div>
+    </div>
+    <div class="grp"><div class="glab">Setpoint</div>
+      <div class="setrow">
+        <div data-help="Target value for the active mode (units follow it: CC=A, CV=V, CR=Ω, CP=W). Greyed value = the device's current setpoint."><label class="fld">Value <span id="setUnit" class="sub">(A)</span></label>
+          <input id="setVal" type="number" step="0.001" min="0" placeholder="1.000"></div>
+        <button id="setBtn" class="btn" disabled data-help="Send the setpoint above to the device.">Set</button>
+      </div>
+      <button id="loadBtn" class="loadbtn stopped" type="button" disabled
+        data-help="Turn the electronic load ON/OFF. Green stripe = on (drawing), red = off.">
+        <span class="ind"></span><span class="lbl">LOAD OFF</span></button>
+    </div>
+    <details class="grp" open data-help="Auto-stop the load after this run time (hh:mm). 0:00 = no limit. Set pushes both fields to the device."><summary>Discharge time limit</summary>
+      <div class="setrow" style="grid-template-columns:1fr 1fr auto">
+        <div><label class="fld">Hours</label><input id="thr" type="number" min="0" max="99" step="1" placeholder="0"></div>
+        <div><label class="fld">Min</label><input id="tmin" type="number" min="0" max="59" step="1" placeholder="0"></div>
+        <button id="timeBtn" class="btn" disabled>Set</button>
+      </div>
+      <div class="hint" style="margin-top:4px">Auto-stops the load when it expires. 0:00 = no limit. Verify on the device after setting.</div>
+    </details>
+    <div class="hint">Setpoint units follow the mode (CC=A · CV=V · CR=Ω · CP=W).
+      CV battery-mode warnings must be cleared on the device’s front panel.
+      Brightness, limits, calibration &amp; device resets live in <b>⚙ Settings</b> (top-right).</div>
+  </aside>
+  <div class="main">
+    <div class="screen">
+      <div class="legend">
+        <span data-s="1" style="color:var(--v)" data-help="Click to show/hide the Voltage trace on the chart.">● Voltage</span>
+        <span data-s="2" style="color:var(--i)" data-help="Click to show/hide the Current trace on the chart.">● Current</span>
+        <span data-s="3" style="color:var(--w)" data-help="Click to show/hide the Power trace on the chart.">● Power</span>
+      </div>
+      <button id="clearBtn" class="chartbtn" data-help="Clear the chart trace and the in-app CSV log buffer. Does NOT touch the device's stored Wh/mAh — use Settings → Zero all data for that.">Clear</button>
+      <canvas id="chart" style="position:absolute;inset:8px 10px 6px;width:calc(100% - 20px);height:calc(100% - 14px)"></canvas>
+    </div>
+    <div class="meas">
+      <div class="cell v"><div class="lab">Voltage</div><div class="val"><span id="rV">0.000</span><span class="un">V</span></div></div>
+      <div class="cell i"><div class="lab">Current</div><div class="val"><span id="rI">0.0000</span><span class="un">A</span></div></div>
+      <div class="cell w"><div class="lab">Power</div><div class="val"><span id="rW">0.000</span><span class="un">W</span></div></div>
+      <div class="cell r" data-help="Total resistance the load sees (voltage ÷ current). Shows — with no load."><div class="lab">Resistance</div><div class="val"><span id="rR">—</span><span class="un">Ω</span></div></div>
+      <div class="cell t" data-help="Temperature of the load's MOSFET / heatsink."><div class="lab">MOS temp</div><div class="val"><span id="rT">0.0</span><span class="un">°C</span></div></div>
+      <div class="cell" data-help="Charge drawn since the last 'Zero all data' (accumulates while the load runs)."><div class="lab">Capacity</div><div class="val"><span id="rCap">0.000</span><span class="un">mAh</span></div></div>
+      <div class="cell" data-help="Energy drawn since the last 'Zero all data'."><div class="lab">Energy</div><div class="val"><span id="rWh">0.000</span><span class="un">Wh</span></div></div>
+      <div class="cell" data-help="Time since the load was last turned ON in this app."><div class="lab">Elapsed</div><div class="val mono" style="font-size:18px"><span id="rTime">00:00:00</span></div></div>
+    </div>
+    <div class="meas" style="grid-template-columns:repeat(3,1fr)">
+      <div class="cell" data-help="External temperature probe (ETS). 'Wait..' means no probe is detected."><div class="lab">ETS probe</div><div class="val" style="font-size:18px"><span id="rExt">Wait..</span></div></div>
+      <div class="cell" data-help="Discharge cutoff voltage currently set on the device (menu 09); the load stops below it."><div class="lab">Cutoff voltage (applied)</div><div class="val" style="font-size:18px"><span id="rCut">—</span><span class="un">V</span></div></div>
+      <div class="cell" data-help="Cooling-fan speed (0 when idle, ramps under load)."><div class="lab">Fan</div><div class="val" style="font-size:18px"><span id="rRPM">0</span><span class="un">rpm</span></div></div>
+    </div>
+    <details style="margin-top:2px" data-help="Protocol debug: live hex frames + a snapshot/diff tool to find which byte holds a value (change one thing, capture a label, repeat).">
+      <summary class="sub" style="cursor:pointer">Raw frames &amp; field finder (debug)</summary>
+      <div class="sub" style="font-size:11px;margin-top:4px">Live (0x05):</div>
+      <div class="mono" id="rawLive" style="font-size:11px;color:var(--dim);word-break:break-all;padding:2px 0"></div>
+      <div class="sub" style="font-size:11px">Settings (0x03):</div>
+      <div class="mono" id="rawSet" style="font-size:11px;color:var(--i);word-break:break-all;padding:2px 0"></div>
+      <div class="sub" style="font-size:11px;margin-top:6px"><b>Field finder:</b> change ONE thing on the device,
+        capture a labelled snapshot, repeat. Offsets that differ across snapshots are listed for each block,
+        decoded as byte / BE-float32 (settings) / LE-uint32 (live), so you can spot which offset holds a value.</div>
+      <div style="display:flex;gap:6px;flex-wrap:wrap;margin:6px 0;align-items:center">
+        <input id="snapLabel" placeholder="label, e.g. cutoff=3V" style="flex:1;min-width:140px;background:var(--panel2);border:1px solid var(--line);border-radius:8px;padding:6px 8px">
+        <button class="btn" id="snapBtn" disabled style="padding:5px 10px">Capture</button>
+        <button class="btn" id="snapClear" style="padding:5px 10px">Clear</button>
+      </div>
+      <div class="sub" id="snapState" style="font-size:11px">No snapshots yet.</div>
+      <div class="mono" id="snapDiff" style="font-size:11px;color:var(--v);word-break:break-all;padding:4px 0;white-space:pre-wrap"></div>
+    </details>
+  </div>
+</div>
+<div id="settingsModal" class="modal" hidden>
+  <div class="backdrop" id="settingsBackdrop"></div>
+  <div class="card">
+    <div class="head">
+      <h3>Settings</h3><span class="sub" id="setConn">device not connected</span>
+      <span class="spacer"></span>
+      <button class="iconbtn" id="settingsClose" title="Close" aria-label="Close">✕</button>
+    </div>
+    <div class="body">
+      <!-- DISPLAY ---------------------------------------------------------- -->
+      <div class="sgrp"><div class="glab">Display</div>
+        <div class="srow"><label>Display brightness (0–9)</label>
+          <input id="dispBri" type="number" min="0" max="9" step="1" placeholder="–">
+          <button class="btn needdev" id="dispBriBtn" disabled>Set</button></div>
+        <div class="srow"><label>Standby brightness (0–9)</label>
+          <input id="stbyBri" type="number" min="0" max="9" step="1" placeholder="–">
+          <button class="btn needdev" id="stbyBriBtn" disabled>Set</button></div>
+        <div class="srow"><label>Standby time (s)</label>
+          <input id="stbyTime" type="number" min="0" step="1" placeholder="–">
+          <button class="btn needdev" id="stbyTimeBtn" disabled>Set</button></div>
+        <div class="srow" data-help="Set the DEVICE's display language (this app's text doesn't change). Write-only — not reflected back."><label>Device language</label>
+          <select id="langSel"><option value="1">English</option><option value="3">Chinese</option></select>
+          <button class="btn needdev" id="langBtn" disabled>Set</button></div>
+      </div>
+      <!-- PROTECTION LIMITS ------------------------------------------------ -->
+      <div class="sgrp"><div class="glab">Protection limits</div>
+        <div class="srow"><label>Over-current (A)</label><input id="ocp" type="number" step="0.1"><span></span></div>
+        <div class="srow"><label>Over-power (W)</label><input id="opp" type="number" step="1"><span></span></div>
+        <div class="srow" data-help="Over-temperature limit for the external probe (menu 12, °C)."><label>Over-temp Ext.T (°C)</label><input id="otext" type="number" step="1"><span></span></div>
+        <div class="srow"><label>Over-temp MOS (°C)</label><input id="otmos" type="number" step="1"><span></span></div>
+        <div class="srow"><label>Cutoff voltage (V)</label><input id="cutv" type="number" step="0.1"><span></span></div>
+        <div class="actions" style="margin-top:8px"><button id="limBtn" class="btn needdev" disabled>Apply limits</button></div>
+      </div>
+      <!-- CALIBRATION ------------------------------------------------------ -->
+      <div class="sgrp" data-help="Per-channel gain multipliers. Writing rescales ALL readings — record the current gains first. The 'now' column is the live device value."><div class="glab">Calibration <span class="danger">⚠ rescales all readings</span></div>
+        <div class="srow calrow"><label>Voltage gain</label><span class="now" id="rCalV">—</span>
+          <input id="calV" type="number" step="0.0001" placeholder="gain"><button class="btn needdev calset" id="calVBtn" disabled>Set</button></div>
+        <div class="srow calrow"><label>Current gain</label><span class="now" id="rCalI">—</span>
+          <input id="calI" type="number" step="0.0001" placeholder="gain"><button class="btn needdev calset" id="calIBtn" disabled>Set</button></div>
+        <div class="srow calrow"><label>Ext-temp gain</label><span class="now" id="rCalT">—</span>
+          <input id="calT" type="number" step="0.0001" placeholder="gain"><button class="btn needdev calset" id="calTBtn" disabled>Set</button></div>
+        <div class="actions" style="margin-top:8px"><button class="btn needdev" id="calCopy" disabled>Copy current gains (backup)</button></div>
+        <div class="chkrow"><input type="checkbox" id="calEnable"><label for="calEnable" class="danger">Enable calibration writes — I understand they rescale every reading</label></div>
+        <div class="hint">The protocol takes arbitrary floats, so you can restore exact factory gains the
+          0.001-step front panel can't reach. Record the values above first.</div>
+      </div>
+      <!-- DEVICE ACTIONS --------------------------------------------------- -->
+      <div class="sgrp"><div class="glab">Device actions</div>
+        <div class="actions">
+          <button class="btn needdev" id="zeroNoLoad" disabled data-help="Tare the current meter's no-load offset. Run with NO load connected.">Zero no-load current</button>
+          <button class="btn needdev" id="zeroData" disabled data-help="Wipe all running statistics on the device: run time, energy (Wh) and capacity (mAh).">Zero all data</button>
+          <button class="btn needdev danger" id="restoreDefaults" disabled data-help="Reset all settings to defaults EXCEPT voltage & current cal — it DOES reset the ext-temp cal.">Restore defaults</button>
+        </div>
+        <div class="hint" style="margin-top:8px">“Zero all data” wipes run time / Wh / mAh. “Restore defaults”
+          resets all settings except voltage &amp; current cal (it <b>does</b> reset ext-temp cal).</div>
+      </div>
+      <div class="sub" style="text-align:center;font-size:11px;padding:12px 0 2px">
+        Copyright © 2026 ·
+        <a href="https://www.gnu.org/licenses/gpl-3.0.html" target="_blank" rel="noopener"
+           style="color:inherit">GPLv3</a>
+      </div>
+    </div>
+  </div>
+</div>
+<div id="cvToast" class="toast">
+  <h4>Constant-voltage mode</h4>
+  <p>If a battery or charged source is connected, the unit shows a safety warning
+     that must be cleared on its front panel — it can’t be bypassed over USB.</p>
+  <div class="acts"><button class="btn" id="cvDismiss">Got it</button><button class="btn" id="cvNever">Don’t show again</button></div>
+</div>
+<div id="helpbar" data-help="Hover any control for a short description."></div>
+<script>
+const VID=0x0483,PID=0x5750;
+const CMD={POLL_MAIN:0x03,POLL_LIVE:0x05,SETPOINT:0x21,LOAD:0x25,CUTOFF_V:0x29,
+  OCP:0x2C,OPP:0x2D,OT_EXT:0x2E,OT_MOS:0x2F,TIMER:0x31,
+  MODE_CC:0x47,MODE_CV:0x48,MODE_CR:0x49,MODE_CP:0x4A,
+  LANG:0x20,DISP_BRI:0x22,STBY_BRI:0x23,STBY_TIME:0x24,
+  CAL_EXT:0x26,CAL_V:0x27,CAL_I:0x28,
+  ZERO_NOLOAD:0x32,RESTORE:0x33,ZERO_DATA:0x34};
+const MODE_CMD={cc:CMD.MODE_CC,cv:CMD.MODE_CV,cr:CMD.MODE_CR,cp:CMD.MODE_CP};
+const UNIT={cc:'A',cv:'V',cr:'\u03A9',cp:'W'};
+const $=id=>document.getElementById(id);
+
+function frame(cmd,args=[]){const b=new Uint8Array(64);b[0]=0x55;b[1]=0x05;b[2]=0x01;b[3]=cmd;
+  args.forEach((v,i)=>b[4+i]=v);b[4+args.length]=0xEE;b[5+args.length]=0xFF;return b;}
+function f32be(x){const d=new DataView(new ArrayBuffer(4));d.setFloat32(0,x,false);
+  return [d.getUint8(0),d.getUint8(1),d.getUint8(2),d.getUint8(3)];}
+function u32be(x){const d=new DataView(new ArrayBuffer(4));d.setUint32(0,x>>>0,false);
+  return [d.getUint8(0),d.getUint8(1),d.getUint8(2),d.getUint8(3)];}
+
+function parseLive(dv,b){
+  if(b[0]!==0xAA||b[1]!==0x05||b[3]!==CMD.POLL_LIVE)return null;
+  const u=o=>dv.getUint32(o,true);const rm=u(20);
+  // o52 = load state byte, 01=on 00=off (CONFIRMED off/on/off/on capture).
+  // o60 is a status BITFIELD: 0x20 = ETS probe absent, 0x80 = load on — so the
+  // probe check must mask, not compare (0xA0 = load on + probe absent).
+  const present=b.length>60?((b[60]&0x20)===0):false;
+  return {voltage:u(8)/1000,current:u(12)/1000,power:u(16)/1000,
+    resistance_ohm:rm>=9999990?null:rm/1000,energy_Wh:u(24)/1000,capacity_mAh:u(28)/1000,
+    ext_present:present,ext_temp:present?u(36)/1000:null,mos_temp:u(40)/1000,
+    fan_rpm:Math.floor(u(44)/1000),load_on:b.length>52?b[52]===1:false};
+}
+// 0x03 settings block (big-endian floats). Active mode is byte o48 (confirmed).
+// o20 = discharge cutoff voltage (menu 09), CONFIRMED. o8/o12/o16 = the three
+// calibration gains (menu 06 Ext_temp / 07 Voltage / 08 Current), CONFIRMED vs
+// the device menus (07=0.9985, 08=0.9743); o12/o16 were NOT the USB D+/D- lines.
+// These are read-only here — calibration writes stay unimplemented (see CLAUDE.md).
+function parseSettings(dv,b){
+  if(b[0]!==0xAA||b[1]!==0x05||b[3]!==CMD.POLL_MAIN)return null;
+  const f=o=>dv.getFloat32(o,false);
+  return {o4:f(4),cal_ext_temp:f(8),cal_voltage:f(12),cal_current:f(16),
+    cutoff_v:f(20),o24:f(24),o32:f(32),o36:f(36),o40:f(40),o44:f(44),
+    // display/standby brightness (menu 02/03) = bytes o50/o51, 0-9 (CONFIRMED);
+    // standby time (menu 04) = byte o52 seconds (CONFIRMED); discharge time limit
+    // read-back: byte o53 = hours, o54 = minutes (CONFIRMED)
+    display_brightness:b.length>50?b[50]:null,standby_brightness:b.length>51?b[51]:null,
+    standby_time:b.length>52?b[52]:null,
+    timer_hr:b.length>53?b[53]:null,timer_min:b.length>54?b[54]:null,bytes:b};
+}
+
+let device=null,poller=null,pollToggle=0,pollMs=150,pollMode='live';
+function startPoller(ms){ // (re)start the alternating live/settings poll
+  if(poller)clearInterval(poller);
+  poller=setInterval(()=>{
+    send(frame(pollToggle?CMD.POLL_MAIN:CMD.POLL_LIVE,[0x0B,0x00,0x8C]));
+    pollToggle^=1;
+  },ms||pollMs);
+}
+function stopPoller(){if(poller){clearInterval(poller);poller=null;}}
+// 'live' = poll at full rate whenever connected; 'load' = full rate only while
+// the load is on. While the load is off in 'load' mode we drop to a slow
+// HEARTBEAT poll: the chart/tiles stay frozen (update() is skipped) but the
+// live o52 load flag is still watched, so a front-panel load-on is detected
+// and full-rate polling resumes. Re-evaluate on connect/load/mode/rate change.
+function updatePolling(){
+  if(!device){stopPoller();return;}
+  if(pollMode==='live'||loadOn)startPoller(pollMs);
+  else startPoller(Math.max(2000,pollMs));
+}
+const log=[];let t0=performance.now();let loadStart=null;
+function clearData(){if(chart)chart.clear();log.length=0;t0=performance.now();}
+async function connect(){
+  if(!('hid' in navigator)){alert('WebHID needs a Chromium-based browser (Chrome/Edge).');return;}
+  const list=await navigator.hid.requestDevice({filters:[{vendorId:VID,productId:PID}]});
+  if(!list.length)return;
+  device=list[0];await device.open();
+  device.addEventListener('inputreport',onReport);
+  setConnected(true);
+  // Do NOT set mode on connect (changing mode can drop a running load).
+  ['setBtn','loadBtn','timeBtn','export','snapBtn'].forEach(id=>$(id).disabled=false);
+  // enable all settings-modal device controls except the cal-write buttons
+  // (those stay gated behind the "Enable calibration writes" checkbox).
+  document.querySelectorAll('.needdev:not(.calset)').forEach(b=>b.disabled=false);
+  updateCalButtons();updateSetConn();
+  updatePolling();
+}
+async function send(b){if(device){try{await device.sendReport(0,b);}catch(e){console.warn(e);}}}
+
+function hex(b){return Array.from(b).map(x=>x.toString(16).padStart(2,'0')).join(' ');}
+function onReport(e){
+  const b=new Uint8Array(e.data.buffer);
+  const live=parseLive(e.data,b);
+  if(live){
+    lastLiveBytes=b.slice(); if($('rawLive')) $('rawLive').textContent=hex(b);
+    reflectLoad(live.load_on);   // track the device's real load state (o52)
+    if(pollMode==='load'&&!loadOn)return;  // heartbeat frame while frozen: detect only
+    update(live); return;
+  }
+  const st=parseSettings(e.data,b);
+  if(st){ lastSetBytes=b.slice(); if($('rawSet')) $('rawSet').textContent=hex(b); applySettings(st); }
+}
+
+let mode=null,loadOn=false;
+let wantSetpointForMode=null;  // load o4 into the setpoint field once the device reports this mode
+// The Connect button is the connection lamp: green LED+outline + "Connected"
+// when on, red + "Connect" when off. No separate status text (keeps the top
+// bar from shifting when Live/Load toggles).
+function setConnected(on){
+  const b=$('connect');
+  b.classList.toggle('on',!!on);b.classList.toggle('off',!on);
+  $('connLbl').textContent=on?'Connected':'Connect';
+}
+document.querySelectorAll('.mode').forEach(el=>el.onclick=()=>{
+  mode=el.dataset.mode;document.querySelectorAll('.mode').forEach(m=>m.classList.toggle('sel',m===el));
+  $('setUnit').textContent='('+UNIT[mode]+')';
+  // each mode has its own setpoint on the device; load the new mode's value into
+  // the field once the device confirms the switch (see applySettings). Blank meanwhile.
+  $('setVal').value='';wantSetpointForMode=el.dataset.mode;
+  if(device)send(frame(MODE_CMD[mode]));
+  if(mode==='cv'&&localStorage.getItem('cvNotice')!=='off')$('cvToast').classList.add('show');
+});
+$('setBtn').onclick=()=>{const v=$('setVal').value;if(v==='')return; // empty = leave as-is
+  send(frame(CMD.SETPOINT,f32be(parseFloat(v)||0)));};
+function setLoadUI(on){
+  loadOn=on;const b=$('loadBtn');
+  b.classList.toggle('running',on);b.classList.toggle('stopped',!on);
+  b.querySelector('.lbl').textContent=on?'LOAD ON':'LOAD OFF';
+  updatePolling();   // in 'Load' mode this switches full-rate vs heartbeat
+}
+// Passive reflection of the device's real load state (live o52) — tracks
+// front-panel toggles too, and corrects the optimistic click below if the
+// device didn't actually switch.
+function reflectLoad(on){
+  if(on===loadOn)return;
+  loadStart=on?performance.now():null;
+  setLoadUI(on);
+}
+$('loadBtn').onclick=()=>{const want=!loadOn;
+  send(frame(CMD.LOAD,[want?1:0,0,0,0]));
+  loadStart=want?performance.now():null;
+  setLoadUI(want);  // optimistic; telemetry (o52) confirms or corrects
+};
+$('limBtn').onclick=()=>{[['ocp',CMD.OCP],['opp',CMD.OPP],['otext',CMD.OT_EXT],['otmos',CMD.OT_MOS],['cutv',CMD.CUTOFF_V]]
+   .forEach(([id,cmd])=>{const el=$(id);if(el.value!==''){send(frame(cmd,f32be(parseFloat(el.value))));
+     if(id==='cutv')$('rCut').textContent=parseFloat(el.value).toFixed(1);}});};
+$('timeBtn').onclick=async()=>{
+  // "Set" always pushes the full hh:mm. 0x31 sets ONE field per command (CONFIRMED
+  // by capture): args = [value,0,0,selector], selector 0x01=hours 0x02=minutes — so
+  // send two commands. A blank box counts as 0.
+  const hr=Math.max(0,Math.min(99,parseInt($('thr').value)||0));
+  const mn=Math.max(0,Math.min(59,parseInt($('tmin').value)||0));
+  await send(frame(CMD.TIMER,[hr,0,0,1]));
+  await send(frame(CMD.TIMER,[mn,0,0,2]));};
+$('connect').onclick=connect;$('export').onclick=exportCSV;$('clearBtn').onclick=clearData;
+// Bottom hint bar: show the nearest [data-help] ancestor's text on hover.
+const helpbar=$('helpbar');const HELP_DEFAULT=helpbar.getAttribute('data-help')||'';
+helpbar.textContent=HELP_DEFAULT;
+document.body.addEventListener('mouseover',e=>{
+  const el=e.target.closest&&e.target.closest('[data-help]');
+  helpbar.textContent=el?el.getAttribute('data-help'):HELP_DEFAULT;});
+document.body.addEventListener('mouseleave',()=>{helpbar.textContent=HELP_DEFAULT;});
+$('pollRate').onchange=e=>{pollMs=parseInt(e.target.value)||150;
+  localStorage.setItem('pollMs',pollMs);updatePolling();};
+function setPollMode(pm){pollMode=pm;
+  document.querySelectorAll('#pollMode button').forEach(b=>b.classList.toggle('sel',b.dataset.pm===pm));
+  localStorage.setItem('pollMode',pm);updatePolling();}
+document.querySelectorAll('#pollMode button').forEach(b=>b.onclick=()=>setPollMode(b.dataset.pm));
+$('cvDismiss').onclick=()=>$('cvToast').classList.remove('show');
+$('cvNever').onclick=()=>{localStorage.setItem('cvNotice','off');$('cvToast').classList.remove('show');};
+
+/* ---- Settings modal ---------------------------------------------------------
+   Holds everything not on the main interface. To add an item: drop a `.srow`
+   into the right `.sgrp` (label + control + optional Set button with class
+   `needdev`), give the button an id, and wire one line below. */
+const settingsModal=$('settingsModal');
+function updateSetConn(){$('setConn').textContent=device?'connected':'device not connected';}
+function openSettings(){updateSetConn();settingsModal.hidden=false;}
+function closeSettings(){settingsModal.hidden=true;}
+$('gear').onclick=openSettings;
+$('settingsClose').onclick=closeSettings;
+$('settingsBackdrop').onclick=closeSettings;
+addEventListener('keydown',e=>{if(e.key==='Escape'&&!settingsModal.hidden)closeSettings();});
+
+// cal-write buttons gated by both connection AND the explicit-risk checkbox
+function updateCalButtons(){const ok=!!device&&$('calEnable').checked;
+  document.querySelectorAll('.calset').forEach(b=>b.disabled=!ok);}
+$('calEnable').onchange=updateCalButtons;
+
+// display/standby = BE uint32; language = value byte. Only send a filled field.
+$('dispBriBtn').onclick=()=>{const v=$('dispBri').value;if(v!=='')send(frame(CMD.DISP_BRI,u32be(parseInt(v)||0)));};
+$('stbyBriBtn').onclick=()=>{const v=$('stbyBri').value;if(v!=='')send(frame(CMD.STBY_BRI,u32be(parseInt(v)||0)));};
+$('stbyTimeBtn').onclick=()=>{const v=$('stbyTime').value;if(v!=='')send(frame(CMD.STBY_TIME,u32be(parseInt(v)||0)));};
+$('langBtn').onclick=()=>send(frame(CMD.LANG,[parseInt($('langSel').value)||1,0,0,0]));
+
+// calibration writes (absolute BE-float gain) — only when unlocked
+[['calVBtn','calV',CMD.CAL_V],['calIBtn','calI',CMD.CAL_I],['calTBtn','calT',CMD.CAL_EXT]]
+  .forEach(([btn,inp,cmd])=>$(btn).onclick=()=>{const v=$(inp).value;if(v==='')return;
+    send(frame(cmd,f32be(parseFloat(v))));});
+$('calCopy').onclick=()=>{const t='voltage='+$('rCalV').textContent+' current='+$('rCalI').textContent+' ext_temp='+$('rCalT').textContent;
+  if(navigator.clipboard)navigator.clipboard.writeText(t);};
+
+// device-action buttons (destructive ones confirm first)
+$('zeroNoLoad').onclick=()=>send(frame(CMD.ZERO_NOLOAD,[0,0,0,0]));
+$('zeroData').onclick=()=>{if(confirm('Zero all data? This wipes run time, Wh and mAh on the device.'))send(frame(CMD.ZERO_DATA,[0,0,0,0]));};
+$('restoreDefaults').onclick=()=>{if(confirm('Restore defaults? Resets all settings except voltage & current cal (it DOES reset ext-temp cal).'))send(frame(CMD.RESTORE,[0,0,0,0]));};
+
+function setTheme(th){document.documentElement.dataset.theme=th;
+  document.querySelectorAll('#theme button').forEach(b=>b.classList.toggle('sel',b.dataset.th===th));
+  localStorage.setItem('theme',th);if(chart)chart.redraw();}
+document.querySelectorAll('#theme button').forEach(b=>b.onclick=()=>setTheme(b.dataset.th));
+
+// Persist each collapsible config section's open/closed state. The HTML `open`
+// attribute is the default (Discharge time limit starts open); a stored choice
+// overrides it, so a purposeful roll-up/down sticks across reloads.
+document.querySelectorAll('details.grp').forEach(d=>{
+  const key='det:'+d.querySelector('summary').textContent.trim();
+  const saved=localStorage.getItem(key);
+  if(saved!==null)d.open=(saved==='1');
+  d.addEventListener('toggle',()=>localStorage.setItem(key,d.open?'1':'0'));
+});
+
+// Mode is byte o48 of the 0x03 block: 00=CC 01=CV 02=CR 03=CP (confirmed by
+// the mode-finder diff). Reflect it into the UI passively — never send a mode
+// command from here (changing mode can drop a running load).
+const MODE_BY_CODE=['cc','cv','cr','cp'];
+function reflectMode(m){
+  if(!m||m===mode)return;
+  mode=m;
+  document.querySelectorAll('.mode').forEach(el=>el.classList.toggle('sel',el.dataset.mode===m));
+  $('setUnit').textContent='('+UNIT[m]+')';
+  // mode changed (incl. front-panel): load this mode's device setpoint (o4) into
+  // the editable field (handled in applySettings once o4 for m arrives).
+  wantSetpointForMode=m;
+}
+function applySettings(st){
+  if(st.bytes&&st.bytes.length>48)reflectMode(MODE_BY_CODE[st.bytes[48]]);
+  // Active setpoint echo (o4), units follow the active mode. On a mode change,
+  // load the NEW mode's setpoint into the editable field — but only once the
+  // device actually reports that mode (so we don't grab the prior mode's value
+  // in the poll before the switch lands). Otherwise only fill an empty field's
+  // placeholder, so we never stomp a value being typed.
+  const reportedMode=(st.bytes&&st.bytes.length>48)?MODE_BY_CODE[st.bytes[48]]:null;
+  if(isFinite(st.o4)){
+    if(wantSetpointForMode&&reportedMode===wantSetpointForMode){
+      $('setVal').value=st.o4.toFixed(3);wantSetpointForMode=null;
+    }else if($('setVal').value===''){
+      $('setVal').placeholder=st.o4.toFixed(3);
+    }
+  }
+  // placeholders for configured limits
+  if($('otmos').value===''&&st.o44)$('otmos').placeholder=st.o44.toFixed(0);
+  if($('otext').value===''&&st.o40)$('otext').placeholder=st.o40.toFixed(0);
+  if($('opp').value===''&&st.o36)$('opp').placeholder=st.o36.toFixed(0);
+  if($('ocp').value===''&&st.o32)$('ocp').placeholder=st.o32.toFixed(1);
+  // Discharge cutoff voltage (menu 09) = o20 (CONFIRMED). Greyed placeholder so
+  // it won't stomp a value being typed; the "applied" tile shows the live read.
+  if(st.cutoff_v!=null&&isFinite(st.cutoff_v)){
+    if($('cutv').value==='')$('cutv').placeholder=st.cutoff_v.toFixed(1);
+    $('rCut').textContent=st.cutoff_v.toFixed(1);
+  }
+  // Calibration gains (menu 06/07/08), read-only — record before any cal write.
+  if(isFinite(st.cal_voltage))$('rCalV').textContent=st.cal_voltage.toFixed(4);
+  if(isFinite(st.cal_current))$('rCalI').textContent=st.cal_current.toFixed(4);
+  if(isFinite(st.cal_ext_temp))$('rCalT').textContent=st.cal_ext_temp.toFixed(4);
+  // Discharge time limit read-back (o53=hr, o54=min): show as placeholder so it
+  // reflects the device without stomping a value being typed.
+  if(st.timer_hr!=null&&$('thr').value==='')$('thr').placeholder=String(st.timer_hr);
+  if(st.timer_min!=null&&$('tmin').value==='')$('tmin').placeholder=String(st.timer_min);
+  // Settings-modal read-backs (brightness o50/o51, standby time o52) as placeholders.
+  if(st.display_brightness!=null&&$('dispBri').value==='')$('dispBri').placeholder=String(st.display_brightness);
+  if(st.standby_brightness!=null&&$('stbyBri').value==='')$('stbyBri').placeholder=String(st.standby_brightness);
+  if(st.standby_time!=null&&$('stbyTime').value==='')$('stbyTime').placeholder=String(st.standby_time);
+}
+
+/* ---- generic field finder: capture labelled snapshots of both the settings
+   (0x03) and live (0x05) frames, then report which byte offsets differ across
+   the snapshots per block, decoded as byte / BE-float32 / LE-uint32. This is the
+   workflow used to map cutoff, brightness, standby, timer, language, etc.:
+   change ONE thing on the device, capture a label, repeat, read the diff. */
+let lastSetBytes=null, lastLiveBytes=null;
+const snaps=[];   // [{label, set:Uint8Array|null, live:Uint8Array|null}]
+function captureSnap(){
+  const label=($('snapLabel').value.trim())||('snap '+(snaps.length+1));
+  if(!lastSetBytes&&!lastLiveBytes){$('snapState').textContent='No frames yet — connect and wait a moment.';return;}
+  snaps.push({label, set:lastSetBytes?lastSetBytes.slice():null, live:lastLiveBytes?lastLiveBytes.slice():null});
+  $('snapLabel').value='';renderSnaps();
+}
+function diffBlock(key, beFloat){
+  const rows=snaps.filter(s=>s[key]).map(s=>({label:s.label, b:s[key]}));
+  if(rows.length<2)return rows.length?`(${rows.length} snapshot — capture another to diff)`:'(none)';
+  const len=Math.min(...rows.map(r=>r.b.length));
+  const offs=[];
+  for(let o=0;o<len;o++) if(rows.some(r=>r.b[o]!==rows[0].b[o])) offs.push(o);
+  if(!offs.length)return 'no bytes differ';
+  const out=[];
+  for(const o of offs)
+    out.push(`  o${o}: `+rows.map(r=>r.label+'='+r.b[o].toString(16).padStart(2,'0')).join(' '));
+  // decode each 4-aligned window that contains a differing byte
+  const wins=[...new Set(offs.map(o=>o-(o%4)))].filter(w=>w+4<=len);
+  for(const w of wins){
+    const dv=r=>new DataView(r.b.buffer, r.b.byteOffset);
+    const dec=rows.map(r=> r.label+'='+(beFloat
+        ? dv(r).getFloat32(w,false).toPrecision(5)
+        : dv(r).getUint32(w,true)));
+    out.push(`  ${beFloat?'f32be':'u32le'} o${w}: `+dec.join(' '));
+  }
+  return out.join('\n');
+}
+function renderSnaps(){
+  $('snapState').textContent = snaps.length
+    ? 'Snapshots: '+snaps.map(s=>s.label).join(', ')
+    : 'No snapshots yet.';
+  if(!snaps.length){$('snapDiff').textContent='';return;}
+  $('snapDiff').textContent =
+    'SETTINGS 0x03 (byte / BE-float32):\n'+diffBlock('set',true)+
+    '\n\nLIVE 0x05 (byte / LE-uint32):\n'+diffBlock('live',false);
+}
+$('snapBtn').onclick=captureSnap;
+$('snapLabel').addEventListener('keydown',e=>{if(e.key==='Enter')captureSnap();});
+$('snapClear').onclick=()=>{snaps.length=0;renderSnaps();};
+
+/* ---- swappable strip-chart module ----
+   The protocol/parse layer only ever calls chart.pushSample(); it never
+   touches the drawing internals. A contributor can drop in uPlot / Chart.js
+   by implementing the same interface against the same <canvas>:
+     fit()                       size to its container, then redraw
+     pushSample(t, {v,i,w})      append one timestamped sample
+     setVisible(key, bool)       show/hide a series
+     clear()                     drop all samples
+     redraw()                    repaint (e.g. after a theme change)
+   CanvasChart is the no-dependency default. */
+const css=v=>getComputedStyle(document.documentElement).getPropertyValue(v).trim();
+class CanvasChart{
+  constructor(canvas,opts={}){
+    this.c=canvas;this.maxpts=opts.maxpts||900;
+    this.series=opts.series||[];          // [{key,cssVar}]
+    this.css=opts.css||(v=>v);
+    this.x=[];this.y={};this.vis={};
+    for(const s of this.series){this.y[s.key]=[];this.vis[s.key]=true;}
+  }
+  fit(){const c=this.c,r=c.getBoundingClientRect(),dpr=devicePixelRatio||1;
+    c.width=Math.max(320,r.width*dpr);c.height=Math.max(200,r.height*dpr);
+    c.getContext('2d').setTransform(dpr,0,0,dpr,0,0);this.redraw();}
+  pushSample(t,vals){this.x.push(t);
+    for(const s of this.series)this.y[s.key].push(vals[s.key]);
+    if(this.x.length>this.maxpts){this.x.shift();for(const s of this.series)this.y[s.key].shift();}
+    this.redraw();}
+  setVisible(key,on){this.vis[key]=on;this.redraw();}
+  clear(){this.x.length=0;for(const s of this.series)this.y[s.key].length=0;this.redraw();}
+  // Per-series y-range: each series scales to its own data min..max (6% margin,
+  // clamped so the floor never dips below 0 when the data doesn't), so V/A/W
+  // with very different magnitudes each use the full plot height (scope-style).
+  _range(key){
+    const arr=this.y[key];let lo=Infinity,hi=-Infinity;
+    for(const v of arr){if(v<lo)lo=v;if(v>hi)hi=v;}
+    if(!isFinite(lo)){lo=0;hi=1;}
+    const dataLo=lo;
+    if(hi-lo<1e-9){const p=Math.max(Math.abs(hi)*.05,.05);lo-=p;hi+=p;}
+    else{const m=(hi-lo)*.06;lo-=m;hi+=m;}
+    if(dataLo>=0&&lo<0)lo=0;
+    return [lo,hi];
+  }
+  redraw(){
+    const c=this.c;if(!c.getContext)return;const ctx=c.getContext('2d');
+    const dpr=devicePixelRatio||1,W=c.width/dpr,H=c.height/dpr;
+    ctx.clearRect(0,0,W,H);
+    const active=this.series.filter(s=>this.vis[s.key]);
+    // one axis-label column per visible series, in that series' colour, in
+    // legend order — each column reads against its own scale
+    const colW=38,padL=8+Math.max(1,active.length)*colW,padR=10,padT=10,padB=20;
+    const pw=W-padL-padR,ph=H-padT-padB;
+    const rng={};for(const s of active)rng[s.key]=this._range(s.key);
+    const fmt=v=>{const a=Math.abs(v);return v.toFixed(a<10?2:a<100?1:0);};
+    ctx.lineWidth=1;ctx.font='10px ui-monospace,monospace';
+    ctx.textAlign='right';ctx.textBaseline='middle';
+    for(let i=0;i<=4;i++){const y=padT+ph*i/4;
+      ctx.strokeStyle=this.css('--grid');
+      ctx.beginPath();ctx.moveTo(padL,y);ctx.lineTo(W-padR,y);ctx.stroke();
+      active.forEach((s,j)=>{const [lo,hi]=rng[s.key];
+        ctx.fillStyle=this.css(s.cssVar);
+        ctx.fillText(fmt(hi-(hi-lo)*i/4),8+(j+1)*colW-6,y);});
+    }
+    const n=this.x.length;if(n<2)return;
+    const x0=this.x[0],x1=this.x[n-1],xr=(x1-x0)||1;
+    for(const s of active){const arr=this.y[s.key];const [lo,hi]=rng[s.key];const yr=(hi-lo)||1;
+      ctx.strokeStyle=this.css(s.cssVar);ctx.lineWidth=2;ctx.beginPath();
+      for(let i=0;i<n;i++){const px=padL+pw*(this.x[i]-x0)/xr,py=padT+ph*(1-(arr[i]-lo)/yr);
+        i?ctx.lineTo(px,py):ctx.moveTo(px,py);}
+      ctx.stroke();}
+  }
+}
+let chart=null;
+function initChart(){
+  chart=new CanvasChart($('chart'),{maxpts:900,css,
+    series:[{key:'v',cssVar:'--v'},{key:'i',cssVar:'--i'},{key:'w',cssVar:'--w'}]});
+  chart.fit();
+}
+document.querySelectorAll('.legend span').forEach(s=>s.onclick=()=>{
+  const k=({1:'v',2:'i',3:'w'})[s.dataset.s];
+  const nowOff=s.classList.toggle('off');     // true if the series is now hidden
+  if(chart)chart.setVisible(k,!nowOff);});
+addEventListener('resize',()=>chart&&chart.fit());
+
+function fmtTime(s){const h=(s/3600|0),m=((s%3600)/60|0),x=(s%60|0);
+  return String(h).padStart(2,'0')+':'+String(m).padStart(2,'0')+':'+String(x).padStart(2,'0');}
+function update(r){
+  $('rV').textContent=r.voltage.toFixed(3);$('rI').textContent=r.current.toFixed(4);
+  $('rW').textContent=r.power.toFixed(3);
+  $('rR').textContent=r.resistance_ohm===null?'\u2014':r.resistance_ohm.toFixed(3);
+  $('rT').textContent=r.mos_temp.toFixed(1);$('rCap').textContent=r.capacity_mAh.toFixed(3);
+  $('rWh').textContent=r.energy_Wh.toFixed(3);$('rRPM').textContent=r.fan_rpm;
+  $('rExt').textContent=r.ext_present?r.ext_temp.toFixed(1)+' \u00B0C':'Wait..';
+  $('rTime').textContent=fmtTime(loadStart?((performance.now()-loadStart)/1000):0);
+  const t=(performance.now()-t0)/1000;
+  if(chart)chart.pushSample(t,{v:r.voltage,i:r.current,w:r.power});
+  log.push([t.toFixed(2),r.voltage,r.current,r.power,r.resistance_ohm??'',r.mos_temp,
+            r.ext_present?r.ext_temp:'',r.fan_rpm,r.energy_Wh,r.capacity_mAh]);
+}
+function exportCSV(){
+  const head='t_s,voltage_V,current_A,power_W,resistance_ohm,mos_temp_C,ext_temp_C,fan_rpm,energy_Wh,capacity_mAh\n';
+  const url=URL.createObjectURL(new Blob([head+log.map(r=>r.join(',')).join('\n')],{type:'text/csv'}));
+  const a=document.createElement('a');a.href=url;a.download='dl24_log.csv';a.click();URL.revokeObjectURL(url);
+}
+setTheme(localStorage.getItem('theme')||'dark');
+function init(){
+  initChart();
+  const sv=localStorage.getItem('pollMs');
+  if(sv){pollMs=parseInt(sv)||150;$('pollRate').value=String(pollMs);}
+  const pm=localStorage.getItem('pollMode');
+  if(pm==='live'||pm==='load')setPollMode(pm);
+}
+if(document.readyState==='complete')init();else addEventListener('load',init);
+</script>
+</body>
+</html>
