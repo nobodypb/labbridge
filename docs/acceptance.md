@@ -124,3 +124,7 @@ completed setup. The first incoming socket can time out before identity; a
 subsequent connection succeeded. This is provisioning evidence, not source
 output/readback, configured-source STOP or full coexistence acceptance.
 
+The optional target-SSID profile changes only phase one's SSID field;
+phase two remains identical. Codec and generated-client tests cover that
+invariance. The default remains the PC-compatible profile.
+

@@ -147,3 +147,9 @@ copy. For hardware acceptance, verify displayed phase-one IP first,
 then join ACK, TCP identity, reconnect/STOP behavior and AP+STA+BLE coexistence.
 The source output must remain OFF during commissioning. No radio trial or firmware flash was performed as part of the original PC
 investigation; subsequent hardware results are recorded in acceptance.md.
+
+The optional `pc_v22_target_ssid` profile changes only the phase-one SSID
+field. It is not a commissioned alternative to `pc_v22`. Use a fresh setup
+state and session; confirm the displayed server IP and advance before the
+management deadline. A retained candidate listing does not prove a new join
+or identity exchange.
