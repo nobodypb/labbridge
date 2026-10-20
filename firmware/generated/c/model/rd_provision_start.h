@@ -16,16 +16,26 @@
 typedef struct rd_provision_start_t rd_provision_start_t;
 
 
+// Enum PROFILE for rd_provision_start
+
+typedef enum  { labbridge_api_rd_provision_start_PROFILE_NULL = 0, labbridge_api_rd_provision_start_PROFILE_pc_v22, labbridge_api_rd_provision_start_PROFILE_pc_v22_target_ssid } labbridge_api_rd_provision_start_PROFILE_e;
+
+char* rd_provision_start_profile_ToString(labbridge_api_rd_provision_start_PROFILE_e profile);
+
+labbridge_api_rd_provision_start_PROFILE_e rd_provision_start_profile_FromString(char* profile);
+
 
 
 typedef struct rd_provision_start_t {
     int confirm_outputs_off; //boolean
+    labbridge_api_rd_provision_start_PROFILE_e profile; //enum
 
     int _library_owned; // Is the library responsible for freeing this object?
 } rd_provision_start_t;
 
 __attribute__((deprecated)) rd_provision_start_t *rd_provision_start_create(
-    int confirm_outputs_off
+    int confirm_outputs_off,
+    labbridge_api_rd_provision_start_PROFILE_e profile
 );
 
 void rd_provision_start_free(rd_provision_start_t *rd_provision_start);

@@ -17,8 +17,8 @@ import pprint
 import re  # noqa: F401
 import json
 
-from pydantic import BaseModel, ConfigDict, Field, StrictBool
-from typing import Any, ClassVar, Dict, List
+from pydantic import BaseModel, ConfigDict, Field, StrictBool, StrictStr, field_validator
+from typing import Any, ClassVar, Dict, List, Optional
 from typing import Optional, Set
 from typing_extensions import Self
 
@@ -27,7 +27,18 @@ class RdProvisionStart(BaseModel):
     Begin two-stage ESPTouch provisioning from the ESP AP. Instruments must be stopped/unleased; no actuation is performed. The operator confirms that the target PSU output is OFF.
     """ # noqa: E501
     confirm_outputs_off: StrictBool = Field(description="Must be true after physically checking that the target PSU output is OFF.")
-    __properties: ClassVar[List[str]] = ["confirm_outputs_off"]
+    profile: Optional[StrictStr] = Field(default=None, description="Default pc_v22 reproduces RIDEN PC v1.0.0.22. Experimental pc_v22_target_ssid changes ONLY the phase-one SSID field from RD6006 to the actual AP SSID; CRC/XOR adapt to that field, while destinations, remaining format and scheduling stay identical. For controlled compatibility comparisons, not a commissioned alternative.")
+    __properties: ClassVar[List[str]] = ["confirm_outputs_off", "profile"]
+
+    @field_validator('profile')
+    def profile_validate_enum(cls, value):
+        """Validates the enum"""
+        if value is None:
+            return value
+
+        if value not in set(['pc_v22', 'pc_v22_target_ssid']):
+            raise ValueError("must be one of enum values ('pc_v22', 'pc_v22_target_ssid')")
+        return value
 
     model_config = ConfigDict(
         extra='forbid',
@@ -81,7 +92,8 @@ class RdProvisionStart(BaseModel):
             return cls.model_validate(obj)
 
         _obj = cls.model_validate({
-            "confirm_outputs_off": obj.get("confirm_outputs_off")
+            "confirm_outputs_off": obj.get("confirm_outputs_off"),
+            "profile": obj.get("profile")
         })
         return _obj
 
