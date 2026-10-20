@@ -172,8 +172,17 @@ tests. All API traffic now shares one connection, with priority STOP/heartbeat,
 queued-command cancellation and no transport retry. A regression test verifies
 that a queued ON cannot run after priority STOP.
 
-Hardware page/control acceptance is pending the final firmware deployment.
-A read-only preflight found the attached StickS3 and DL24M ready with confirmed
-OFF, fresh 0 V / 0 A, and reachable station HTTP. No energized-load or battery
-claim follows from this preflight. The planned on-device UI check uses reversible
-settings with output OFF and restores the original settings.
+On 2026-10-20, the final frontend was served entirely by the physical StickS3
+running application commit `c355180`, with no browser asset override. Authentication,
+single-device reservation, brightness change/readback/restoration, independent
+STOP and release passed through the real HTTP API. All original 14 settings and
+the 0.100 A current target matched the pre-flash snapshot afterwards; output was
+confirmed OFF. Local JavaScript, CSS, GPL text and corresponding-source downloads
+returned successfully. The load input was fresh 0 V / 0 A throughout this check;
+no energized-load pulse or battery test is claimed.
+
+Validation passed: `tools/check.sh` (including 21 portable C++ tests and the
+Python/reference suites), deterministic generation/drift, TypeScript/Webbuild,
+11 Web unit tests, 21 browser scenarios, formatting and public-tree checks.
+ESP-IDF 5.5.2 builds succeeded for StickS3, USB-OTG and ESP32; each app fits its
+configured partition. Physical acceptance above covers StickS3/DL24M only.
