@@ -24,7 +24,7 @@ checks pass and its hardware claims match the evidence.
 | LB-016 | As a cell tester, I optionally use direct source/load switching and independent meters/additional temperature channels. | LB-012, LB-015 | Done |
 | LB-017 | As an operator, I configure INA228 I²C and Yocto-Watt-V2-C measurement providers. | LB-015 | Implemented; hardware acceptance open |
 | LB-018 | As an API consumer, I understand operations, units, prerequisites and failure handling directly from OpenAPI and generated clients. | LB-002, LB-015 | Done |
-| LB-021 | As a DL24M operator, I use verified modes, native telemetry and passive diagnostics over one authenticated WebSocket connection. | LB-020 | Accepted; implementation and commissioning in progress |
+| LB-021 | As a DL24M operator, I use verified modes, native telemetry and passive diagnostics over one authenticated WebSocket connection. | LB-020 | Implemented; bounded StickS3 bench passed; BLE timing follow-up open |
 | LB-020 | As a DL24M operator, I use the complete Bench interface on the ESP with confirmed backend control and retained future features. | LB-005, LB-011 | Implemented; OFF-only hardware acceptance passed |
 
 | LB-019 | As an operator, I provision and automate RD6018 sources on the ESP AP alongside DL24M BLE, with bounded recovery and measured coexistence acceptance. | LB-007, LB-011 | Provisioning and no-load source control validated; loaded/two-source/coexistence acceptance open |
@@ -101,7 +101,8 @@ boot and gap handling. Bound chart/log memory. Serve all assets locally under th
 existing CSP. Browser/portable/generation checks and all board builds pass;
 physical bench acceptance is recorded separately with original settings restored.
 
-Follow-ups: active CV/CR/CP commissioning, calibration/zero/factory-reset APIs,
+Follow-ups recorded at LB-020 delivery (LB-021 below updates their status):
+active CV/CR/CP commissioning, calibration/zero/factory-reset APIs,
 HID-frame/snapshot diagnostics, fan RPM and verified native counter scales,
 external probe telemetry, other device themes and persistent recording. Their
 absence is not permission to expose raw commands or claim hardware support.
@@ -115,7 +116,7 @@ queue with priority STOP/heartbeat and cancellation of queued commands. Loaded
 operation through the new page and battery testing were not performed (0 V input);
 the existing physical limitations in LB-014 remain open.
 
-## LB-021 — DL24M capabilities and one-connection Bench (accepted)
+## LB-021 — DL24M capabilities and one-connection Bench (implemented)
 
 Provide a factual supported/unverified/unavailable status for every retained
 Bench feature. Extend the typed API, DL24M driver and UI for confirmed modes,
@@ -143,7 +144,14 @@ Remaining physical limits are explicit: external probe mapping and fan RPM;
 calibration 46/4F reference, full data backup
 and restore; no-load zero effects; full factory-reset restoration. No destructive
 maintenance operation is exposed merely because its command number is known.
-Legacy inactive-bank transactions occasionally timed out on hardware after mode
-trials; checked STOP/recovery was retained. Typed mode/target operations and
-explicit readback restored the original banks. Further BLE timing/soak evidence
-is a follow-up, rather than a reason to relax recovery or replay writes.
+Intermittent BLE readback timeouts occurred in both legacy inactive-bank and
+typed mode/target operations after trials. Checked STOP/recovery was retained;
+failed operations were not replayed. A separate explicit read/restore procedure
+confirmed all original settings, targets and OFF. BLE transaction timing, recovery
+soak and memory headroom under prolonged concurrent traffic remain follow-ups;
+the bounded successful mode pulses do not establish long-term reliability.
+
+LB-021 evidence: [bounded hardware and automated acceptance](acceptance.md#dl24m-native-capabilities-and-websocket-lb-021).
+Calibration/zero/reset commissioning needs an external reference and proven full
+backup/restore; external-temperature and fan-RPM work needs an audited native
+register mapping. Those controls remain visible and locked.

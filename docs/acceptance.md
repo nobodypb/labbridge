@@ -275,3 +275,116 @@ Python/reference suites), deterministic generation/drift, TypeScript/Webbuild,
 11 Web unit tests, 21 browser scenarios, formatting and public-tree checks.
 ESP-IDF 5.5.2 builds succeeded for StickS3, USB-OTG and ESP32; each app fits its
 configured partition. Physical acceptance above covers StickS3/DL24M only.
+
+
+## DL24M native capabilities and WebSocket (LB-021)
+
+Behavior tests were observed failing before changes to mode/target guarding,
+rollback, native readings, passive tracing, shared stream dispatch/authentication,
+explicit heartbeats, gap/operation retention, bounded queues, partial writes,
+JSON depth/allocation handling and request-schema retention. A further browser
+regression reproduced an enabled CC setpoint button rejecting an adjustment while
+ON; the common current operation now retains that existing behavior. Codec files
+and the upstream vendored Bench remain unchanged.
+
+Validation: `tools/check.sh` passes (27 portable C++ executables, API/Python/host
+and frozen reference suites), generated drift is zero across 306 files, Black and
+public-tree checks pass. TypeScript/Webbuild, 20 Web unit tests and 27 browser
+scenarios pass. Browser scenarios cover all upstream control IDs, unavailable
+controls without writes, authentication, lease conflicts/loss, delayed/failed
+operations, STOP priority/fallback, reboot/disconnect without replay, mode/target
+RPC, passive diagnostics, CSV, themes, narrow layouts and local-only assets.
+Session tests distinguish native counters from browser integrals and reject
+invalid, duplicate, late, stale, missing and cross-boot/device samples. Red tests
+also reproduced queued telemetry appearing fresh on arrival. A conservative
+subscription-to-device-clock bound now includes transport delay in reading ages,
+including native values/temperatures. Delayed values lock ON and are excluded from
+integration; fresh samples recover without resetting this bound.
+
+ESP-IDF 5.5.2 builds of application revision `7f9eb61` pass on all three targets;
+partition checks are included in each build. The build version has a `-dirty`
+suffix for the pending acceptance documentation/local target-lock state; the
+application source corresponds to the recorded revision:
+
+| Target | Application bytes | App partition | Free |
+|---|---:|---:|---:|
+| StickS3 | 2,179,936 | 4 MiB | 48% |
+| USB-OTG | 2,258,432 | 4 MiB | 46% |
+| ESP32 | 2,163,360 | 3 MiB | 31% |
+
+Hardware checks on 2026-10-21 used the operator-selected exclusive DL24M
+StickS3. Deployment-specific connection details remain in ignored local notes.
+It was connected as a station to the requested LAN; browser/stream checks used LAN access. The source
+was manually set to 24 V / 0.15 A by the operator, with no battery. Original app
+and configuration evidence stayed private. No unknown command, calibration,
+factory reset, no-load zero or device-counter reset was performed.
+
+Native mode commissioning used the actual BLE driver through both USB and
+WebSocket APIs. Successful trials used a local 5,000 ms activation deadline and
+explicit independent STOP; the WebSocket trials stopped after approximately
+3.1–3.4 s. Representative fresh loaded readings were:
+
+| Mode | Target | Voltage | Current | Result |
+|---|---:|---:|---:|---|
+| CR | 240 Ohm | 23.992 V | 0.099 A | confirmed ON, fresh samples, STOP OFF |
+| CP | 2.4 W | 23.992 V | 0.099 A | confirmed ON, fresh samples, STOP OFF |
+| CV | 23.5 V | 23.515 V | 0.154 A | confirmed ON, fresh samples, STOP OFF |
+
+The USB CV trial reported up to 0.156 A. These are uncalibrated instrument
+readings against a nominal 0.15 A source limit, not an independently measured
+current-limit or absolute-accuracy result. Guards use the configured local
+25 V / 0.2 A / 5 W envelope in addition to the physical source limit. CV also
+requires fresh OCP/OPP, CR checks at maximum configured voltage, and CP checks
+at the fresh nonzero cutoff. Mode/target changes remain OFF-only.
+
+A separate approximately 92 s CC stream run at a 0.050 A target, with a local
+100,000 ms deadline, recorded 160 samples and no stream gaps. The native deltas
+were 89 s, 1 mAh and 30 mWh; the fresh-sample trapezoidal integrals were
+1.21389125 mAh and 29.13025296 mWh. Together with the native firmware analysis,
+this confirms relative mAh/mWh scaling of reads 14/15. The API converts these to
+Ah/Wh and exposes each value's source, quality and age, including common charge
+and energy sensor routes. Browser-session integrals remain separate. No external
+reference or absolute calibration was available.
+
+Actual stream checks confirmed no device data before authentication, 401 for
+unauthenticated RPC/wrong token, closure after the three-second authentication
+deadline and admission of only one authenticated session. WebSocket ping did not
+renew a one-second lease; explicit heartbeat RPC did. Independent STOP confirmed
+OFF. A slow receiver combined with 1,000 read-only diagnostic RPCs caused stream
+closure and released its slot. The lease expired to stopped/OFF while fresh valid
+measurements remained readable over HTTP (approximately 0.40 s for recovery
+reads). Oversized and excessively nested messages closed their connections.
+No ESP panic, stack overflow or allocation abort was observed in these checks.
+An earlier build without PSRAM reached only 4,776 bytes of minimum free heap.
+After incorporating the current base and rebuilding the StickS3 PSRAM profile,
+the same tests passed with 8,368,027 bytes of aggregate minimum free 8-bit heap
+(including external RAM), 4,012 bytes of stream-worker stack headroom and a 39 ms
+maximum observed snapshot build. The new authenticated probe confirmed that the
+overloaded server session released its slot; the slow client still had unread
+frames buffered and had not reached EOF within its four-second drain window.
+This is bounded stress evidence, not a long-duration internal-RAM/coexistence soak.
+
+The real `/dl24` page and assets were served by the ESP under its CSP, without
+asset overrides or internet dependencies. Authentication, reservation, supported
+mode controls, native units, brightness change/readback/restoration, disabled
+maintenance, passive BLE/register diagnostics, CSV, browser-only Clear, keyboard
+Escape and both themes at a 390 px viewport passed. Normal monitoring and command
+confirmation used one WebSocket with zero HTTP API polling. Explicit STOP after
+closing that socket used HTTP successfully. Resetting the ESP while OFF broke the
+connection and locked control; explicit reconnect saw a different boot identity,
+OFF and no reservation. No ON request was sent or replayed by these browser tests.
+
+Intermittent native BLE readback timeouts were observed during legacy bank cleanup
+and, on a later run, a typed CP target transaction after a successful CR pulse.
+The failed transaction reported unknown output, invalidated ownership and did not
+lead to another ON. STOP and persistent rollback remained in force. One explicit
+restoration attempt also timed out; after fresh OFF/state readback a separate
+paced restoration confirmed all 14 original settings, all three original inactive
+targets (5 V / 5 Ohm / 5 W), original CC 0.100 A and final OFF. Failed writes were
+not automatically replayed. BLE timing/recovery soak remains open in LB-021.
+External probe/fan mapping, full maintenance backup/restore and absolute accuracy
+remain explicitly uncommissioned. None of these checks establishes battery-test
+readiness or RD-source/BLE coexistence acceptance. Final read-only checks on the
+integrated application reconfirmed all 14 settings, CC 0.100 A, ready/OFF, fresh
+measurements and Ah/Wh units on both native and common sensor routes; no mode
+mutations occurred after the original inactive targets were restored.
