@@ -119,3 +119,12 @@ The original DL24M settings matched the pre-flash snapshot; CC 0.100 A, fresh
 measurements and confirmed output OFF were preserved. A private system/application
 backup was taken before flashing. No RD source was paired or actuated in these
 checks, and no AP-client/BLE coexistence result is claimed from them.
+
+W01 provisioning investigation on firmware `0.1.0+c29b29d`: direct AP broadcasts
+reported 7,413 successful radio-driver completions and zero failed completions,
+with no associated AP client. The operator still observed W01 without a server
+IP; no incoming RD TCP connection occurred. This is a failed pairing result, not
+RD commissioning or coexistence acceptance. An intermittent USB request timeout
+was also observed; later status remained available without a confirmed reset.
+The documented SmartConfig/open-network incompatibility requires a protected
+network comparison. Output actuation was not performed.

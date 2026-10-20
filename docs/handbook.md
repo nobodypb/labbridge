@@ -187,6 +187,8 @@ requests OFF before allowing work; it never resumes ON.
 
 ### Pairing through LabBridge
 
+**Commissioning limitation:** the current AP is open, while Espressif documents that SmartConfig does not support open networks. The user's W01 module did not receive a server address in open-AP trials. Do not assume this pairing workflow is usable on W01 until a protected-network comparison resolves that incompatibility. See [compatibility notes](uncertainties.md).
+
 Keep the target PSU output OFF and configure one module at a time. On the PSU,
 select WiFi/address 1, reset the previous Wi-Fi setup and restart. In `/devices`,
 enter the API token, open **RD60xx Wi-Fi setup**, confirm output OFF and start.
