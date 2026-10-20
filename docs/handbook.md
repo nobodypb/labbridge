@@ -274,7 +274,8 @@ with nonblocking node access to a conversion worker and explicit probe identity.
 The Python runner performs preflight, snapshots original source/load settings,
 reserves nodes, charges in CC/CV to termination, rests, pulses and discharges to
 cutoff for each cycle. It keeps the source path isolated until the source is
-configured and enabled. STOP requests to source, load and interlock are attempted
+configured and enabled. Voltage changes first reduce the source current setting
+to zero, so intermediate setpoints stay within the local power limit. STOP requests to source, load and interlock are attempted
 independently. Active phases supply local duration caps. Host/lease failures do
 not start another phase. There is no distributed atomic transaction across nodes.
 

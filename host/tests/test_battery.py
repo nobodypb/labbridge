@@ -156,3 +156,35 @@ class WorkflowTests(unittest.TestCase):
             )
         for rest in transports.values():
             self.assertTrue(all(not d["output"] for d in rest.devices.values()))
+
+    def test_source_reconfiguration_keeps_intermediate_power_within_node_limit(self):
+        import tempfile, pathlib
+        from labbridge.battery import Runner
+        from labbridge.simulator import simulated_cluster
+
+        p = Profile(**{**FIELDS, "max_power_w": 2.2})
+        cluster, clock, transports = simulated_cluster(self.bindings(), p)
+        supply = transports["source-node"].devices["supply"]
+        supply.update(voltage=3.0, current=0.6)
+        api = cluster.nodes["source-node"].rd60xx
+        original = api.set_source_voltage
+
+        def checked_voltage(*args, **kwargs):
+            if kwargs["voltage_request"].voltage_v * supply["current"] > p.max_power_w:
+                raise ValueError(
+                    "Intermediate source settings exceed local power limit"
+                )
+            return original(*args, **kwargs)
+
+        api.set_source_voltage = checked_voltage
+        with tempfile.TemporaryDirectory() as directory:
+            result = Runner(
+                cluster,
+                self.bindings(),
+                p,
+                pathlib.Path(directory) / "run",
+                clock=clock,
+                sleep=clock.sleep,
+            ).run()
+            self.assertEqual(result["status"], "succeeded")
+        self.assertEqual((supply["voltage"], supply["current"]), (3.0, 0.6))

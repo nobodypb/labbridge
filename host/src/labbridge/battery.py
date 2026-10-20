@@ -450,6 +450,12 @@ class Runner:
     def charge(self, cycle):
         p = self.profile
         self.isolate()
+        # Absolute writes are checked against the other, still-current setpoint.
+        self.perform(
+            "source",
+            self.node("source").rd60xx.set_source_current,
+            current_request=CurrentRequest(current_a=0.0),
+        )
         self.perform(
             "source",
             self.node("source").rd60xx.set_source_voltage,
@@ -547,6 +553,11 @@ class Runner:
             try:
                 if role == "source":
                     v, a = self.original[role]
+                    self.perform(
+                        role,
+                        self.node(role).rd60xx.set_source_current,
+                        current_request=CurrentRequest(current_a=0.0),
+                    )
                     self.perform(
                         role,
                         self.node(role).rd60xx.set_source_voltage,
