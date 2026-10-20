@@ -55,7 +55,10 @@ static measurements_t *measurements_create_internal(
     double set_current_a,
     labbridge_api_measurements_REGULATIONMODE_e regulation_mode,
     int protection_code,
-    char *boot_id
+    char *boot_id,
+    double input_voltage_v,
+    double battery_voltage_v,
+    int battery_detected
     ) {
     measurements_t *measurements_local_var = malloc(sizeof(measurements_t));
     if (!measurements_local_var) {
@@ -77,6 +80,9 @@ static measurements_t *measurements_create_internal(
     measurements_local_var->regulation_mode = regulation_mode;
     measurements_local_var->protection_code = protection_code;
     measurements_local_var->boot_id = boot_id;
+    measurements_local_var->input_voltage_v = input_voltage_v;
+    measurements_local_var->battery_voltage_v = battery_voltage_v;
+    measurements_local_var->battery_detected = battery_detected;
 
     measurements_local_var->_library_owned = 1;
     return measurements_local_var;
@@ -98,7 +104,10 @@ __attribute__((deprecated)) measurements_t *measurements_create(
     double set_current_a,
     labbridge_api_measurements_REGULATIONMODE_e regulation_mode,
     int protection_code,
-    char *boot_id
+    char *boot_id,
+    double input_voltage_v,
+    double battery_voltage_v,
+    int battery_detected
     ) {
     return measurements_create_internal (
         device_id,
@@ -116,7 +125,10 @@ __attribute__((deprecated)) measurements_t *measurements_create(
         set_current_a,
         regulation_mode,
         protection_code,
-        boot_id
+        boot_id,
+        input_voltage_v,
+        battery_voltage_v,
+        battery_detected
         );
 }
 
@@ -294,6 +306,30 @@ cJSON *measurements_convertToJSON(measurements_t *measurements) {
     if(measurements->boot_id) {
     if(cJSON_AddStringToObject(item, "boot_id", measurements->boot_id) == NULL) {
     goto fail; //String
+    }
+    }
+
+
+    // measurements->input_voltage_v
+    if(measurements->input_voltage_v) {
+    if(cJSON_AddNumberToObject(item, "input_voltage_v", measurements->input_voltage_v) == NULL) {
+    goto fail; //Numeric
+    }
+    }
+
+
+    // measurements->battery_voltage_v
+    if(measurements->battery_voltage_v) {
+    if(cJSON_AddNumberToObject(item, "battery_voltage_v", measurements->battery_voltage_v) == NULL) {
+    goto fail; //Numeric
+    }
+    }
+
+
+    // measurements->battery_detected
+    if(measurements->battery_detected) {
+    if(cJSON_AddBoolToObject(item, "battery_detected", measurements->battery_detected) == NULL) {
+    goto fail; //Bool
     }
     }
 
@@ -538,6 +574,42 @@ measurements_t *measurements_parseFromJSON(cJSON *measurementsJSON){
     }
     }
 
+    // measurements->input_voltage_v
+    cJSON *input_voltage_v = cJSON_GetObjectItemCaseSensitive(measurementsJSON, "input_voltage_v");
+    if (cJSON_IsNull(input_voltage_v)) {
+        input_voltage_v = NULL;
+    }
+    if (input_voltage_v) { 
+    if(!cJSON_IsNumber(input_voltage_v))
+    {
+    goto end; //Numeric
+    }
+    }
+
+    // measurements->battery_voltage_v
+    cJSON *battery_voltage_v = cJSON_GetObjectItemCaseSensitive(measurementsJSON, "battery_voltage_v");
+    if (cJSON_IsNull(battery_voltage_v)) {
+        battery_voltage_v = NULL;
+    }
+    if (battery_voltage_v) { 
+    if(!cJSON_IsNumber(battery_voltage_v))
+    {
+    goto end; //Numeric
+    }
+    }
+
+    // measurements->battery_detected
+    cJSON *battery_detected = cJSON_GetObjectItemCaseSensitive(measurementsJSON, "battery_detected");
+    if (cJSON_IsNull(battery_detected)) {
+        battery_detected = NULL;
+    }
+    if (battery_detected) { 
+    if(!cJSON_IsBool(battery_detected))
+    {
+    goto end; //Bool
+    }
+    }
+
 
     measurements_local_var = measurements_create_internal (
         strdup(device_id->valuestring),
@@ -555,7 +627,10 @@ measurements_t *measurements_parseFromJSON(cJSON *measurementsJSON){
         set_current_a ? set_current_a->valuedouble : 0,
         regulation_mode ? regulation_modeVariable : labbridge_api_measurements_REGULATIONMODE_NULL,
         protection_code ? protection_code->valuedouble : 0,
-        boot_id && !cJSON_IsNull(boot_id) ? strdup(boot_id->valuestring) : NULL
+        boot_id && !cJSON_IsNull(boot_id) ? strdup(boot_id->valuestring) : NULL,
+        input_voltage_v ? input_voltage_v->valuedouble : 0,
+        battery_voltage_v ? battery_voltage_v->valuedouble : 0,
+        battery_detected ? battery_detected->valueint : 0
         );
 
     return measurements_local_var;
