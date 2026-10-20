@@ -44,7 +44,7 @@ Json Rd60xxDriver::describe(uint64_t now) {
   Json j, l;
   auto a = Json::array();
   for (auto c : {"source.cc_cv", "output", "voltage.measure", "current.measure",
-                 "power.measure"})
+                 "power.measure", "energy.measure", "charge.measure"})
     a.append(std::string(c));
   l.set("voltage_v", limits_.voltage)
       .set("current_a", limits_.current)
@@ -91,8 +91,63 @@ Json Rd60xxDriver::measurements(uint64_t now) {
         .set("received_ms", double(received_))
         .set("age_ms", double(now - received_));
     temps.append(t);
+    if (measurement_.auxiliary) {
+      const auto &a = *measurement_.auxiliary;
+      j.set("input_voltage_v", a.input_voltage)
+          .set("battery_voltage_v", a.battery_voltage)
+          .set("battery_detected", a.battery_detected)
+          .set("capacity_ah", a.capacity)
+          .set("energy_wh", a.energy);
+      Json external;
+      external.set("id", "external")
+          .set("kind", "external_probe")
+          .set("quality", !a.external_temperature ? "unavailable"
+                          : fresh(now)            ? "valid"
+                                                  : "stale")
+          .set("received_ms", double(received_))
+          .set("age_ms", double(now - received_));
+      if (a.external_temperature)
+        external.set("value_c", *a.external_temperature);
+      temps.append(external);
+    }
   }
   j.set("temperature_channels", temps);
+  return j;
+}
+Json Rd60xxDriver::components(uint64_t now) {
+  auto result = Driver::components(now);
+  for (auto id : {"input-voltage", "battery-voltage", "battery-detected"}) {
+    bool presence = std::string(id) == "battery-detected";
+    Json sensor;
+    sensor.set("id", id)
+        .set("kind", "sensor")
+        .set("actions", Json::array())
+        .set("quantity", presence ? "presence" : "voltage")
+        .set("unit", presence ? "1" : "V");
+    result.append(sensor);
+  }
+  return result;
+}
+Json Rd60xxDriver::component_reading(const std::string &id, uint64_t now) {
+  if (id != "input-voltage" && id != "battery-voltage" &&
+      id != "battery-detected")
+    return Driver::component_reading(id, now);
+  auto m = measurements(now);
+  bool presence = id == "battery-detected";
+  auto key = presence                ? "battery_detected"
+             : id == "input-voltage" ? "input_voltage_v"
+                                     : "battery_voltage_v";
+  Json j;
+  j.set("device_id", id_)
+      .set("component_id", id)
+      .set("quantity", presence ? "presence" : "voltage")
+      .set("unit", presence ? "1" : "V")
+      .set("quality", m.has(key) ? m.text("quality") : "unavailable")
+      .set("sequence", m.number("sequence"))
+      .set("received_ms", m.number("received_ms"))
+      .set("age_ms", m.number("age_ms"));
+  if (m.has(key))
+    j.set("value", presence ? double(m.boolean(key)) : m.number(key));
   return j;
 }
 Json Rd60xxDriver::operation(uint64_t now) {
@@ -119,7 +174,7 @@ void Rd60xxDriver::send_read(Phase phase, uint64_t now) {
   wire_.receive();
   rx_.clear();
   stream_.clear();
-  request_ = rd60xx::read(1, 0, 20);
+  request_ = rd60xx::read(1, 0, rd60xx::telemetry_register_count);
   if (!wire_.send(request_)) {
     fail("send_failed", now);
     return;
@@ -146,10 +201,10 @@ void Rd60xxDriver::send_write(uint64_t now) {
   result_.set("write_attempts", result_.number("write_attempts") + 1);
 }
 bool Rd60xxDriver::consume_read(uint64_t now) {
-  if (!rd60xx::valid(rx_, 1, 3) || rx_.size() != 45)
+  if (!rd60xx::valid(rx_, 1, 3) || rx_.size() != rd60xx::telemetry_frame_size)
     return false;
-  std::array<uint16_t, 20> r{};
-  for (size_t i = 0; i < 20; ++i)
+  std::array<uint16_t, rd60xx::telemetry_register_count> r{};
+  for (size_t i = 0; i < r.size(); ++i)
     r[i] = (uint16_t(rx_[3 + 2 * i]) << 8) | rx_[4 + 2 * i];
   try {
     auto m = rd60xx::decode(r, model_);
@@ -175,7 +230,7 @@ void Rd60xxDriver::stop(uint64_t now) {
   wire_.cancel_pending();
   bool active = phase_ != Phase::idle;
   if (active && phase_ != Phase::drain)
-    drain_size_ = phase_ == Phase::echo ? 8 : 45;
+    drain_size_ = phase_ == Phase::echo ? 8 : rd60xx::telemetry_frame_size;
   user_ = false;
   stopping_ = true;
   need_stop_ = true;
@@ -312,7 +367,8 @@ void Rd60xxDriver::tick(uint64_t now) {
       return;
     }
     if ((phase_ == Phase::echo && frame[1] == 6) ||
-        (phase_ != Phase::echo && frame[1] == 3 && frame.size() == 45)) {
+        (phase_ != Phase::echo && frame[1] == 3 &&
+         frame.size() == rd60xx::telemetry_frame_size)) {
       rx_ = std::move(frame);
       break;
     }
@@ -328,7 +384,7 @@ void Rd60xxDriver::tick(uint64_t now) {
       send_read(Phase::verify, now);
       return;
     }
-  } else if (rx_.size() >= 45) {
+  } else if (rx_.size() >= rd60xx::telemetry_frame_size) {
     auto phase = phase_;
     if (!consume_read(now))
       return;

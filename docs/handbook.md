@@ -149,13 +149,22 @@ CRC low byte first. Validate address, function, payload length and CRC.
 | 8 / 9 | set voltage / current | /100 V, /100 A |
 | 10 / 11 | measured voltage / current | /100 V, /100 A |
 | 12–13 | measured power | combined 32-bit /100 W |
+| 14 | input supply voltage | /100 V |
 | 16 | protection | raw enum |
 | 17 | CC/CV | 0=CV, 1=CC; sustained loaded CC acceptance remains open |
 | 18 | output | 0/1 |
+| 32 / 33 | battery detected / sensed battery voltage | nonzero / /100 V |
+| 34–35 | external NTC temperature | sign, magnitude °C |
+| 38–39 | native charge counter | combined 32-bit /1000 Ah |
+| 40–41 | native energy counter | combined 32-bit /1000 Wh |
 
 Before writing, re-read and match instrument serial/model. Require function-06
-byte-for-byte echo, then fresh register readback with the same identity. The
-external NTC channel is not mapped yet; internal temperature cannot substitute.
+byte-for-byte echo, then fresh register readback with the same identity. Reads
+cover registers 0–41 in one CRC-checked response, including identity, operating
+state and auxiliary measurements. Discovery uses the shorter 0–19 identity read.
+An external NTC reading below −40 °C (including the disconnected −89 °C sentinel),
+an invalid sign or a reading above 100 °C is unavailable, with no numeric value.
+Internal temperature cannot substitute for this external channel.
 
 The response deadline is one second; a successful reply advances immediately.
 There is no mandatory one-second pause between commands. Missing pre-activation
@@ -165,10 +174,16 @@ requests recovery OFF; ON is not repeated. OFF and setpoint recovery remain
 bounded. Confirmed ON describes the output-enable register, not settled terminal
 voltage. A workflow that requires a settled voltage must check fresh measurements.
 
-The current source API exposes voltage/current setpoints, output, V/I/power,
-regulation mode, protection status and internal temperature. OVP/OCP settings,
-presets, front-panel settings, external NTC and native counters are not yet
-exposed by this driver. Calibration is not an automation operation.
+The source API exposes voltage/current setpoints, output, V/I/power, input and
+battery voltage, battery presence, native Ah/Wh counters, regulation mode,
+protection status and both temperature channels. Common sensor component IDs
+are `voltage`, `current`, `power`, `input-voltage`, `battery-voltage`,
+`battery-detected` (dimensionless 0/1), `charge` (Ah), `energy` (Wh),
+`temperature-internal` and `temperature-external`. All use the same reading and
+freshness contract. Native counters can reset with device actions; detect a
+decrease and start a new integration segment rather than inventing a delta.
+OVP/OCP settings, presets and front-panel settings are not yet exposed by this
+driver. Calibration is not an automation operation.
 
 The ordinary RD6018 and RD6024 profiles use 0.01 V/A setpoint steps. RD6018
 model ceilings are 60 V / 18 A / 1080 W; RD6024 ceilings are 60 V / 24 A /

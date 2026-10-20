@@ -3,7 +3,7 @@
 using namespace labbridge;
 struct Rtu : Endpoint {
   Bytes rx;
-  std::array<uint16_t, 20> regs{};
+  std::array<uint16_t, 42> regs{};
   uint64_t gen = 1;
   unsigned enables = 0;
   bool online = true;
@@ -19,8 +19,11 @@ struct Rtu : Endpoint {
   uint64_t generation() const override { return gen; }
   bool send(const Bytes &b) override {
     if (b[1] == 3) {
-      rx = {1, 3, 40};
-      for (auto r : regs) {
+      unsigned first = (b[2] << 8) | b[3], count = (b[4] << 8) | b[5];
+      assert(first + count <= regs.size());
+      rx = {1, 3, uint8_t(count * 2)};
+      for (unsigned i = first; i < first + count; ++i) {
+        auto r = regs[i];
         rx.push_back(r >> 8);
         rx.push_back(r & 255);
       }
@@ -48,6 +51,60 @@ struct Rtu : Endpoint {
   }
 };
 int main() {
+  // LB-007: all source telemetry is available through compatibility and
+  // component APIs, with absent probes distinguished from real zero readings.
+  Rtu telemetry;
+  telemetry.regs[0] = 60181;
+  telemetry.regs[14] = 6789;
+  telemetry.regs[32] = 1;
+  telemetry.regs[33] = 417;
+  telemetry.regs[35] = 28;
+  telemetry.regs[38] = 1;
+  telemetry.regs[39] = 3456;
+  telemetry.regs[40] = 2;
+  telemetry.regs[41] = 5678;
+  Rd60xxDriver meter(
+      "psu", 123, telemetry, {5, 1, 5, 3000, 0}, [](const Json &) {}, Json(),
+      "tcp", 6018);
+  for (uint64_t t = 0; t < 1000; t += 5)
+    meter.tick(t);
+  auto full = meter.measurements(1000);
+  assert(full.number("input_voltage_v") == 67.89);
+  assert(full.number("battery_voltage_v") == 4.17);
+  assert(full.boolean("battery_detected"));
+  assert(full.number("capacity_ah") == 68.992);
+  assert(full.number("energy_wh") == 136.75);
+  assert(meter.component_reading("input-voltage", 1000).number("value") ==
+         67.89);
+  assert(meter.component_reading("battery-voltage", 1000).number("value") ==
+         4.17);
+  assert(meter.component_reading("charge", 1000).text("unit") == "Ah");
+  assert(meter.component_reading("battery-detected", 1000).number("value") ==
+         1);
+  assert(meter.component_reading("energy", 1000).number("value") == 136.75);
+  assert(
+      meter.component_reading("temperature-external", 1000).number("value") ==
+      28);
+  telemetry.regs[34] = 1;
+  telemetry.regs[35] =
+      89; // Disconnected NTC, as handled by the manufacturer PC app.
+  for (uint64_t t = 1000; t < 1500; t += 5)
+    meter.tick(t);
+  auto absent = meter.component_reading("temperature-external", 1500);
+  assert(absent.text("quality") == "unavailable" && !absent.has("value"));
+  assert(
+      meter.component_reading("temperature-internal", 1500).text("quality") ==
+      "valid");
+  telemetry.regs[32] = telemetry.regs[34] = telemetry.regs[35] = 0;
+  for (uint64_t t = 1500; t < 2000; t += 5)
+    meter.tick(t);
+  assert(meter.component_reading("battery-detected", 2000).number("value") ==
+         0);
+  auto zero_probe = meter.component_reading("temperature-external", 2000);
+  assert(zero_probe.text("quality") == "valid" && zero_probe.has("value") &&
+         zero_probe.number("value") == 0);
+  assert(meter.component_reading("input-voltage", 5000).text("quality") ==
+         "stale");
   // LB-019: a lost background read may be recovered before the first ON
   // write. Neither an uncertain ON echo nor a mismatched readback permits
   // a second activation write.

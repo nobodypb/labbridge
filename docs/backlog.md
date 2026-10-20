@@ -62,6 +62,8 @@ no claim of a production-ready battery test system or of tested optional PSU BT.
 
 - **LB-019:** host commissioning sends both stages without an intermediate operator callback. After the bounded PC server-address window, send stored AP credentials automatically; a fresh session-scoped TCP identity confirms completion. A cached candidate or UDP ACK alone cannot confirm success. Timeout/cancellation/session changes must not advance or cancel another session. The initial physical OFF/setup prerequisites remain required.
 
+- **LB-007:** read the complete operating/measurement block (0–41): output V/I/W, input supply and battery voltage/presence, internal/external temperature, native Ah/Wh counters, setpoints and protection/regulation state. Preserve 32-bit word order and PC software scales; expose sensor components with units/freshness, and absent NTC as unavailable without a substituted zero. Verify the extended read and V/I/output writes on actual RD hardware, restore settings and leave confirmed OFF.
+
 - **LB-010:** stable udev/by-id aliases identify a physical ESP despite tty renumbering; native USB/JTAG line control uses the resolved USB identity while opening the selected durable path. Separate bench roles never rely on ttyACM enumeration.
 - **LB-010:** native USB responses remain complete through reserve/release/STOP cycles as well as read-only discovery. Use buffered interrupt-driven console I/O; exercise the actual connected board, not only host framing fixtures.
 - **LB-001:** the StickS3 profile enables and boot-tests its octal PSRAM for the application heap; a repeated hardware operation run retains its boot identity. Memory-pressure admission/recovery on boards without PSRAM remains a separate physical acceptance limit.

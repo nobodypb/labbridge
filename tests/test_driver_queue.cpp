@@ -46,7 +46,7 @@ struct DelayedRtu : Endpoint {
   bool pending = false;
   unsigned overlaps = 0;
   Bytes rx;
-  std::array<uint16_t, 20> regs{};
+  std::array<uint16_t, 42> regs{};
   DelayedRtu() {
     regs[0] = 60241;
     regs[2] = 123;
@@ -61,8 +61,11 @@ struct DelayedRtu : Endpoint {
       return false;
     }
     if (b[1] == 3) {
-      rx = {1, 3, 40};
-      for (auto r : regs) {
+      unsigned first = (b[2] << 8) | b[3], count = (b[4] << 8) | b[5];
+      assert(first + count <= regs.size());
+      rx = {1, 3, uint8_t(count * 2)};
+      for (unsigned i = first; i < first + count; ++i) {
+        auto r = regs[i];
         rx.push_back(r >> 8);
         rx.push_back(r);
       }
