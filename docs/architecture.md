@@ -58,3 +58,14 @@ Read-only meters publish immutable snapshots from worker tasks; node routing and
 safety do not wait on I²C or network I/O. I²C endpoints share only their validated
 bus/pin pair, not their address or sample state. A host-native Yocto provider
 implements the same generated read-only API over the official USB SDK.
+
+
+RD60xx original Wi-Fi modules connect inward to the ESP AP. A bounded socket
+worker probes identity read-only, then assigns separate endpoints by serial and
+expected model. Portable framing, identity-binding and provisioning state live
+with the driver module; the ESP worker owns socket/datagram I/O. The safety loop
+never waits for network operations. Provisioning is node-level management because
+the instrument identity is unknown initially, and never creates a lease or actor
+implicitly. Its authenticated API is shared by generated CLI and a registered
+node-setup UI module. Distinct configurable AP SSIDs allow the same firmware to
+move source devices onto another node without adding a second integration path.

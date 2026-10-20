@@ -6,13 +6,15 @@ struct Rtu : Endpoint {
   std::array<uint16_t, 20> regs{};
   uint64_t gen = 1;
   unsigned enables = 0;
+  bool online = true;
+  size_t chunk = 256;
   Rtu() {
     regs[0] = 60241;
     regs[2] = 123;
     regs[8] = 420;
     regs[9] = 100;
   }
-  bool connected() const override { return true; }
+  bool connected() const override { return online; }
   uint64_t generation() const override { return gen; }
   bool send(const Bytes &b) override {
     if (b[1] == 3) {
@@ -34,8 +36,9 @@ struct Rtu : Endpoint {
     return true;
   }
   Bytes receive() override {
-    Bytes b;
-    b.swap(rx);
+    auto n = std::min(chunk, rx.size());
+    Bytes b(rx.begin(), rx.begin() + n);
+    rx.erase(rx.begin(), rx.begin() + n);
     return b;
   }
 };
@@ -58,4 +61,45 @@ int main() {
     d.tick(t);
   failed = d.operation(2000).text("status") == "failed";
   assert(failed && wire.enables == 0);
+  Rtu wifi;
+  wifi.regs[0] = 60181;
+  wifi.chunk = 3;
+  Rd60xxDriver rd18(
+      "psu", 123, wifi, {5, 1, 5, 3000, 0}, [](const Json &) {}, Json(), "tcp",
+      6018);
+  for (uint64_t t = 0; t < 1000; t += 5)
+    rd18.tick(t);
+  assert(rd18.describe(1000).text("state") == "ready");
+  rd18.execute("setSourceCurrent", Json::parse(R"({"current_a":0.15})"), 1000);
+  for (uint64_t t = 1000; t < 1600; t += 5)
+    rd18.tick(t);
+  assert(wifi.regs[9] == 15 &&
+         rd18.operation(1600).text("status") == "succeeded");
+  rd18.execute("setOutput", Json::parse(R"({"enabled":true})"), 1600);
+  ++wifi.gen;
+  rd18.tick(1605);
+  assert(rd18.operation(1605).text("status") == "failed");
+  for (uint64_t t = 1610; t < 2500; t += 5)
+    rd18.tick(t);
+  assert(wifi.enables == 0 && rd18.describe(2500).text("output") == "off");
+  Rtu second;
+  second.regs[0] = 60182;
+  second.regs[2] = 456;
+  second.chunk = 5;
+  Rd60xxDriver rd18b(
+      "psu-b", 456, second, {5, 1, 5, 3000, 0}, [](const Json &) {}, Json(),
+      "tcp", 6018);
+  for (uint64_t t = 2500; t < 3500; t += 5) {
+    rd18.tick(t);
+    rd18b.tick(t);
+  }
+  rd18.execute("setSourceCurrent", Json::parse(R"({"current_a":0.20})"), 3500);
+  rd18b.execute("setSourceCurrent", Json::parse(R"({"current_a":0.30})"), 3500);
+  for (uint64_t t = 3500; t < 4200; t += 5) {
+    rd18.tick(t);
+    rd18b.tick(t);
+  }
+  assert(wifi.regs[9] == 20 && second.regs[9] == 30);
+  assert(rd18.operation(4200).text("status") == "succeeded" &&
+         rd18b.operation(4200).text("status") == "succeeded");
 }

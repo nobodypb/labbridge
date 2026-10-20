@@ -33,9 +33,24 @@ bool valid(const Bytes &b, uint8_t a, uint8_t f) {
     return b.size() == size_t(b[2]) + 5 && !(b[2] % 2);
   return f == 6 && b.size() == 8;
 }
-Measurement decode(const std::array<uint16_t, 20> &r) {
-  if (r[0] / 10 != 6024 || r[18] > 1 || r[17] > 1)
-    throw std::invalid_argument("Unexpected RD6024 register block");
+Profile profile(unsigned model) {
+  if (model == 6018)
+    return {6018, 18, 1080};
+  if (model == 6024)
+    return {6024, 24, 1440};
+  throw std::invalid_argument(
+      "Unsupported RD60xx model (P variants are not supported)");
+}
+void Profile::validate(const Limits &l) const {
+  if (!l.valid() || l.voltage > 60 || l.current > max_current ||
+      l.power > max_power)
+    throw std::invalid_argument("RD60xx limits exceed selected model");
+}
+Measurement decode(const std::array<uint16_t, 20> &r, unsigned expected_model) {
+  auto model = profile(expected_model);
+  if (r[0] / 10 != expected_model || (expected_model == 6018 && r[0] > 60184) ||
+      r[18] > 1 || r[17] > 1)
+    throw std::invalid_argument("Unexpected RD60xx model/register block");
   Measurement m{(uint32_t(r[1]) << 16) | r[2],
                 r[8] / 100.,
                 r[9] / 100.,
@@ -46,8 +61,8 @@ Measurement decode(const std::array<uint16_t, 20> &r) {
                 r[18] != 0,
                 r[17] != 0,
                 r[16]};
-  if (m.voltage > 65 || m.current > 26)
-    throw std::invalid_argument("RD6024 values out of range");
+  if (m.voltage > 65 || m.current > model.max_current + 2)
+    throw std::invalid_argument("RD60xx values out of range");
   return m;
 }
 } // namespace labbridge::rd60xx

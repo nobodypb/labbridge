@@ -25,8 +25,9 @@ static std::atomic<bool> scan_requested{false}, scan_running{false};
 static std::atomic<uint64_t> scan_finished{0};
 static void scan_worker(void *) {
   for (;;) {
-    if (scan_requested.exchange(false)) {
+    if (scan_requested) {
       scan_running = true;
+      scan_requested = false;
       wifi_scan_config_t cfg = {};
       auto err = esp_wifi_scan_start(&cfg, true);
       Json result;
@@ -91,6 +92,9 @@ static void connect_station() {
   esp_wifi_disconnect();
   esp_wifi_connect();
 }
+bool wifi_network_busy() {
+  return scan_running || scan_requested || apply_wifi_at != 0;
+}
 Response dispatch(const std::string &method, const std::string &path,
                   const Json &body, const Headers &headers, bool local) {
   std::lock_guard<std::recursive_mutex> l(mutex);
@@ -99,6 +103,12 @@ Response dispatch(const std::string &method, const std::string &path,
     j.set("token", read_nvs("auth").text("token"));
     return {200, j};
   }
+  if (rd_provisioning_active() &&
+      (path == "/api/v1/wifi/scan" ||
+       (method != "GET" && path.rfind("/api/v1/rd60xx/provisioning", 0) != 0 &&
+        !(path.size() >= 5 && path.substr(path.size() - 5) == "/stop"))))
+    return problem(
+        409, "Finish or cancel RD provisioning before other mutations/scans");
   return node->request(method, path, body, headers, now_ms());
 }
 static bool via_ap(httpd_req_t *r) {
@@ -249,9 +259,9 @@ void start_network() {
   esp_event_handler_register(IP_EVENT, IP_EVENT_STA_GOT_IP, event, nullptr);
   ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_APSTA));
   wifi_config_t c = {};
-  const char *ssid = "LabBridge-Setup";
-  memcpy(c.ap.ssid, ssid, strlen(ssid));
-  c.ap.ssid_len = strlen(ssid);
+  auto ssid = configuration.text("ap_ssid", "LabBridge-Setup");
+  memcpy(c.ap.ssid, ssid.data(), ssid.size());
+  c.ap.ssid_len = ssid.size();
   c.ap.max_connection = 4;
   c.ap.authmode = WIFI_AUTH_OPEN;
   ESP_ERROR_CHECK(esp_wifi_set_config(WIFI_IF_AP, &c));
@@ -323,6 +333,7 @@ void start_network() {
     ESP_ERROR_CHECK(httpd_register_uri_handler(server, &u));
   }
   httpd_register_err_handler(server, HTTPD_404_NOT_FOUND, captive);
+  start_rd_network();
   xTaskCreate(scan_worker, "wifi_scan", 6144, nullptr, 3, nullptr);
   xTaskCreate(dns, "setup_dns", 3072, nullptr, 2, nullptr);
   xTaskCreate(wifi_worker, "wifi_apply", 4096, nullptr, 3, nullptr);

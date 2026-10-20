@@ -77,16 +77,18 @@ static void modules() {
                                          *wire, limits(j), persistence(j),
                                          journal(j));
   });
-  catalog.register_module("rd60xx", {"usb", "uart"}, [](const Json &j) {
+  catalog.register_module("rd60xx", {"usb", "uart", "tcp"}, [](const Json &j) {
+    auto model = unsigned(j.item("rd60xx").number("model", 6024));
     auto wire =
-        j.text("transport") == "usb"
+        j.text("transport") == "tcp" ? tcp_endpoint(j.text("endpoint"), model)
+        : j.text("transport") == "usb"
             ? usb_endpoint(j.text("endpoint"))
             : uart_endpoint({j.text("id"), j.text("driver"),
                              j.text("transport"), j.text("endpoint"), pins(j)});
     endpoints.push_back(wire);
     return std::make_shared<Rd60xxDriver>(
         j.text("id"), std::stoul(j.text("endpoint")), *wire, limits(j),
-        persistence(j), journal(j), j.text("transport"));
+        persistence(j), journal(j), j.text("transport"), model);
   });
   catalog.register_module("ina228", {"i2c"}, ina228_driver);
   catalog.register_module("yocto_watt", {"http"}, yocto_watt_driver);
@@ -97,6 +99,9 @@ static void validate_configuration(const Json &c) {
   if (c.text("board") != board.id)
     throw ConfigurationError(
         "Configuration board does not match firmware build");
+  auto ssid = c.text("ap_ssid", "LabBridge-Setup");
+  if (ssid.empty() || ssid.size() > 32)
+    throw ConfigurationError("AP SSID must contain 1..32 bytes");
   auto registry = catalog.validate(c, board);
   (void)registry;
   auto a = c.at("devices");
@@ -118,12 +123,14 @@ static void validate_configuration(const Json &c) {
     }
     if (d == "rd60xx") {
       auto l = limits(j);
-      if (l.voltage > 60 || l.current > 24 || l.power > 1440)
-        throw ConfigurationError(
-            "RD6024 limits exceed supported hardware range");
+      rd60xx::profile(unsigned(j.item("rd60xx").number("model", 6024)))
+          .validate(l);
+      if (j.text("transport") == "tcp" && count)
+        throw ConfigurationError("TCP does not use GPIO pins");
       auto s = j.text("endpoint");
       if (s.empty() || s.find_first_not_of("0123456789") != std::string::npos ||
-          std::stoull(s) > UINT32_MAX || std::stoull(s) == 0)
+          std::stoull(s) > UINT32_MAX || std::stoull(s) == 0 ||
+          s != std::to_string(std::stoull(s)))
         throw ConfigurationError(
             "RD endpoint must be instrument register serial");
       if (j.text("transport") == "uart" && count != 2)

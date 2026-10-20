@@ -5,6 +5,7 @@ namespace labbridge {
 BoardProfile BoardProfile::stick_s3() {
   return {"m5stack-sticks3",
           {{"http", 4},
+           {"tcp", 2},
            {"ble", 2},
            {"usb", 0},
            {"spp", 0},
@@ -16,6 +17,7 @@ BoardProfile BoardProfile::stick_s3() {
 BoardProfile BoardProfile::s3_usb_otg() {
   return {"esp32-s3-usb-otg",
           {{"http", 4},
+           {"tcp", 2},
            {"ble", 2},
            {"usb", 2},
            {"spp", 0},
@@ -27,6 +29,7 @@ BoardProfile BoardProfile::s3_usb_otg() {
 BoardProfile BoardProfile::esp32_devkit() {
   return {"esp32-devkit",
           {{"http", 4},
+           {"tcp", 2},
            {"ble", 2},
            {"usb", 0},
            {"spp", 0},

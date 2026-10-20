@@ -2,13 +2,13 @@
 #include "labbridge/guard.hpp"
 #include "labbridge/node.hpp"
 #include "labbridge/transaction.hpp"
-#include "rd60xx.hpp"
+#include "rd_wifi.hpp"
 namespace labbridge {
 class Rd60xxDriver : public Driver {
 public:
   Rd60xxDriver(std::string id, uint32_t serial, Endpoint &, Limits,
                std::function<void(const Json &)>, Json,
-               std::string transport = "usb");
+               std::string transport = "usb", unsigned model = 6024);
   Json describe(uint64_t) override;
   Json measurements(uint64_t) override;
   bool supports(const std::string &) const override;
@@ -25,6 +25,8 @@ private:
   enum class Phase { idle, identity, echo, verify, poll, drain };
   std::string id_, transport_;
   uint32_t serial_;
+  unsigned model_;
+  rd60xx::RtuStream stream_;
   Endpoint &wire_;
   Limits limits_;
   std::function<void(const Json &)> persist_;
@@ -42,6 +44,7 @@ private:
   void send_write(uint64_t);
   bool consume_read(uint64_t);
   void fail(const std::string &, uint64_t);
+  void recovery_stop(uint64_t);
   bool fresh(uint64_t) const;
 };
 } // namespace labbridge

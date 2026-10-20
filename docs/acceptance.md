@@ -85,3 +85,29 @@ component STOP). Confirmations use A/V/s with units. The pulse measured 23.990 V
 0.100 A. All 14 original settings, CC 0.100 A and confirmed OFF were restored;
 22/22 audited registers remained valid. This extends the DL24M evidence and does
 not commission the optional new meter hardware.
+
+
+## RD6018 AP extension (LB-019)
+
+Portable tests cover ordinary RD6018/RD6024 selection and ceilings, explicit
+RD6018P rejection, independent identities/two sources, corrupt/fragmented RTU
+frames, duplicate/wrong-model binding, interrupted ON without replay, provisioning
+packet vectors/checksums and session/phase/replay/deadline behavior. Generated
+CLI tests exercise provisioning requests; browser scenarios cover physical-OFF
+confirmation, both phases, cancellation and ETag/explicit-limit registration.
+The StickS3 firmware builds with the AP TCP service and provisioning sender.
+
+Actual RD pairing, setpoint/output readback, fault tests and full coexistence
+acceptance remain open until performed. This must not be inferred from simulated
+sources. The read-only acceptance runner requires configured TCP sources, BLE
+DL24M and an active station connection:
+
+```sh
+python tools/rd_wifi_acceptance.py --endpoint serial:/dev/ttyACM0 --source source-a --load load --output results/rd-ap-soak
+# Add --source source-b when its Wi-Fi module is available. Default duration: 3600 s.
+```
+
+It records boot IDs, measurement freshness, configuration and connection counters;
+an unexpected disconnect/rejection, stale sample or restart fails the run. Files
+contain hardware identities and remain ignored/private. Active bench writes and
+intentional fault injection are separate checks; this runner makes no mutations.

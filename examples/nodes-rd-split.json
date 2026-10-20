@@ -1,0 +1,6 @@
+{
+  "nodes": {
+    "load-node": {"endpoint": "http://labbridge.local", "token_env": "LABBRIDGE_LOAD_TOKEN"},
+    "source-node": {"endpoint": "http://labbridge-sources.local", "token_env": "LABBRIDGE_SOURCE_TOKEN"}
+  }
+}

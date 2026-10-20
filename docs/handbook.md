@@ -15,8 +15,8 @@ No manufacturer firmware update is needed for the confirmed DL24M protocol.
 
 | Board | Practical instrument connections | Constraints |
 |---|---|---|
-| M5Stack StickS3 / ESP32-S3 | BLE DL24M | Native USB remains the console. USB host disabled. No Bluetooth Classic. |
-| ESP32-S3-USB-OTG | BLE and up to two USB serial RD6024 endpoints | Powered USB hub for two instruments; separate UART console. Internal USB PHY cannot serve console and host simultaneously. |
+| M5Stack StickS3 / ESP32-S3 | BLE DL24M and up to two AP TCP RD6018/RD6024 sources | Native USB remains the console. USB host disabled. No Bluetooth Classic. |
+| ESP32-S3-USB-OTG | BLE, up to two AP TCP sources and up to two USB serial RD60xx endpoints | Powered USB hub for two instruments; separate UART console. Internal USB PHY cannot serve console and host simultaneously. |
 | Classic ESP32 devkit | BLE and UART | Bluetooth Classic hardware exists, but SPP is not enabled in this runtime. No native USB host. |
 
 Resource profiles reject excess connections, duplicate instrument identities
@@ -24,7 +24,7 @@ and shared pins before creating drivers. GPIO/1-Wire pins must be explicitly
 approved in a board profile; an empty pin allowlist is intentional. Do not infer
 that an exposed pin is free on a display/power-management board.
 
-RD6024 USB links use 115200 baud, 8N1. The original adapter supports CH34x, CP210x
+RD6018/RD6024 USB links use 115200 baud, 8N1. The original adapter supports CH34x, CP210x
 and FTDI converters. Bind a PSU by its register serial number, not enumeration
 order or USB converter VID/PID. Two converters can have identical VID/PID.
 A PSU's optional Bluetooth module is not automatically compatible with BLE;
@@ -128,16 +128,17 @@ only after OFF readback. Persist original settings before a multi-step change;
 on incomplete execution, stop and restore. Safety freshness stays at most
 3 seconds during recovery, regardless of the transaction deadline.
 
-## RD6024 protocol
+## RD6018 / RD6024 protocol
 
-Modbus RTU, address 1 on each independent cable. Function 03 reads holding
+Modbus RTU, address 1 on each independent cable or TCP connection. Function 03 reads holding
 registers, function 06 writes one register. CRC16 polynomial A001, initial FFFF,
 CRC low byte first. Validate address, function, payload length and CRC.
 
 | Register | Meaning | Conversion |
 |---:|---|---|
-| 0 | model | raw / 10 = 6024 |
+| 0 | model/revision | RD6018: 60180..60184; RD6024: raw / 10 = 6024 |
 | 1–2 | serial | high word, low word |
+| 3 | firmware | e.g. 136 = 1.36 |
 | 4–5 | internal temperature | sign, magnitude °C |
 | 8 / 9 | set voltage / current | /100 V, /100 A |
 | 10 / 11 | measured voltage / current | /100 V, /100 A |
@@ -149,6 +150,101 @@ CRC low byte first. Validate address, function, payload length and CRC.
 Before writing, re-read and match instrument serial/model. Require function-06
 byte-for-byte echo, then fresh register readback with the same identity. The
 external NTC channel is not mapped yet; internal temperature cannot substitute.
+
+The ordinary RD6018 and RD6024 profiles use 0.01 V/A setpoint steps. RD6018
+model ceilings are 60 V / 18 A / 1080 W; RD6024 ceilings are 60 V / 24 A /
+1440 W. These ceilings do not guarantee that the input supply/cooling can deliver
+that power. Explicit configured limits remain authoritative and can be lower.
+RD6018P IDs 60185..60189 are rejected because their scaling differs. Configurations
+without `rd60xx.model` retain the earlier RD6024 profile; select `6018` explicitly
+for the user's RD6018 instruments. Unsupported models are rejected before writes.
+
+### Original RD Wi-Fi modules on the ESP AP
+
+The first deployment hosts sources on the ESP AP while the ESP is also a station
+on the laboratory WLAN and a BLE central for DL24M. AP+STA is already enabled.
+The AP is open, defaults to `LabBridge-Setup`, and has address `192.168.4.1`.
+Optional `NodeConfiguration.ap_ssid` changes its name; the lab LAN must use a
+different subnet. Four AP stations are permitted, including phones/PCs.
+
+Original RIDEN Wi-Fi modules are TCP **clients**. They connect to the configured
+server on port **8080**, carrying CRC-protected **Modbus RTU** bytes. There is no
+MBAP header. LabBridge listens on its AP address; this delivery does not expose
+that instrument socket on the station LAN. No NAT, cloud, MQTT broker or Internet
+access is needed. The host accesses LabBridge through its existing LAN API or
+trusted USB CLI.
+
+Set each PSU's Modbus address to **1**. Bind each device by its decimal instrument
+serial, never its DHCP address. Up to two configured TCP devices have independent
+streams, connection generations and recovery. The listener permits four sockets,
+probes each newcomer using only function 03, and remembers up to eight candidate
+identities per boot. Unknown devices remain read-only. Duplicate live serials,
+wrong configured models and unsupported models are rejected. Socket buffers and
+identity timeouts are bounded; fragmented/coalesced TCP data is parsed by frame
+length and CRC. A timed-out command discards its TCP stream to prevent a late
+response from confirming a later command. Reconnection verifies identity and
+requests OFF before allowing work; it never resumes ON.
+
+### Pairing through LabBridge
+
+Keep the target PSU output OFF and configure one module at a time. On the PSU,
+select WiFi/address 1, reset the previous Wi-Fi setup and restart. In `/devices`,
+enter the API token, open **RD60xx Wi-Fi setup**, confirm output OFF and start.
+These setup operations require bearer authentication even on the open AP; USB
+management is trusted. Existing leases/operations must be released and shutdown
+obligations resolved. Wi-Fi scans/changes, configuration writes and new leases
+are blocked while pairing; independent STOP remains available.
+
+1. In `server_address`, the ESP transmits its AP address using the RIDEN
+   two-stage ESPTouch convention. When the PSU shows `192.168.4.1` /
+   **Connecting WiFi**, acknowledge **ESP address shown / Connecting WiFi**.
+2. In `wifi`, the ESP transmits the AP SSID, BSSID and empty AP password. When
+   the PSU shows **Connecting server**, acknowledge **Connecting server shown**.
+3. `waiting_connection` completes when a supported incoming identity has been
+   seen. Each phase has a 120-second deadline. Cancellation stops transmission;
+   settings already received by the PSU are not undone. Old session IDs are
+   rejected and repeated phase acknowledgements never skip a step.
+4. Check the displayed model/serial. Enter a device ID and explicit voltage,
+   current and power limits, then select **Add RD source and restart**. This
+   appends a serial-bound TCP device using the configuration ETag. Saving
+   reboots the ESP; restart the PSU if its original module does not reconnect.
+   Discovery/registration never enables an output.
+
+The same operations are generated for HTTP and USB CLI:
+
+```sh
+labbridge --endpoint serial:/dev/ttyACM0 call rd60xx.get_rd_provisioning
+labbridge --endpoint serial:/dev/ttyACM0 call rd60xx.start_rd_provisioning --args-file examples/commands/rd-pair-start.json
+labbridge --endpoint serial:/dev/ttyACM0 call rd60xx.advance_rd_provisioning --args '{"rd_provision_advance":{"session_id":"YOUR-SESSION","expected_phase":"server_address"}}'
+labbridge --endpoint serial:/dev/ttyACM0 call rd60xx.advance_rd_provisioning --args '{"rd_provision_advance":{"session_id":"YOUR-SESSION","expected_phase":"wifi"}}'
+labbridge --endpoint serial:/dev/ttyACM0 call rd60xx.cancel_rd_provisioning --args '{"rd_provision_cancel":{"session_id":"YOUR-SESSION"}}'
+```
+
+See [single-node configuration](../examples/configuration/rd6018-ap-sticks3.json).
+Replace all synthetic identities and bench limits for the actual circuit.
+
+### Coexistence and a second ESP
+
+AP and STA share one channel, with the STA channel taking priority. Espressif
+classifies SoftAP with associated stations plus BLE as supported but potentially
+unstable; this combination requires actual commissioning, not just compilation.
+The initial configuration deliberately tries one ESP. Unexpected disconnects,
+measurement gaps beyond configured freshness, ESP resets or unconfirmed STOP on
+an otherwise intact connection fail acceptance.
+
+If unstable, move the TCP source devices to a second ESP running the same
+firmware. Use the [sources-only configuration](../examples/configuration/rd6018-ap-sources-sticks3.json)
+with AP `LabBridge-Sources`, keep DL24M on the first node and use
+[named nodes](../examples/nodes-rd-split.json) in host bindings. No PSU clients
+then share the DL24M node's AP. Do not switch topology during an active run.
+A lost radio link cannot prove physical OFF; independent circuit protection is
+required wherever shutdown must remain possible during that loss.
+
+Protocol/provisioning references: [original-module bridge and pairing documentation](https://github.com/pgreenland/RidenRD60xxMQTT),
+[Espressif ESPTouch framing](https://github.com/EspressifApp/EsptouchForAndroid),
+[ordinary/P model scaling](https://github.com/morgendagen/riden-dongle/blob/main/src/riden_modbus/riden_modbus.cpp),
+[Espressif RF coexistence](https://docs.espressif.com/projects/esp-idf/en/v5.5.2/esp32s3/api-guides/coexist.html).
+No third-party implementation code is vendored for this transport/provisioner.
 
 ## Public API and USB
 
