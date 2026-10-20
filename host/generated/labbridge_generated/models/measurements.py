@@ -17,7 +17,7 @@ import pprint
 import re  # noqa: F401
 import json
 
-from pydantic import BaseModel, ConfigDict, Field, StrictFloat, StrictInt, StrictStr, field_validator
+from pydantic import BaseModel, ConfigDict, Field, StrictBool, StrictFloat, StrictInt, StrictStr, field_validator
 from typing import Any, ClassVar, Dict, List, Optional, Union
 from typing_extensions import Annotated
 from labbridge_generated.models.temperature_channel import TemperatureChannel
@@ -61,7 +61,13 @@ class Measurements(BaseModel):
     protection_code: Optional[Annotated[int, Field(le=65535, strict=True, ge=0)]] = Field(default=None, description="Driver-specific protection status code, not a portable cross-device enum.")
 
     boot_id: Optional[StrictStr] = Field(default=None, description="Opaque identifier for this node boot. A change invalidates prior monotonic timestamps, leases and operation IDs.")
-    __properties: ClassVar[List[str]] = ["device_id", "sequence", "received_ms", "age_ms", "quality", "voltage_v", "current_a", "power_w", "capacity_ah", "energy_wh", "temperature_channels", "set_voltage_v", "set_current_a", "regulation_mode", "protection_code", "boot_id"]
+
+    input_voltage_v: Optional[Union[StrictFloat, StrictInt]] = Field(default=None, description="Source input supply voltage in V when supported. This is distinct from output voltage and its operating limit.")
+
+    battery_voltage_v: Optional[Union[StrictFloat, StrictInt]] = Field(default=None, description="Voltage in V reported by a dedicated battery-sensing input when supported. Do not infer electrical isolation or a valid battery wiring arrangement from this value.")
+
+    battery_detected: Optional[StrictBool] = Field(default=None, description="Instrument-reported battery presence, when supported. This is telemetry, not authorization for a battery operation or proof of correct wiring.")
+    __properties: ClassVar[List[str]] = ["device_id", "sequence", "received_ms", "age_ms", "quality", "voltage_v", "current_a", "power_w", "capacity_ah", "energy_wh", "temperature_channels", "set_voltage_v", "set_current_a", "regulation_mode", "protection_code", "boot_id", "input_voltage_v", "battery_voltage_v", "battery_detected"]
 
     @field_validator('quality')
     def quality_validate_enum(cls, value):
@@ -154,7 +160,10 @@ class Measurements(BaseModel):
             "set_current_a": obj.get("set_current_a"),
             "regulation_mode": obj.get("regulation_mode"),
             "protection_code": obj.get("protection_code"),
-            "boot_id": obj.get("boot_id")
+            "boot_id": obj.get("boot_id"),
+            "input_voltage_v": obj.get("input_voltage_v"),
+            "battery_voltage_v": obj.get("battery_voltage_v"),
+            "battery_detected": obj.get("battery_detected")
         })
         return _obj
 
