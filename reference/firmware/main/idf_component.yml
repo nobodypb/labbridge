@@ -1,0 +1,19 @@
+dependencies:
+  idf: "==5.5.2"
+  espressif/mdns: "1.8.2"
+  espressif/usb_host_cdc_acm:
+    version: "2.4.1"
+    matches:
+      - if: "target == esp32s3"
+  espressif/usb_host_ch34x_vcp:
+    version: "2.2.1"
+    matches:
+      - if: "target == esp32s3"
+  espressif/usb_host_cp210x_vcp:
+    version: "2.2.0"
+    matches:
+      - if: "target == esp32s3"
+  espressif/usb_host_ftdi_vcp:
+    version: "2.1.0"
+    matches:
+      - if: "target == esp32s3"

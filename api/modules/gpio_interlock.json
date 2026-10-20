@@ -1,0 +1,110 @@
+{
+  "x-labbridge-module": {
+    "id": "gpio_interlock",
+    "transports": [
+      "gpio"
+    ],
+    "capabilities": [
+      "switch.path",
+      "switch.feedback"
+    ]
+  },
+  "paths": {
+    "/api/v1/devices/{deviceId}/switch/path": {
+      "put": {
+        "operationId": "setSwitchPath",
+        "tags": [
+          "gpio_interlock"
+        ],
+        "responses": {
+          "default": {
+            "description": "Structured error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "202": {
+            "description": "Operation accepted; poll Location until terminal",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Operation"
+                }
+              }
+            },
+            "headers": {
+              "Location": {
+                "description": "Operation URL",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "deviceId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9_-]{1,48}$"
+            }
+          },
+          {
+            "name": "X-Lab-Lease",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 96
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SwitchPathRequest"
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "schemas": {
+    "SwitchPathRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "path": {
+          "type": "string",
+          "enum": [
+            "isolated",
+            "charge",
+            "discharge"
+          ]
+        }
+      },
+      "required": [
+        "path"
+      ]
+    }
+  }
+}

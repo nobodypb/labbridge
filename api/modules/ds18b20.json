@@ -1,0 +1,55 @@
+{
+  "x-labbridge-module": {
+    "id": "ds18b20",
+    "transports": [
+      "onewire"
+    ],
+    "capabilities": [
+      "temperature.external"
+    ]
+  },
+  "paths": {
+    "/api/v1/devices/{deviceId}/temperature/channels": {
+      "get": {
+        "operationId": "getTemperatureChannels",
+        "tags": [
+          "ds18b20"
+        ],
+        "responses": {
+          "200": {
+            "description": "Confirmed result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TemperatureChannels"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Structured error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "deviceId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9_-]{1,48}$"
+            }
+          }
+        ]
+      }
+    }
+  },
+  "schemas": {}
+}

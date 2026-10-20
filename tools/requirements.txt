@@ -1,0 +1,8 @@
+cmake==3.30.2
+openapi-spec-validator==0.7.2
+pytest==8.3.5
+pydantic==2.11.7
+urllib3==2.5.0
+python-dateutil==2.9.0.post0
+pyserial==3.5
+clang-format==18.1.8

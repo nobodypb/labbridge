@@ -1,0 +1,90 @@
+<!doctype html>
+<html lang="de">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Laborbrücke – WLAN einrichten</title>
+<style>
+  :root{font:16px system-ui,sans-serif;color:#182432;background:#f3f5f8}
+  body{max-width:34rem;margin:2rem auto;padding:0 1rem}
+  main{background:white;border-radius:12px;padding:1.5rem;box-shadow:0 4px 24px #18243212}
+  h1{margin-top:0}label{display:block;font-weight:600;margin:1rem 0 .35rem}
+  input,select,button,textarea{box-sizing:border-box;font:inherit;width:100%;padding:.7rem;border:1px solid #94a3b8;border-radius:7px}
+  button{margin-top:1rem;background:#1656a5;color:white;border:0;cursor:pointer}
+  button:disabled{opacity:.6;cursor:wait}small{color:#475569}p{line-height:1.45}
+  #notice{min-height:1.5rem}#tokenBox{margin-top:1.5rem;border-top:1px solid #ddd;padding-top:1rem}
+  textarea{height:4.5rem;resize:none;font-family:monospace}a{overflow-wrap:anywhere}
+</style>
+<main>
+  <h1>WLAN einrichten</h1>
+  <p><a href="/devices">Zu den Geräteeinstellungen</a></p>
+  <p>Verbinde die Laborbrücke mit deinem WLAN. Dieses Setup-Netz heißt <strong id="apSsid">LabBridge-Setup</strong> und benötigt kein eigenes Passwort.</p>
+  <label for="networks">Gefundene WLAN-Netze</label>
+  <select id="networks" aria-label="WLAN auswählen"><option value="">Netze suchen …</option></select>
+  <button id="scan" type="button">Erneut suchen</button>
+  <label for="ssid">WLAN-Name (SSID)</label>
+  <input id="ssid" maxlength="32" autocomplete="off" placeholder="Netz auswählen oder Namen eingeben">
+  <label for="password">WLAN-Schlüssel (PSK)</label>
+  <input id="password" type="password" minlength="8" maxlength="63" autocomplete="off" placeholder="Bei offenem WLAN leer lassen">
+  <button id="connect" type="button">Mit WLAN verbinden</button>
+  <p id="notice" role="status" aria-live="polite"></p>
+  <div id="tokenBox" hidden>
+    <label for="token">API-Token für die Laborbrücke</label>
+    <textarea id="token" readonly></textarea>
+    <small>Jetzt kopieren und sicher aufbewahren. Der Token wird später für Messungen benötigt.</small>
+    <p id="homeLink"></p>
+  </div>
+  <p><small>Falls sich diese Seite nicht automatisch öffnet: <a href="http://192.168.4.1/wifi">http://192.168.4.1/wifi</a> im Browser öffnen. Nach erfolgreicher Verbindung schließt das Setup-Netz nach 60 Sekunden.</small></p>
+</main>
+<script>
+const $=id=>document.getElementById(id);
+async function api(path,body){
+  const r=await fetch('/setup/'+path,{method:body?'POST':'GET',headers:{'Content-Type':'application/json'},body:body?JSON.stringify(body):undefined,cache:'no-store'});
+  const j=await r.json();if(!r.ok)throw Error(j.error||'HTTP '+r.status);return j;
+}
+function say(s){$('notice').textContent=s}
+async function scanWifi(){
+  $('scan').disabled=true;say('WLAN-Netze werden gesucht …');
+  try{
+    const d=await api('scan');const selected=$('ssid').value;
+    $('networks').replaceChildren(new Option('Netz auswählen …',''));
+    for(const name of d.networks)$('networks').add(new Option(name,name));
+    if(d.networks.includes(selected))$('networks').value=selected;
+    say(d.networks.length?d.networks.length+' WLAN-Netze gefunden.':'Keine Netze gefunden. Den Netzname kannst du manuell eingeben.');
+  }catch(e){say('Suche fehlgeschlagen: '+e.message+'; bitte erneut versuchen.')}
+  finally{$('scan').disabled=false}
+}
+async function checkConnection(){
+  try{
+    const s=await api('status');
+    if(!s.connected)return false;
+    const url='http://'+s.ip+'/';
+    const link=document.createElement('a');link.href=url;link.textContent=url;
+    $('homeLink').replaceChildren(document.createTextNode('Im Ziel-WLAN erreichbar: '),link);
+    say('Verbunden. Wechsle jetzt zurück in dein WLAN und öffne die angezeigte Adresse.');
+    return true;
+  }catch(e){return false}
+}
+async function showSetupName(){try{const s=await api('status');if(s.ap_ssid)$('apSsid').textContent=s.ap_ssid}catch(e){}}
+async function connectWifi(){
+  const ssid=$('ssid').value.trim(),password=$('password').value;
+  if(!ssid){say('Bitte ein WLAN auswählen oder einen Netznamen eingeben.');return}
+  if(password.length>0&&password.length<8){say('Der WLAN-Schlüssel muss mindestens 8 Zeichen haben.');return}
+  $('connect').disabled=true;say('Verbindung wird hergestellt …');
+  try{
+    const result=await api('connect',{ssid,password});
+    $('password').value='';$('token').value=result.api_token;$('tokenBox').hidden=false;
+    for(let i=0;i<20;i++){
+      if(await checkConnection())return;
+      await new Promise(resolve=>setTimeout(resolve,1000));
+    }
+    say('Noch keine Verbindung. WLAN-Name und Schlüssel prüfen und erneut versuchen. Das Setup-Netz bleibt erreichbar.');
+  }catch(e){say('Verbindung fehlgeschlagen: '+e.message)}
+  finally{$('connect').disabled=false}
+}
+$('networks').addEventListener('change',()=>{if($('networks').value)$('ssid').value=$('networks').value});
+$('scan').addEventListener('click',scanWifi);
+$('connect').addEventListener('click',connectWifi);
+scanWifi();
+showSetupName();
+</script>
+</html>

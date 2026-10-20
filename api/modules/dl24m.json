@@ -1,0 +1,376 @@
+{
+  "x-labbridge-module": {
+    "id": "dl24m",
+    "transports": [
+      "ble"
+    ],
+    "capabilities": [
+      "load.cc",
+      "output",
+      "voltage.measure",
+      "current.measure",
+      "power.measure",
+      "counters",
+      "load.cutoff",
+      "dl24m.settings"
+    ]
+  },
+  "paths": {
+    "/api/v1/devices/{deviceId}/load/current": {
+      "put": {
+        "operationId": "setLoadCurrent",
+        "tags": [
+          "dl24m"
+        ],
+        "responses": {
+          "default": {
+            "description": "Structured error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "202": {
+            "description": "Operation accepted; poll Location until terminal",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Operation"
+                }
+              }
+            },
+            "headers": {
+              "Location": {
+                "description": "Operation URL",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "deviceId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9_-]{1,48}$"
+            }
+          },
+          {
+            "name": "X-Lab-Lease",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 96
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CurrentRequest"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/devices/{deviceId}/dl24m/settings": {
+      "get": {
+        "operationId": "getDl24mSettings",
+        "tags": [
+          "dl24m"
+        ],
+        "responses": {
+          "200": {
+            "description": "Confirmed result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Dl24mSettings"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Structured error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "deviceId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9_-]{1,48}$"
+            }
+          }
+        ]
+      },
+      "put": {
+        "operationId": "setDl24mSettings",
+        "tags": [
+          "dl24m"
+        ],
+        "responses": {
+          "default": {
+            "description": "Structured error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "202": {
+            "description": "Operation accepted; poll Location until terminal",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Operation"
+                }
+              }
+            },
+            "headers": {
+              "Location": {
+                "description": "Operation URL",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "deviceId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9_-]{1,48}$"
+            }
+          },
+          {
+            "name": "X-Lab-Lease",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 96
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Dl24mSettings"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/devices/{deviceId}/dl24m/counters/reset": {
+      "post": {
+        "operationId": "resetDl24mCounters",
+        "tags": [
+          "dl24m"
+        ],
+        "responses": {
+          "default": {
+            "description": "Structured error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "202": {
+            "description": "Operation accepted; poll Location until terminal",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Operation"
+                }
+              }
+            },
+            "headers": {
+              "Location": {
+                "description": "Operation URL",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "deviceId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9_-]{1,48}$"
+            }
+          },
+          {
+            "name": "X-Lab-Lease",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 96
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/StopRequest"
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "schemas": {
+    "Dl24mSettings": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "cutoff_voltage_v": {
+          "type": "number",
+          "format": "double",
+          "minimum": 0,
+          "maximum": 25
+        },
+        "time_limit_s": {
+          "type": "integer",
+          "format": "int64",
+          "minimum": 0,
+          "maximum": 86400,
+          "multipleOf": 60
+        },
+        "working_brightness": {
+          "type": "integer",
+          "format": "int64",
+          "minimum": 0,
+          "maximum": 9
+        },
+        "standby_brightness": {
+          "type": "integer",
+          "format": "int64",
+          "minimum": 0,
+          "maximum": 9
+        },
+        "current_resolution": {
+          "type": "integer",
+          "format": "int64",
+          "minimum": 0,
+          "maximum": 2
+        },
+        "overvoltage_v": {
+          "type": "number",
+          "format": "double",
+          "minimum": 3,
+          "maximum": 25
+        },
+        "overcurrent_a": {
+          "type": "number",
+          "format": "double",
+          "minimum": 0.05,
+          "maximum": 2.5
+        },
+        "overpower_w": {
+          "type": "number",
+          "format": "double",
+          "minimum": 1,
+          "maximum": 15
+        },
+        "overtemperature_c": {
+          "type": "integer",
+          "format": "int64",
+          "minimum": 40,
+          "maximum": 100
+        },
+        "fan_temperature_c": {
+          "type": "integer",
+          "format": "int64",
+          "minimum": 20,
+          "maximum": 90
+        },
+        "battery_overtemperature_c": {
+          "type": "integer",
+          "format": "int64",
+          "minimum": 40,
+          "maximum": 100
+        },
+        "language": {
+          "type": "integer",
+          "format": "int64",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "mode": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 3
+        }
+      }
+    }
+  }
+}

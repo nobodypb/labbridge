@@ -1,0 +1,6 @@
+cmake_minimum_required(VERSION 3.16)
+include($ENV{IDF_PATH}/tools/cmake/project.cmake)
+if(IDF_TARGET STREQUAL "esp32")
+    idf_build_set_property(DEPENDENCIES_LOCK dependencies.esp32.lock)
+endif()
+project(labbridge VERSION 0.1.0)
