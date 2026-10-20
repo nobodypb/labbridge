@@ -399,6 +399,10 @@ void start_network() {
   hc.uri_match_fn = httpd_uri_match_wildcard;
   hc.max_uri_handlers = 8;
   hc.stack_size = 12288;
+  // Cookie sessions outlive TCP connections. Reclaim idle HTTP connections
+  // before the shared socket budget is exhausted; keep active requests bounded.
+  hc.max_open_sockets = 4;
+  hc.lru_purge_enable = true;
   httpd_handle_t server;
   ESP_ERROR_CHECK(httpd_start(&server, &hc));
   for (auto method : {HTTP_GET, HTTP_POST, HTTP_PUT, HTTP_DELETE}) {
