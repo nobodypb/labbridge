@@ -16,16 +16,16 @@ export const settingsFields:Record<string,{key:keyof Dl24mSettings;min:number;ma
  fanTemp:{key:'fanTemperatureC',min:20,max:90,step:1,button:'fanTempBtn'}
 };
 // Every upstream action has either an adapter/local implementation or a reason.
-export const features:Record<string,{handler?:string;reason?:string}>={
- connect:{handler:'connect'},pollMode:{handler:'local recording mode'},pollRate:{handler:'HTTP read interval'},theme:{handler:'local theme'},export:{handler:'session CSV'},gear:{handler:'settings dialog'},
- setBtn:{handler:'setComponentCurrent'},loadBtn:{handler:'setComponentOutput / stopDevice'},timeBtn:{handler:'setComponentDuration'},
+export const features:Record<string,{handler?:string;reason?:string;capability?:string}>={
+ connect:{handler:'connect'},pollMode:{handler:'local recording mode'},pollRate:{handler:'stream measurement interval'},theme:{handler:'local theme'},export:{handler:'session CSV'},gear:{handler:'settings dialog'},
+ setBtn:{handler:'setComponentCurrent / setDl24mTarget'},loadBtn:{handler:'setComponentOutput / stopDevice'},timeBtn:{handler:'setComponentDuration'},
  clearBtn:{handler:'session clear'},limBtn:{handler:'setDl24mSettings'},zeroData:{handler:'resetDl24mCounters'},
  settingsClose:{handler:'close dialog'},settingsBackdrop:{handler:'close dialog'},cvDismiss:{handler:'dismiss notice'},cvNever:{handler:'dismiss notice'},
- 'mode-cc':{handler:'setDl24mSettings mode 0'},
+ 'mode-cc':{handler:'setDl24mMode'},
  ...Object.fromEntries(Object.values(settingsFields).filter(s=>s.button).map(s=>[s.button!,{handler:'setDl24mSettings'}])),
- ...Object.fromEntries(['mode-cv','mode-cr','mode-cp'].map(id=>[id,{reason:'Active CV/CR/CP operation is not commissioned by the DL24M backend.'}])),
- ...Object.fromEntries(['calV','calI','calT','calVBtn','calIBtn','calTBtn','calCopy','calEnable'].map(id=>[id,{reason:'Calibration reads and writes are unavailable in the current backend.'}])),
- zeroNoLoad:{reason:'No-load zero has no supported backend operation.'},restoreDefaults:{reason:'Factory reset has no supported backend operation.'},
- ...Object.fromEntries(['snapLabel','snapBtn','snapClear'].map(id=>[id,{reason:'HID frames and snapshot comparison are unavailable over this backend.'}])),
- rRPM:{reason:'Fan RPM is not provided by the backend.'},rExt:{reason:'External probe data appears only when provided by the backend.'}
+ ...Object.fromEntries(['cv','cr','cp'].map(mode=>['mode-'+mode,{capability:mode,reason:'Connect to discover active mode support.'}])),
+ ...Object.fromEntries(['calV','calI','calT','calVBtn','calIBtn','calTBtn','calCopy','calEnable'].map(id=>[id,{capability:'calibration',reason:'Connect to discover calibration support.'}])),
+ zeroNoLoad:{capability:'zero',reason:'No-load zero has no supported backend operation.'},restoreDefaults:{capability:'factory-reset',reason:'Factory reset has no supported backend operation.'},
+ snapLabel:{capability:'diagnostics',handler:'local snapshot label'},snapBtn:{capability:'diagnostics',handler:'getDl24mDiagnostics'},snapClear:{capability:'diagnostics',handler:'clear browser snapshots'},
+ rRPM:{capability:'fan-rpm',reason:'Fan RPM is not provided by the backend.'},rExt:{capability:'external-temperature',reason:'External probe data appears only when provided by the backend.'}
 };

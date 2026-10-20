@@ -3,9 +3,9 @@ import {readFileSync} from 'node:fs';
 const original=readFileSync(new URL('../vendor/dl24-bench/upstream.html',import.meta.url),'utf8');
 async function backend(page,opts={}){
  const state={writes:[],output:'off',boot:'boot-a',sequence:1,fail:false,heartbeatFail:false,settings:{mode:0,cutoff_voltage_v:1,time_limit_s:0,working_brightness:5},...opts};
- const devices=['load-a','load-b'].map(id=>({id,driver:'dl24m',identity:'synthetic-'+id,transport:'ble',state:'ready',output:'off',capabilities:['output','load.cc','dl24m.settings','components'],limits:{voltage_v:25,current_a:.2,power_w:5,max_age_ms:3000},components:[{id:'sink',kind:'sink',actions:['current','output','cutoff','duration']}]}));
- let operation, polls=0;
- await page.route('**/api/v1/**',async route=>{
+ const devices=['load-a','load-b'].map(id=>({id,driver:'dl24m',identity:'synthetic-'+id,transport:'ble',state:'ready',output:'off',capabilities:['output','load.cc','dl24m.settings','components'],features:[{id:'cc',status:'supported',reason:'Commissioned CC'},{id:'diagnostics',status:'supported',reason:'Passive BLE capture'},...['cv','cr','cp','calibration','zero','factory-reset'].map(id=>({id,status:state.activeModes&&['cv','cr','cp'].includes(id)?'supported':'unverified',reason:'Commissioning status from backend'}))],limits:{voltage_v:25,current_a:.2,power_w:5,max_age_ms:3000},components:[{id:'sink',kind:'sink',actions:['current','output','cutoff','duration']}]}));
+ let operation, polls=0,operationSerial=0;state.rpc=[];state.sockets=[];
+ const handle=async route=>{
   const r=route.request(),path=new URL(r.url()).pathname,method=r.method(),body=r.postDataJSON();
   const reply=(data,status=200)=>route.fulfill({status,contentType:'application/json',body:JSON.stringify(data)});
   if(state.fail)return route.abort();
@@ -16,7 +16,8 @@ async function backend(page,opts={}){
   if(path==='/api/v1/leases')return state.conflict?reply({detail:'Already reserved'},409):reply({id:'lease-a',device_ids:body.device_ids,expires_at_ms:100000,state:'active'});
   if(path.endsWith('/heartbeat'))return state.heartbeatFail?reply({detail:'Lease expired'},423):reply({id:'lease-a',device_ids:['load-a'],expires_at_ms:100000,state:'active'});
   if(path==='/api/v1/leases/lease-a/stop')return reply({id:'lease-a',device_ids:['load-a'],expires_at_ms:0,state:'stopped'});
-  if(path.endsWith('/measurements'))return reply({device_id:path.split('/')[4],boot_id:state.boot,sequence:state.sequence++,received_ms:state.sequence*1000,age_ms:0,quality:state.stale?'stale':'valid',voltage_v:10,current_a:.1,power_w:1,temperature_channels:[{id:'internal',kind:'internal',quality:'valid',age_ms:0,received_ms:1000,value_c:25}]});
+  if(path.endsWith('/measurements'))return reply({device_id:path.split('/')[4],boot_id:state.boot,sequence:state.sequence++,received_ms:state.sequence*1000,age_ms:0,quality:state.stale?'stale':'valid',voltage_v:state.voltage??10,current_a:.1,power_w:1,load_mode:['cc','cv','cr','cp'][state.settings.mode],load_target:state.target??{mode:['cc','cv','cr','cp'][state.settings.mode],value:.1,unit:'A'},temperature_channels:[{id:'internal',kind:'internal',quality:'valid',age_ms:0,received_ms:1000,value_c:25}]});
+  if(path.endsWith('/dl24m/diagnostics'))return reply({entries:[{sequence:1,received_ms:1000,generation:1,direction:'tx',hex:'b1b2100000000000b6',truncated:false}],dropped:1,registers:[{name:'output',command:16,value:0,quality:'valid',received_ms:1000,age_ms:0}]});
   if(path.endsWith('/state'))return reply({device_id:path.split('/')[4],component_id:'sink',state:'ready',output:state.output,settings:{current_a:.1,regulation_mode:'cc'}});
   if(path.endsWith('/dl24m/settings')&&method==='GET')return reply(state.settings);
   if(path.includes('/operations/')){
@@ -24,11 +25,34 @@ async function backend(page,opts={}){
    return reply(operation);
   }
   if(method==='POST'||method==='PUT'){
-   polls=0;operation={id:'op-a',device_id:path.split('/')[4],status:'running',stage:'readback',read_attempts:1,write_attempts:1,reconnects:0,duration_ms:50,restore_pending:false,final_output:path.endsWith('/output')?(body.enabled?'on':'off'):path.endsWith('/stop')?'off':state.output};
-   if(path.endsWith('/dl24m/settings'))Object.assign(state.settings,body);
+   polls=0;operation={id:'op-'+(++operationSerial),device_id:path.split('/')[4],status:'running',stage:'readback',read_attempts:1,write_attempts:1,reconnects:0,duration_ms:50,restore_pending:false,final_output:path.endsWith('/output')?(body.enabled?'on':'off'):path.endsWith('/stop')?'off':state.output};
+   if(path.endsWith('/dl24m/settings'))Object.assign(state.settings,body);if(path.endsWith('/dl24m/mode'))state.settings.mode=['cc','cv','cr','cp'].indexOf(body.mode);if(path.endsWith('/dl24m/target'))state.target=body;
    return reply(operation,202);
   }
   return reply({detail:'Unmocked '+path},404);
+ };
+ await page.route('**/api/v1/**',handle);
+ await page.routeWebSocket('**/api/v1/ws',ws=>{
+  state.sockets.push(ws);if(state.denyWs){ws.close();return;}let authenticated=false,selected='',streamSequence=0;
+  const call=async(method,path,body={},headers={})=>{
+   let result;
+   await handle({request:()=>({url:()=>`http://localhost${path}`,method:()=>method,postDataJSON:()=>body,headers:()=>({authorization:'Bearer bench-test',...headers})}),fulfill:r=>{result={status:r.status,body:JSON.parse(r.body),headers:{}};},abort:()=>ws.close()});return result;
+  };
+  const timer=setInterval(async()=>{
+   if(!authenticated||!selected)return;if(state.fail){clearInterval(timer);ws.close();return;}
+   const m=await call('GET',`/api/v1/devices/${selected}/measurements`),a=await call('GET',`/api/v1/devices/${selected}/components/sink/state`);
+   let ops=[];if(operation){await call('GET','/api/v1/operations/'+operation.id);ops=[operation];}
+   ws.send(JSON.stringify({type:'snapshot',boot_id:state.boot,sequence:++streamSequence,gap:!!state.gap,body:{device_id:selected,devices:devices.map(d=>({...d,output:state.output})),measurements:m.body,actors:[{...a.body,component_id:'sink'}],details:{settings:state.settings},operations:ops}}));state.gap=false;
+  },100);
+  ws.onClose(()=>clearInterval(timer));
+  ws.onMessage(async data=>{
+   const r=JSON.parse(String(data));
+   if(!authenticated){if(r.type==='auth'&&r.token==='bench-test'){authenticated=true;ws.send(JSON.stringify({type:'authenticated',boot_id:state.boot}));}else{ws.send(JSON.stringify({status:401,body:{detail:'Token required'}}));ws.close();}return;}
+   if(r.type==='subscribe'){selected=r.device_id;ws.send(JSON.stringify({id:r.id,status:200,body:{subscribed:selected}}));return;}
+   state.rpc.push(r);if(state.beforeRpc)await state.beforeRpc(r);
+   const headers=Object.fromEntries(Object.entries(r.headers??{}).map(([k,v])=>[k.toLowerCase(),v]));
+   const result=await call(r.method,r.path,r.body,headers);if(result)ws.send(JSON.stringify({id:r.id,...result}));
+  });
  });return state;
 }
 async function connect(page){await page.goto('/dl24');await page.getByLabel('API bearer token').fill('bench-test');await page.locator('#connect').click();await expect(page.locator('#connLbl')).toHaveText('Connected');}
@@ -96,7 +120,7 @@ test('failed operations remain locked and a failed STOP cannot switch devices',a
 });
 test('Load recording does not prevent OFF monitoring or heartbeat',async({page})=>{
  const s=await backend(page);await connect(page);await page.locator('#reserve').click();await page.locator('[data-pm="load"]').click();
- await expect(page.locator('#dataQuality')).toContainText('recording paused');
+ await expect(page.locator('#dataQuality')).toContainText('recording paused');s.voltage=12;await expect(page.locator('#rV')).toHaveText('12.000');
  await expect.poll(()=>s.writes.filter(w=>w.path.endsWith('/heartbeat')).length).toBeGreaterThan(0);
  s.output='on';await expect(page.locator('#loadBtn')).toContainText('LOAD ON');
  s.output='off';await expect(page.locator('#loadBtn')).toContainText('LOAD OFF');await expect(page.locator('#dataQuality')).toContainText('recording paused');
@@ -130,15 +154,47 @@ test('shares one API connection across monitoring, heartbeat and command confirm
  await connect(page);await page.locator('#reserve').click();await expect(page.locator('#setBtn')).toBeEnabled();
  s.hold=true;await page.locator('#setVal').fill('.1');await page.locator('#setBtn').click();
  await expect.poll(()=>s.writes.some(w=>w.path.endsWith('/heartbeat'))).toBe(true);
- s.hold=false;await expect(page.locator('#benchStatus')).toContainText('succeeded');expect(peak).toBe(1);
+ s.hold=false;await expect(page.locator('#benchStatus')).toContainText('succeeded');expect(peak).toBe(0);expect(s.sockets).toHaveLength(1);expect(s.rpc.some(r=>r.path.endsWith('/heartbeat'))).toBe(true);expect(s.rpc.some(r=>r.path.includes('/operations/'))).toBe(false);
 });
 test('priority STOP cancels an ON request still waiting for the API connection',async({page})=>{
  const s=await backend(page);await connect(page);await page.locator('#reserve').click();await expect(page.locator('#loadBtn')).toBeEnabled();
  let held=false,release;
- await page.route('**/api/v1/node',async route=>{held=true;await new Promise(r=>{release=r;});await route.fallback();});
+ s.beforeRpc=async r=>{if(r.path.endsWith('/heartbeat')){held=true;await new Promise(r=>{release=r;});}};
  await expect.poll(()=>held).toBe(true);
- await page.locator('#loadBtn').click();await page.locator('#stop').click();release();
+ await page.locator('#loadBtn').click();await page.locator('#stop').click();s.beforeRpc=undefined;release();
  await expect(page.locator('#benchStatus')).toContainText('succeeded');
  expect(s.writes.filter(w=>w.path.endsWith('/output'))).toHaveLength(0);
  await expect(page.locator('#loadBtn')).toContainText('LOAD OFF');
+});
+
+test('stream gaps and disconnect never replay writes or mix browser integrals',async({page})=>{
+ const s=await backend(page);await connect(page);await page.locator('#reserve').click();
+ s.gap=true;await expect(page.locator('#benchStatus')).toContainText('Stream gap');
+ s.fail=true;await expect(page.locator('#benchStatus')).toContainText('Connection lost');s.fail=false;
+ await page.locator('#connect').click();await expect(page.locator('#connLbl')).toHaveText('Connected');
+ expect(s.sockets).toHaveLength(2);expect(s.writes.filter(w=>w.path.endsWith('/output'))).toHaveLength(0);
+});
+
+test('backend capabilities enable typed modes and targets only after confirmed OFF and reservation',async({page})=>{
+ const s=await backend(page,{activeModes:true});await connect(page);await expect(page.locator('[data-mode="cv"]')).toBeDisabled();
+ await page.locator('#reserve').click();await expect(page.locator('[data-mode="cv"]')).toBeEnabled();
+ await page.locator('[data-mode="cv"]').click();await expect(page.locator('#benchStatus')).toContainText('succeeded');
+ await expect(page.locator('#setUnit')).toHaveText('(V)');await page.locator('#setVal').fill('23.9');await page.locator('#setBtn').click();
+ await expect.poll(()=>s.writes.find(w=>w.path.endsWith('/dl24m/target'))?.body).toEqual({mode:'cv',value:23.9,unit:'V'});
+ expect(s.writes.filter(w=>w.path.endsWith('/output'))).toHaveLength(0);
+});
+test('passive BLE snapshots compare and export without instrument writes',async({page})=>{
+ const s=await backend(page);await connect(page);await page.locator('details').filter({has:page.locator('#snapBtn')}).locator('summary').click();
+ await page.locator('#snapBtn').click();await expect(page.locator('#rawLive')).toContainText('TX b1b210');await expect(page.locator('#rawSet')).toContainText('output');
+ await page.locator('#snapBtn').click();await expect(page.locator('#snapState')).toContainText('0 changed');
+ const downloading=page.waitForEvent('download');await page.getByRole('button',{name:'Export BLE diagnostics'}).click();expect((await downloading).suggestedFilename()).toMatch(/diagnostics.json$/);
+ await page.locator('#snapClear').click();await expect(page.locator('#snapState')).toContainText('Browser snapshots cleared');expect(s.writes).toHaveLength(0);
+});
+
+test('explicit STOP falls back to HTTP when the WebSocket session is unavailable',async({page})=>{
+ const s=await backend(page);const http=[];page.on('request',r=>{if(r.url().includes('/api/v1/'))http.push(new URL(r.url()).pathname);});
+ await connect(page);s.fail=true;await expect(page.locator('#benchStatus')).toContainText('Connection lost');s.fail=false;s.denyWs=true;
+ await page.locator('#stop').click();await expect(page.locator('#benchStatus')).toContainText('succeeded');
+ expect(http.some(p=>p.endsWith('/stop'))).toBe(true);expect(s.writes.filter(w=>w.path.endsWith('/output'))).toHaveLength(0);
+ await expect(page.locator('#loadBtn')).toBeDisabled();
 });

@@ -104,3 +104,6 @@ control-panel layout, including visibly disabled future backend features.
 Its adapted frontend carries GPL-3.0-or-later notices; see
 [upstream attribution and licence](web/vendor/dl24-bench/README.md).
 The device provides offline licence and corresponding-source downloads.
+The [capability/stream matrix](docs/dl24m-bench-extension.md) documents native
+CC/CV/CR/CP control, device counters, passive BLE diagnostics and one authenticated
+WebSocket connection for monitoring, commands and explicit lease heartbeats.

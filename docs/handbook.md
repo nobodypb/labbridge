@@ -707,23 +707,35 @@ replays an ON command. Settings and device-counter reset require confirmed OFF.
 CC current, cutoff, minute-resolution timer, display settings and supported
 protection limits use the existing typed API. Device language is explicitly the
 backend's raw 0/1 enum, and standby time is a raw value with unconfirmed units.
-Active CV/CR/CP, calibration, no-load zero, factory reset, HID frames/snapshots
-and fan RPM remain visible with unavailable controls/values. No HID commands are
-sent by this page. These retained features do not imply commissioned support.
+Typed CV/CR/CP mode and target routes use native BLE scaling, confirmed OFF,
+original-setting recovery and mode-specific activation guards. Controls follow
+the device capability status; uncommissioned modes stay locked. Calibration,
+no-load zero, factory reset, external temperature and fan RPM retain concrete
+restrictions. Passive diagnostics capture actual BLE traffic, cached register
+snapshots, browser-side comparison and export. No HID commands are sent.
+See the [capability and protocol matrix](dl24m-bench-extension.md).
 
-The default HTTP refresh is 1 s (selectable 500 ms/1 s/2 s); this reads cached
-backend samples and does not alter BLE polling. API requests share one in-flight connection so
-monitoring, heartbeat and command confirmation fit the ESP socket budget. STOP
-has priority and cancels queued commands; transport loss cancels queued requests
-without replay. Settings refresh every 5 s,
-subject to the driver's slower settings cache. Live records continuously; Load
+The page authenticates one `/api/v1/ws` connection with the bearer token in its
+first message. Discovery, commands and explicit lease heartbeats use the same
+USB-shaped API envelopes; monitoring, settings and operation completion are
+pushed. The default measurement interval is 1 s (selectable 500 ms/1 s/2 s),
+without changing BLE polling. There is no normal HTTP polling. STOP has priority
+and cancels queued commands; transport loss cancels requests without replay.
+An explicit STOP after socket loss can use HTTP and confirm OFF independently;
+it does not reconnect or reacquire control. Settings reflect the driver's cached
+readback. Live records continuously; Load
 records only during confirmed ON, while state monitoring and heartbeat continue.
 The graph retains 900 points. At 100,000 CSV rows, recording pauses visibly until
 export/clear; device control and monitoring continue. Recording lives only in
 the browser session. Export before switching devices or closing/reloading.
 
 Capacity (mAh), energy (Wh) and observed time are browser-session values, not native
-DL24M counters or certified battery-test results. Integration uses trapezoids
+DL24M counters or certified battery-test results. Native elapsed/counter readings
+are shown separately with source, units and freshness; uncommissioned counter
+scales remain raw. DL24M read 14 counts mAh and read 15 counts mWh; native
+values use Ah/Wh with per-register freshness, also available as common charge and
+energy sensors. Relative scaling was bench-checked; absolute accuracy remains
+unverified. Integration uses trapezoids
 between distinct, fresh, finite samples with increasing device-monotonic time,
 within the configured freshness limit and one device/boot. Missing/stale samples
 and larger gaps break the trace/integration. CSV retains sample identity, boot,
