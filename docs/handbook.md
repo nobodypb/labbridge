@@ -712,7 +712,10 @@ and fan RPM remain visible with unavailable controls/values. No HID commands are
 sent by this page. These retained features do not imply commissioned support.
 
 The default HTTP refresh is 1 s (selectable 500 ms/1 s/2 s); this reads cached
-backend samples and does not alter BLE polling. Settings refresh every 5 s,
+backend samples and does not alter BLE polling. API requests share one in-flight connection so
+monitoring, heartbeat and command confirmation fit the ESP socket budget. STOP
+has priority and cancels queued commands; transport loss cancels queued requests
+without replay. Settings refresh every 5 s,
 subject to the driver's slower settings cache. Live records continuously; Load
 records only during confirmed ON, while state monitoring and heartbeat continue.
 The graph retains 900 points. At 100,000 CSV rows, recording pauses visibly until

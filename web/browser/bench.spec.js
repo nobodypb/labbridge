@@ -111,3 +111,34 @@ test('applying a changed language does not overwrite the selection with cached r
  await page.locator('#langSel').selectOption('1');await page.locator('#langBtn').click();await expect(page.locator('#benchStatus')).toContainText('succeeded');
  expect(s.writes.find(w=>w.path.endsWith('/settings')).body).toEqual({language:1});
 });
+test('connects and monitors with a two-request transport budget',async({page})=>{
+ await backend(page);let active=0,peak=0;
+ await page.route('**/api/v1/**',async route=>{
+  active++;peak=Math.max(peak,active);
+  try{if(active>2)return await route.abort('connectionreset');await new Promise(r=>setTimeout(r,50));await route.fallback();}
+  finally{active--;}
+ });
+ await connect(page);await expect(page.locator('#dataQuality')).toContainText('fresh');expect(peak).toBeLessThanOrEqual(2);
+});
+test('shares one API connection across monitoring, heartbeat and command confirmation',async({page})=>{
+ const s=await backend(page);let active=0,peak=0;
+ await page.route('**/api/v1/**',async route=>{
+  active++;peak=Math.max(peak,active);
+  try{if(active>1)return await route.abort('connectionreset');await new Promise(r=>setTimeout(r,120));await route.fallback();}
+  finally{active--;}
+ });
+ await connect(page);await page.locator('#reserve').click();await expect(page.locator('#setBtn')).toBeEnabled();
+ s.hold=true;await page.locator('#setVal').fill('.1');await page.locator('#setBtn').click();
+ await expect.poll(()=>s.writes.some(w=>w.path.endsWith('/heartbeat'))).toBe(true);
+ s.hold=false;await expect(page.locator('#benchStatus')).toContainText('succeeded');expect(peak).toBe(1);
+});
+test('priority STOP cancels an ON request still waiting for the API connection',async({page})=>{
+ const s=await backend(page);await connect(page);await page.locator('#reserve').click();await expect(page.locator('#loadBtn')).toBeEnabled();
+ let held=false,release;
+ await page.route('**/api/v1/node',async route=>{held=true;await new Promise(r=>{release=r;});await route.fallback();});
+ await expect.poll(()=>held).toBe(true);
+ await page.locator('#loadBtn').click();await page.locator('#stop').click();release();
+ await expect(page.locator('#benchStatus')).toContainText('succeeded');
+ expect(s.writes.filter(w=>w.path.endsWith('/output'))).toHaveLength(0);
+ await expect(page.locator('#loadBtn')).toContainText('LOAD OFF');
+});

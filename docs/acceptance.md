@@ -166,7 +166,11 @@ commands, failed STOP blocking device switching, lease/network/reboot failures,
 stale measurements, live/load monitoring, local assets/source/licence downloads,
 CSV, both themes and narrow layouts. Browser screenshots use synthetic devices.
 Session tests cover units, bounded buffers, invalid/duplicate/late samples,
-identity/boot separation and gap handling.
+identity/boot separation and gap handling. A real HTTP connection-reset failure
+under parallel browser requests was reproduced with bounded-connection browser
+tests. All API traffic now shares one connection, with priority STOP/heartbeat,
+queued-command cancellation and no transport retry. A regression test verifies
+that a queued ON cannot run after priority STOP.
 
 Hardware page/control acceptance is pending the final firmware deployment.
 A read-only preflight found the attached StickS3 and DL24M ready with confirmed

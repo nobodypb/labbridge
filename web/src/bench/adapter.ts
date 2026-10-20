@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (c) 2026 LabBridge contributors
+import {RequestQueue} from './request-queue.js';
 import {Configuration,CoreApi,ComponentsApi,Dl24mApi} from '../../generated/src/index';
 import type {Device,Measurements,Dl24mSettings,Operation,ActuatorState} from '../../generated/src/index';
 export async function message(error:unknown):Promise<string>{
@@ -16,9 +17,23 @@ export class BenchAdapter {
  measurement?:Measurements;settings:Dl24mSettings={};actor?:ActuatorState;receivedAt=0;pollMs=1000;
  onChange=()=>{};onSample=(m:Measurements)=>{};onError=(m:string)=>{};
  private generation=0;private operationGeneration=0;private timer?:number;private heartbeat?:number;private heartbeatBusy=false;private settingsAt=0;
- readonly config=new Configuration({basePath:location.origin,accessToken:()=>this.token,fetchApi:async(input,init)=>{
-  const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),4000);
-  try{return await fetch(input,{...init,signal:controller.signal});}finally{clearTimeout(timer);}
+ private readonly requests=new RequestQueue();
+ readonly config=new Configuration({basePath:location.origin,accessToken:()=>this.token,fetchApi:(input,init)=>{
+  const generation=this.generation,path=new URL(String(input),location.origin).pathname;
+  const stop=path.endsWith('/stop'),priority=stop?0:path.endsWith('/heartbeat')?1:init?.method!=='GET'||path.includes('/operations/')?2:3;
+  return this.requests.run(async()=>{
+   if(generation!==this.generation&&!stop)throw Error('Connection changed before request was sent');
+   const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),4000);
+   try{
+    const response=await fetch(input,{...init,signal:controller.signal});
+    // Keep the slot until the response body has arrived, not just its headers.
+    await response.clone().arrayBuffer();return response;
+   }catch(error){
+    this.requests.cancelPending(Error('Connection lost before queued request was sent'));
+    this.lose('Connection lost: HTTP request failed; queued commands cancelled');
+    throw error;
+   }finally{clearTimeout(timer);}
+  },priority);
  }});
  readonly core=new CoreApi(this.config);readonly components=new ComponentsApi(this.config);readonly dl=new Dl24mApi(this.config);
  get sink(){return this.device?.components?.find(c=>c.kind==='sink')?.id;}
@@ -33,7 +48,7 @@ export class BenchAdapter {
  async connect(token:string){
   if(this.lease)await this.release();
   this.cancelPolling();this.token=token;this.connected=false;this.uncertain=false;this.measurement=undefined;this.actor=undefined;this.onChange();
-  const [node,list]=await Promise.all([this.core.getNode(),this.core.listDevices()]);
+  const node=await this.core.getNode(),list=await this.core.listDevices();
   this.devices=list.devices.filter(d=>d.driver==='dl24m');this.boot=node.bootId;
   if(!this.devices.length){this.device=undefined;this.onChange();throw Error('No DL24M device configured on this node');}
   this.device=this.devices.find(d=>d.id===this.device?.id)??this.devices[0];
@@ -43,13 +58,16 @@ export class BenchAdapter {
  private async poll(generation:number){
   try{
    const id=this.device!.id,componentId=this.sink!;
-   const [m,a,node,settings]=await Promise.all([
-    this.core.getMeasurements({deviceId:id}),this.components.getActuatorState({deviceId:id,componentId}),this.core.getNode(),
-    !this.settingsAt||performance.now()-this.settingsAt>=5000?this.dl.getDl24mSettings({deviceId:id}):Promise.resolve(undefined)
-   ]);
+   // A browser's parallel reads can exhaust the node's shared socket budget
+   // (HTTP, AP DNS, mDNS and instrument TCP). Reuse connections sequentially.
+   const node=await this.core.getNode(),requestedAt=performance.now();
+   const m=await this.core.getMeasurements({deviceId:id});
+   const a=await this.components.getActuatorState({deviceId:id,componentId});
+   const settings=!this.settingsAt||performance.now()-this.settingsAt>=5000
+    ?await this.dl.getDl24mSettings({deviceId:id}):undefined;
    if(generation!==this.generation)return;
    if(node.bootId!==this.boot||m.bootId&&m.bootId!==this.boot){this.lose('ESP restarted: reservation invalidated. Reconnect to start a new session.');return;}
-   this.measurement={...m,bootId:this.boot};this.receivedAt=performance.now();this.actor=a;
+   this.measurement={...m,bootId:this.boot,ageMs:m.ageMs+performance.now()-requestedAt};this.receivedAt=performance.now();this.actor=a;
    if(settings){this.settings=settings;this.settingsAt=performance.now();}
    this.onSample(this.measurement);this.onChange();
   }catch(e){if(generation===this.generation)this.lose('Connection lost: '+await message(e));return;}
@@ -95,7 +113,8 @@ export class BenchAdapter {
    if(boot!==this.boot||!this.connected&&!stop)throw Error('Connection changed while confirming the operation');
    if(o.status!=='succeeded'||o.restorePending||o.finalOutput==='unknown')throw Error(`${o.status}: ${o.stage}; output ${o.finalOutput}; restore pending ${o.restorePending}`);
    if(stop&&o.finalOutput!=='off')throw Error('STOP did not confirm OFF');
-   const [actor,settings]=await Promise.all([this.components.getActuatorState({deviceId:this.device!.id,componentId:this.sink!}),this.dl.getDl24mSettings({deviceId:this.device!.id})]);
+   const actor=await this.components.getActuatorState({deviceId:this.device!.id,componentId:this.sink!});
+   const settings=await this.dl.getDl24mSettings({deviceId:this.device!.id});
    if(operationGeneration!==this.operationGeneration)return o;
    this.actor=actor;this.settings=settings;this.settingsAt=performance.now();
    if(stop&&actor.output!=='off')throw Error('OFF readback was not confirmed');
@@ -107,7 +126,7 @@ export class BenchAdapter {
  }
  async current(currentA:number){const p=this.params();if(!this.supports('current')||this.settings.mode!==0)throw Error('CC current is unavailable');return this.perform(()=>this.components.setComponentCurrent({...p,currentRequest:{currentA}}));}
  async enable(){if(!this.canOn||!this.supports('output'))throw Error('ON requires fresh CC state and confirmed OFF');const p=this.params();return this.perform(()=>this.components.setComponentOutput({...p,outputRequest:{enabled:true}}));}
- async stop(){if(!this.device)throw Error('Select a DL24M device first');const deviceId=this.device.id;return this.perform(()=>this.core.stopDevice({deviceId,idempotencyKey:key(),stopRequest:{reason:'DL24M Bench STOP'}}),true);}
+ async stop(){this.requests.cancelPending(Error('Cancelled by priority STOP'),job=>job.priority===2);if(!this.device)throw Error('Select a DL24M device first');const deviceId=this.device.id;return this.perform(()=>this.core.stopDevice({deviceId,idempotencyKey:key(),stopRequest:{reason:'DL24M Bench STOP'}}),true);}
  async settingsWrite(settings:Dl24mSettings){if(!this.off)throw Error('Settings require a reservation and confirmed OFF');const p=this.params();return this.perform(()=>this.dl.setDl24mSettings({...p,dl24mSettings:settings}));}
  async duration(timeLimitS:number){if(!this.off||!this.supports('duration'))throw Error('Timer requires confirmed OFF and backend support');const p=this.params();return this.perform(()=>this.components.setComponentDuration({...p,durationRequest:{timeLimitS}}));}
  async cutoff(cutoffVoltageV:number){if(!this.off||!this.supports('cutoff'))throw Error('Cutoff requires confirmed OFF and backend support');const p=this.params();return this.perform(()=>this.components.setComponentCutoff({...p,cutoffRequest:{cutoffVoltageV}}));}
