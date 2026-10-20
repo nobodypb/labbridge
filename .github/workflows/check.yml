@@ -1,5 +1,8 @@
 name: checks
-on: [push, pull_request]
+on:
+  push:
+    branches: [main]
+  pull_request:
 permissions:
   contents: read
 jobs:
@@ -13,8 +16,8 @@ jobs:
         with: {distribution: temurin, java-version: '21'}
       - uses: actions/setup-node@v4
         with: {node-version: '20'}
-      - run: pip install -r tools/requirements.txt
-      - run: pip install --no-deps -e host/generated -e host
+      - run: pip install --require-hashes -r tools/requirements.lock
+      - run: pip install --no-build-isolation --no-deps -e host/generated -e host
       - run: tools/generate.sh
       - run: git diff --exit-code -- api/openapi.json firmware/generated host/generated web/generated
       - run: tools/check.sh
