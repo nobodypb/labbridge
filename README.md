@@ -98,3 +98,9 @@ on the ESP is not implemented. Both provider paths use the common sensor API.
 See [the handbook](docs/handbook.md#device-components-the-common-integration-api)
 and the direct INA228/Yocto binding examples for orientation, optional extra
 sensors and the distinction between OFF and electrical isolation.
+
+The additional `/dl24` DL24M Bench interface retains the complete upstream
+control-panel layout, including visibly disabled future backend features.
+Its adapted frontend carries GPL-3.0-or-later notices; see
+[upstream attribution and licence](web/vendor/dl24-bench/README.md).
+The device provides offline licence and corresponding-source downloads.

@@ -10,7 +10,9 @@ endif()
 idf_component_register(SRCS "main.cpp" "network.cpp" "rd_network.cpp" "console.cpp" "ble.cpp" "usb.cpp" "gpio.cpp" "meters.cpp" ${METERS} ${CORE} ${DL} ${RD}
  INCLUDE_DIRS "." "${ROOT}/core/include" "${ROOT}/drivers/dl24m" "${ROOT}/drivers/meters" "${ROOT}/drivers/rd60xx" "${ROOT}/generated"
  REQUIRES ${REQUIRES}
- EMBED_TXTFILES "../../../../web/dist/index.html" "../../../../web/dist/app.js")
+ EMBED_TXTFILES "../../../../web/dist/index.html" "../../../../web/dist/app.js"
+ "../../../../web/dist/dl24.html" "../../../../web/dist/dl24.css" "../../../../web/dist/dl24.js" "../../../../web/dist/dl24-license.txt"
+ EMBED_FILES "../../../../web/dist/dl24-source.tar.gz")
 target_compile_features(${COMPONENT_LIB} PUBLIC cxx_std_17)
 if(IDF_TARGET STREQUAL "esp32s3")
  target_link_libraries(${COMPONENT_LIB} INTERFACE "-Wl,--wrap=cdc_acm_host_open_v1_dispatch")

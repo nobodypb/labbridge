@@ -1,0 +1,193 @@
+<!doctype html>
+<!-- SPDX-License-Identifier: GPL-3.0-or-later -->
+<!-- SPDX-FileCopyrightText: © 2026 DL24 reverse-engineering project contributors -->
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>LabBridge · DL24M Bench</title>
+<link rel="stylesheet" href="/dl24.css">
+</head>
+<body>
+<div class="top">
+  <div class="mark">DL<b>24</b></div>
+  <div class="sub">LabBridge · DL24M Bench</div>
+  <div class="spacer"></div>
+  <div class="toggle" id="pollMode"
+       data-help="Live: poll continuously while connected. Load: poll only while the load is ON — the readout & chart freeze and hold when the load is off (intentional, not a bug)."
+       title="Live = poll continuously while connected. Load = poll only while the load is on (readout freezes when off).">
+    <button data-pm="live" class="sel">Live</button><button data-pm="load">Load</button></div>
+  <label class="sub" style="display:flex;align-items:center;gap:6px"
+         data-help="How often to poll the device. Live and settings frames alternate, so each block refreshes at twice this rate."
+         title="Send interval. Live + settings blocks alternate, so each block refreshes at twice this period.">Poll
+    <select id="pollRate" class="sel-input">
+      <option value="500">500 ms</option><option value="1000" selected>1 s</option><option value="2000">2 s</option>
+    </select></label>
+  <div class="toggle" id="theme" data-help="Switch between light and dark themes."><button data-th="light">Light</button><button data-th="dark" class="sel">Dark</button></div>
+  <button id="connect" class="btn connbtn off" data-help="Connect to a DL24 over USB (WebHID, Chromium only). The LED is the connection lamp: red = off, green = connected."><span class="led"></span><span id="connLbl">Connect</span></button>
+  <button id="export" class="btn" disabled data-help="Download all logged samples (time, V/I/W, temps, Wh, mAh) as a CSV file.">Export CSV</button>
+  <button id="gear" class="iconbtn" title="Settings" aria-label="Settings" data-help="Settings: brightness, standby, language, protection limits, calibration, and device resets.">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <circle cx="12" cy="12" r="3"></circle>
+      <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09a1.65 1.65 0 0 0 1.51-1 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
+    </svg>
+  </button>
+</div>
+<div class="connection">
+ <nav><a href="/devices">Instruments</a> · <a href="/wifi">Wi-Fi setup</a></nav>
+ <label>API bearer token <input id="apiToken" type="password" autocomplete="off"></label>
+ <label>DL24M device <select id="deviceSelect" aria-label="DL24M device"></select></label>
+ <button id="reserve" class="btn" disabled>Reserve device</button>
+ <button id="stop" class="btn danger" disabled>STOP</button>
+ <span id="benchStatus" role="status" aria-live="polite">Enter an API token and connect. Recording lasts for this browser session.</span>
+</div>
+<div class="app">
+  <aside class="rail">
+    <div class="grp"><div class="glab">Mode</div>
+      <div class="modes">
+        <button type="button" class="mode" data-mode="cc" data-help="Constant Current — the load draws a fixed current (A) you set.">CC</button><button type="button" class="mode" data-mode="cv" data-help="Constant Voltage — the load holds a fixed terminal voltage (V).">CV</button>
+        <button type="button" class="mode" data-mode="cr" data-help="Constant Resistance — the load acts like a fixed resistor (Ω).">CR</button><button type="button" class="mode" data-mode="cp" data-help="Constant Power — the load draws a fixed wattage (W).">CP</button>
+      </div>
+    </div>
+    <div class="grp"><div class="glab">Setpoint</div>
+      <div class="setrow">
+        <div data-help="Target value for the active mode (units follow it: CC=A, CV=V, CR=Ω, CP=W). Greyed value = the device's current setpoint."><label class="fld">Value <span id="setUnit" class="sub">(A)</span></label>
+          <input id="setVal" type="number" step="0.001" min="0" placeholder="1.000"></div>
+        <button id="setBtn" class="btn" disabled data-help="Send the setpoint above to the device.">Set</button>
+      </div>
+      <button id="loadBtn" class="loadbtn stopped" type="button" disabled
+        data-help="Turn the electronic load ON/OFF. Green stripe = on (drawing), red = off.">
+        <span class="ind"></span><span class="lbl">LOAD OFF</span></button>
+    </div>
+    <details class="grp" open data-help="Auto-stop the load after this run time (hh:mm). 0:00 = no limit. Set pushes both fields to the device."><summary>Discharge time limit</summary>
+      <div class="setrow" style="grid-template-columns:1fr 1fr auto">
+        <div><label class="fld">Hours</label><input id="thr" type="number" min="0" max="99" step="1" placeholder="0"></div>
+        <div><label class="fld">Min</label><input id="tmin" type="number" min="0" max="59" step="1" placeholder="0"></div>
+        <button id="timeBtn" class="btn" disabled>Set</button>
+      </div>
+      <div class="hint" style="margin-top:4px">Auto-stops the load when it expires. 0:00 = no limit. LabBridge confirms the setting by readback; bridge safety deadlines still apply.</div>
+    </details>
+    <div class="hint">CC is supported. CV/CR/CP remain visible for future backend support. Changes require a reservation; settings require confirmed OFF.
+      Brightness, limits, calibration &amp; device resets live in <b>⚙ Settings</b> (top-right).</div>
+  </aside>
+  <div class="main">
+    <div class="screen">
+      <div class="legend">
+        <span data-s="1" style="color:var(--v)" data-help="Click to show/hide the Voltage trace on the chart.">● Voltage</span>
+        <span data-s="2" style="color:var(--i)" data-help="Click to show/hide the Current trace on the chart.">● Current</span>
+        <span data-s="3" style="color:var(--w)" data-help="Click to show/hide the Power trace on the chart.">● Power</span>
+      </div>
+      <button id="clearBtn" class="chartbtn" data-help="Clear the chart trace and the in-app CSV log buffer. Does NOT touch the device's stored Wh/mAh — use Settings → Zero all data for that.">Clear</button>
+      <canvas id="chart" style="position:absolute;inset:8px 10px 6px;width:calc(100% - 20px);height:calc(100% - 14px)"></canvas>
+    </div>
+    <div class="meas">
+      <div class="cell v"><div class="lab">Voltage</div><div class="val"><span id="rV">—</span><span class="un">V</span></div></div>
+      <div class="cell i"><div class="lab">Current</div><div class="val"><span id="rI">—</span><span class="un">A</span></div></div>
+      <div class="cell w"><div class="lab">Power</div><div class="val"><span id="rW">—</span><span class="un">W</span></div></div>
+      <div class="cell r" data-help="Total resistance the load sees (voltage ÷ current). Shows — with no load."><div class="lab">Resistance</div><div class="val"><span id="rR">—</span><span class="un">Ω</span></div></div>
+      <div class="cell t" data-help="Temperature of the load's MOSFET / heatsink."><div class="lab">Internal temp</div><div class="val"><span id="rT">—</span><span class="un">°C</span></div></div>
+      <div class="cell" data-help="Charge drawn since the last 'Zero all data' (accumulates while the load runs)."><div class="lab">Capacity · session</div><div class="val"><span id="rCap">—</span><span class="un">mAh</span></div></div>
+      <div class="cell" data-help="Energy drawn since the last 'Zero all data'."><div class="lab">Energy · session</div><div class="val"><span id="rWh">—</span><span class="un">Wh</span></div></div>
+      <div class="cell" data-help="Time since the load was last turned ON in this app."><div class="lab">Observed time</div><div class="val mono" style="font-size:18px"><span id="rTime">—</span></div></div>
+    </div>
+    <div class="meas" style="grid-template-columns:repeat(3,1fr)">
+      <div class="cell" data-help="External temperature probe (ETS). 'Wait..' means no probe is detected."><div class="lab">ETS probe</div><div class="val" style="font-size:18px"><span id="rExt">—</span></div></div>
+      <div class="cell" data-help="Discharge cutoff voltage currently set on the device (menu 09); the load stops below it."><div class="lab">Cutoff voltage (applied)</div><div class="val" style="font-size:18px"><span id="rCut">—</span><span class="un">V</span></div></div>
+      <div class="cell" data-help="Cooling-fan speed (0 when idle, ramps under load)."><div class="lab">Fan</div><div class="val" style="font-size:18px"><span id="rRPM">—</span><span class="un">rpm</span></div></div>
+    </div>
+    <details style="margin-top:2px" data-help="Protocol debug: live hex frames + a snapshot/diff tool to find which byte holds a value (change one thing, capture a label, repeat).">
+      <summary class="sub" style="cursor:pointer">Raw frames &amp; field finder (debug)</summary>
+      <div class="sub" style="font-size:11px;margin-top:4px">Live (0x05):</div>
+      <div class="mono" id="rawLive" style="font-size:11px;color:var(--dim);word-break:break-all;padding:2px 0"></div>
+      <div class="sub" style="font-size:11px">Settings (0x03):</div>
+      <div class="mono" id="rawSet" style="font-size:11px;color:var(--i);word-break:break-all;padding:2px 0"></div>
+      <div class="sub" style="font-size:11px;margin-top:6px"><b>Field finder:</b> change ONE thing on the device,
+        capture a labelled snapshot, repeat. Offsets that differ across snapshots are listed for each block,
+        decoded as byte / BE-float32 (settings) / LE-uint32 (live), so you can spot which offset holds a value.</div>
+      <div style="display:flex;gap:6px;flex-wrap:wrap;margin:6px 0;align-items:center">
+        <input id="snapLabel" placeholder="label, e.g. cutoff=3V" style="flex:1;min-width:140px;background:var(--panel2);border:1px solid var(--line);border-radius:8px;padding:6px 8px">
+        <button class="btn" id="snapBtn" disabled style="padding:5px 10px">Capture</button>
+        <button class="btn" id="snapClear" style="padding:5px 10px">Clear</button>
+      </div>
+      <div class="sub" id="snapState" style="font-size:11px">No snapshots yet.</div>
+      <div class="mono" id="snapDiff" style="font-size:11px;color:var(--v);word-break:break-all;padding:4px 0;white-space:pre-wrap"></div>
+    </details>
+  </div>
+</div>
+<div id="settingsModal" class="modal" role="dialog" aria-modal="true" aria-label="Settings" hidden>
+  <div class="backdrop" id="settingsBackdrop"></div>
+  <div class="card">
+    <div class="head">
+      <h3>Settings</h3><span class="sub" id="setConn">device not connected</span>
+      <span class="spacer"></span>
+      <button class="iconbtn" id="settingsClose" title="Close" aria-label="Close">✕</button>
+    </div>
+    <div class="body"><p id="unsupported" class="hint">Unavailable in the current backend: active CV/CR/CP, calibration, no-load zero, factory reset, HID frames/snapshots and fan RPM. These controls are retained for future support.</p>
+      <!-- DISPLAY ---------------------------------------------------------- -->
+      <div class="sgrp"><div class="glab">Display</div>
+        <div class="srow"><label>Display brightness (0–9)</label>
+          <input id="dispBri" type="number" min="0" max="9" step="1" placeholder="–">
+          <button class="btn needdev" id="dispBriBtn" disabled>Set</button></div>
+        <div class="srow"><label>Standby brightness (0–9)</label>
+          <input id="stbyBri" type="number" min="0" max="9" step="1" placeholder="–">
+          <button class="btn needdev" id="stbyBriBtn" disabled>Set</button></div>
+        <div class="srow"><label>Standby time (raw, unit unconfirmed)</label>
+          <input id="stbyTime" type="number" min="0" step="1" placeholder="–">
+          <button class="btn needdev" id="stbyTimeBtn" disabled>Set</button></div>
+        <div class="srow" data-help="Set the DEVICE's display language (this app's text doesn't change). Write-only — not reflected back."><label>Device language</label>
+          <select id="langSel"><option value="">—</option><option value="0">Raw 0</option><option value="1">Raw 1</option></select>
+          <button class="btn needdev" id="langBtn" disabled>Set</button></div>
+      </div>
+      <div class="sgrp"><div class="glab">Additional DL24M settings</div>
+<div class="srow"><label>Current resolution (raw 0–2)</label><input id="resolution" type="number"><button id="resolutionBtn" class="btn" disabled>Set</button></div>
+<div class="srow"><label>Over-voltage (V)</label><input id="ovp" type="number"><button id="ovpBtn" class="btn" disabled>Set</button></div>
+<div class="srow"><label>Fan start temperature (°C)</label><input id="fanTemp" type="number"><button id="fanTempBtn" class="btn" disabled>Set</button></div>
+</div>
+<!-- PROTECTION LIMITS ------------------------------------------------ -->
+      <div class="sgrp"><div class="glab">Protection limits</div>
+        <div class="srow"><label>Over-current (A)</label><input id="ocp" type="number" step="0.1"><span></span></div>
+        <div class="srow"><label>Over-power (W)</label><input id="opp" type="number" step="1"><span></span></div>
+        <div class="srow" data-help="Over-temperature limit for the external probe (menu 12, °C)."><label>Over-temp Ext.T (°C)</label><input id="otext" type="number" step="1"><span></span></div>
+        <div class="srow"><label>Over-temp MOS (°C)</label><input id="otmos" type="number" step="1"><span></span></div>
+        <div class="srow"><label>Cutoff voltage (V)</label><input id="cutv" type="number" step="0.1"><span></span></div>
+        <div class="actions" style="margin-top:8px"><button id="limBtn" class="btn needdev" disabled>Apply limits</button></div>
+      </div>
+      <!-- CALIBRATION ------------------------------------------------------ -->
+      <div class="sgrp" data-help="Per-channel gain multipliers. Writing rescales ALL readings — record the current gains first. The 'now' column is the live device value."><div class="glab">Calibration <span class="danger">⚠ rescales all readings</span></div>
+        <div class="srow calrow"><label>Voltage gain</label><span class="now" id="rCalV">—</span>
+          <input id="calV" type="number" step="0.0001" placeholder="gain"><button class="btn needdev calset" id="calVBtn" disabled>Set</button></div>
+        <div class="srow calrow"><label>Current gain</label><span class="now" id="rCalI">—</span>
+          <input id="calI" type="number" step="0.0001" placeholder="gain"><button class="btn needdev calset" id="calIBtn" disabled>Set</button></div>
+        <div class="srow calrow"><label>Ext-temp gain</label><span class="now" id="rCalT">—</span>
+          <input id="calT" type="number" step="0.0001" placeholder="gain"><button class="btn needdev calset" id="calTBtn" disabled>Set</button></div>
+        <div class="actions" style="margin-top:8px"><button class="btn needdev" id="calCopy" disabled>Copy current gains (backup)</button></div>
+        <div class="chkrow"><input type="checkbox" id="calEnable"><label for="calEnable" class="danger">Enable calibration writes — I understand they rescale every reading</label></div>
+        <div class="hint">Calibration read/write is unavailable in the current backend; gains are unknown.</div>
+      </div>
+      <!-- DEVICE ACTIONS --------------------------------------------------- -->
+      <div class="sgrp"><div class="glab">Device actions</div>
+        <div class="actions">
+          <button class="btn needdev" id="zeroNoLoad" disabled data-help="Tare the current meter's no-load offset. Run with NO load connected.">Zero no-load current</button>
+          <button class="btn needdev" id="zeroData" disabled data-help="Wipe all running statistics on the device: run time, energy (Wh) and capacity (mAh).">Zero all data</button>
+          <button class="btn needdev danger" id="restoreDefaults" disabled data-help="Reset all settings to defaults EXCEPT voltage & current cal — it DOES reset the ext-temp cal.">Restore defaults</button>
+        </div>
+        <div class="hint" style="margin-top:8px">“Zero all data” wipes run time / Wh / mAh. “Restore defaults” is not supported by this backend.</div>
+      </div>
+      <div class="sub" style="text-align:center;font-size:11px;padding:12px 0 2px">
+        Copyright © 2026 DL24 reverse-engineering project contributors; adapted by LabBridge contributors ·
+        <a href="/dl24-license.txt" target="_blank" rel="noopener"
+           style="color:inherit">GPL-3.0-or-later</a> · <a href="/dl24-source.tar.gz" download>Corresponding source</a> · <a href="https://crimson-grass-5279.binman-cloudflare.workers.dev/dl24" target="_blank" rel="noopener">Original interface</a>
+      </div>
+    </div>
+  </div>
+</div>
+<div id="cvToast" class="toast">
+  <h4>Constant-voltage mode</h4>
+  <p>If a battery or charged source is connected, the unit shows a safety warning
+     that must be cleared on its front panel — it can’t be bypassed over USB.</p>
+  <div class="acts"><button class="btn" id="cvDismiss">Got it</button><button class="btn" id="cvNever">Don’t show again</button></div>
+</div>
+<div id="helpbar" data-help="Hover any control for a short description."></div>
+<script type="module" src="/dl24.js"></script>
+</body>
+</html>

@@ -16,6 +16,16 @@ extern const char page_start[] asm("_binary_index_html_start");
 extern const char page_end[] asm("_binary_index_html_end");
 extern const char js_start[] asm("_binary_app_js_start");
 extern const char js_end[] asm("_binary_app_js_end");
+extern const char bench_html_start[] asm("_binary_dl24_html_start");
+extern const char bench_html_end[] asm("_binary_dl24_html_end");
+extern const char bench_css_start[] asm("_binary_dl24_css_start");
+extern const char bench_css_end[] asm("_binary_dl24_css_end");
+extern const char bench_js_start[] asm("_binary_dl24_js_start");
+extern const char bench_js_end[] asm("_binary_dl24_js_end");
+extern const char bench_license_start[] asm("_binary_dl24_license_txt_start");
+extern const char bench_license_end[] asm("_binary_dl24_license_txt_end");
+extern const char bench_source_start[] asm("_binary_dl24_source_tar_gz_start");
+extern const char bench_source_end[] asm("_binary_dl24_source_tar_gz_end");
 static esp_netif_t *sta, *ap;
 static std::atomic<bool> connected{false};
 static bool setup_enabled = true;
@@ -173,19 +183,35 @@ static esp_err_t route(httpd_req_t *r) {
   auto query = path.find('?');
   if (query != std::string::npos)
     path.resize(query);
-  if (r->method == HTTP_GET && (path == "/" || path == "/wifi" ||
-                                path == "/devices" || path == "/app.js")) {
-    httpd_resp_set_hdr(r, "Cache-Control", "no-store");
-    httpd_resp_set_hdr(r, "X-Frame-Options", "DENY");
-    httpd_resp_set_hdr(r, "Content-Security-Policy",
-                       "default-src 'self'; style-src 'self' 'unsafe-inline'; "
-                       "script-src 'self'; frame-ancestors 'none'");
-    if (path == "/app.js") {
-      httpd_resp_set_type(r, "text/javascript");
-      return httpd_resp_send(r, js_start, js_end - js_start - 1);
+  struct Asset {
+    const char *path, *type, *begin, *end;
+    bool binary;
+  };
+  const Asset assets[] = {
+      {"/", "text/html; charset=utf-8", page_start, page_end, false},
+      {"/wifi", "text/html; charset=utf-8", page_start, page_end, false},
+      {"/devices", "text/html; charset=utf-8", page_start, page_end, false},
+      {"/app.js", "text/javascript", js_start, js_end, false},
+      {"/dl24", "text/html; charset=utf-8", bench_html_start, bench_html_end, false},
+      {"/dl24/", "text/html; charset=utf-8", bench_html_start, bench_html_end, false},
+      {"/dl24.css", "text/css", bench_css_start, bench_css_end, false},
+      {"/dl24.js", "text/javascript", bench_js_start, bench_js_end, false},
+      {"/dl24-license.txt", "text/plain; charset=utf-8", bench_license_start, bench_license_end, false},
+      {"/dl24-source.tar.gz", "application/gzip", bench_source_start, bench_source_end, true}};
+  if (r->method == HTTP_GET) {
+    for (const auto &asset : assets) {
+      if (path != asset.path)
+        continue;
+      httpd_resp_set_hdr(r, "Cache-Control", "no-store");
+      httpd_resp_set_hdr(r, "X-Frame-Options", "DENY");
+      httpd_resp_set_hdr(r, "Content-Security-Policy",
+                         "default-src 'self'; style-src 'self' 'unsafe-inline'; "
+                         "script-src 'self'; frame-ancestors 'none'");
+      if (asset.binary)
+        httpd_resp_set_hdr(r, "Content-Disposition", "attachment; filename=dl24-source.tar.gz");
+      httpd_resp_set_type(r, asset.type);
+      return httpd_resp_send(r, asset.begin, asset.end - asset.begin - (asset.binary ? 0 : 1));
     }
-    httpd_resp_set_type(r, "text/html; charset=utf-8");
-    return httpd_resp_send(r, page_start, page_end - page_start - 1);
   }
   if (path.rfind("/api/", 0) != 0 && path != "/management/token" && via_ap(r)) {
     httpd_resp_set_status(r, "302 Found");

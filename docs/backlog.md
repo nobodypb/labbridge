@@ -24,6 +24,7 @@ checks pass and its hardware claims match the evidence.
 | LB-016 | As a cell tester, I optionally use direct source/load switching and independent meters/additional temperature channels. | LB-012, LB-015 | Done |
 | LB-017 | As an operator, I configure INA228 I²C and Yocto-Watt-V2-C measurement providers. | LB-015 | Implemented; hardware acceptance open |
 | LB-018 | As an API consumer, I understand operations, units, prerequisites and failure handling directly from OpenAPI and generated clients. | LB-002, LB-015 | Done |
+| LB-020 | As a DL24M operator, I use the complete Bench interface on the ESP with confirmed backend control and retained future features. | LB-005, LB-011 | Implemented; OFF-only hardware acceptance passed |
 
 | LB-019 | As an operator, I provision and automate RD6018 sources on the ESP AP alongside DL24M BLE, with bounded recovery and measured coexistence acceptance. | LB-007, LB-011 | Provisioning and no-load source control validated; loaded/two-source/coexistence acceptance open |
 
@@ -80,3 +81,35 @@ Component routes, optional routing and measurement providers are delivered in PR
 #20. LB-015/016 have portable, generated-client, browser and DL24M bench acceptance.
 LB-017 software is implemented; actual INA228/Yocto hardware commissioning remains
 open in issue #19. The native ESP Yocto USB transport is not part of this delivery.
+
+## LB-020 — DL24M Bench page (implemented; OFF-only hardware acceptance passed)
+
+As a DL24M operator, I use the complete DL24 Bench interface at `/dl24` on the
+ESP with LabBridge HTTP control. Preserve every upstream function area: unsupported
+controls remain visible, disabled and explained, ready for later backend support.
+Keep the unchanged GPL-3.0-or-later upstream snapshot separate from adaptations.
+
+Acceptance: choose one DL24M; authenticate; reserve only that device; confirmed
+operations and independent STOP; stop/confirm OFF before releasing or switching;
+no automatic ON/replay after loss or reboot. Existing current/cutoff/timer/settings
+routes enforce their limits. All modes, calibration/reset and protocol diagnostics
+remain visible; unsupported actions never send commands. Retain themes, chart,
+all measurement tiles, live/load recording and CSV. Missing values remain unknown;
+capacity/energy are labelled browser session integrals with freshness, identity,
+boot and gap handling. Bound chart/log memory. Serve all assets locally under the
+existing CSP. Browser/portable/generation checks and all board builds pass;
+physical bench acceptance is recorded separately with original settings restored.
+
+Follow-ups: active CV/CR/CP commissioning, calibration/zero/factory-reset APIs,
+HID-frame/snapshot diagnostics, fan RPM and verified native counter scales,
+external probe telemetry, other device themes and persistent recording. Their
+absence is not permission to expose raw commands or claim hardware support.
+
+LB-020 evidence: 11 Web unit tests and 21 browser scenarios pass, alongside
+portable/generation checks and all three board builds. The embedded StickS3 page
+passed authentication, reservation, brightness change/restoration, STOP and
+release on 2026-10-20; all 14 settings, the original current target and confirmed
+OFF were restored. Real HTTP resets under parallel polling led to a single-request
+queue with priority STOP/heartbeat and cancellation of queued commands. Loaded
+operation through the new page and battery testing were not performed (0 V input);
+the existing physical limitations in LB-014 remain open.
