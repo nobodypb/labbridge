@@ -234,7 +234,8 @@ Provisioning defaults to `profile: "pc_v22"`. For a controlled commissioning
 comparison, trusted USB/CLI may explicitly select `pc_v22_target_ssid` in the
 start request. That variant changes only the phase-one SSID field to the AP
 SSID, with the resulting CRC/XOR/length changes; phase two, multicast and timing
-are identical. It is experimental until a repeated hardware comparison succeeds.
+are identical. W01 trials received the server IP but have not established
+Wi-Fi/TCP pairing with this variant; retain the default `pc_v22` profile.
 Status returns the selected `profile`. Confirm the displayed server IP and
 advance within the 120-second management phase; the sender itself runs for
 up to 60 seconds. A stale candidate listing does not prove a new pairing: check

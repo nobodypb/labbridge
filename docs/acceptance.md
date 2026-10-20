@@ -136,3 +136,7 @@ A target-SSID trial displayed the server address but produced no new join
 result or TCP identity. Its late management transition prevents a clean
 end-to-end comparison.
 
+A same-session target-SSID repeat likewise produced no new join/TCP evidence.
+The PC-compatible profile remains the supported default. Differing transition
+delays prevent claiming a universal receiver requirement.
+
