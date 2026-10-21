@@ -1,5 +1,6 @@
 import {test,expect} from '@playwright/test';
 import {mockAuth,signIn} from './auth-helper.js';
+import {openAccount} from './bench-controls.js';
 async function backend(page,{accessPoint=false}={}){
  const requests=[];
  await page.route('**/api/v1/**',async route=>{
@@ -17,7 +18,7 @@ test('LAN scan prompts for password and resumes automatically; reload and naviga
  await expect(page.getByRole('heading',{name:'Sign in',exact:true})).toBeVisible();
  await signIn(page);await expect(page.getByLabel('Network name (SSID)')).toHaveValue('Bench network');
  await page.reload();await expect(page.getByLabel('Network name (SSID)')).toHaveValue('Bench network');
- await page.getByRole('link',{name:'Instruments',exact:true}).click();await expect(page.getByRole('button',{name:'Sign out',exact:true})).toBeVisible();
+ await page.getByRole('link',{name:'Instruments',exact:true}).click();await openAccount(page);await expect(page.getByRole('button',{name:'Sign out',exact:true})).toBeVisible();
  expect(requests.filter(r=>r.method!=='GET')).toHaveLength(0);
  await page.getByRole('button',{name:'Sign out',exact:true}).click();await expect(page.getByRole('heading',{name:'Sign in',exact:true})).toBeVisible();
 });
@@ -50,7 +51,7 @@ test('password replacement invalidates the browser session and requires a new lo
  await expect(page.getByRole('heading',{name:'Sign in',exact:true})).toBeVisible();
  await expect(page.locator('#status')).toContainText('Password changed');
  await page.getByLabel('Device password',{exact:true}).fill('replacement password');
- await page.getByRole('button',{name:'Sign in',exact:true}).click();await expect(page.getByRole('button',{name:'Sign out',exact:true})).toBeVisible();
+ await page.getByRole('button',{name:'Sign in',exact:true}).click();await openAccount(page);await expect(page.getByRole('button',{name:'Sign out',exact:true})).toBeVisible();
 });
 for(const path of ['/','/wifi','/devices','/dl24','/dl24/'])test(`password sign-in works on user entry point ${path}`,async({page})=>{
  const requests=await backend(page);await mockAuth(page);
@@ -58,8 +59,8 @@ for(const path of ['/','/wifi','/devices','/dl24','/dl24/'])test(`password sign-
  await page.goto(path);
  await expect(page.getByLabel('Device password',{exact:true})).toHaveAttribute('autocomplete','current-password');
  await expect(page.getByLabel(/API bearer token|Management token/i)).toHaveCount(0);
- await signIn(page);await expect(page.getByRole('button',{name:'Sign out',exact:true})).toBeVisible();
- await page.reload();await expect(page.getByRole('button',{name:'Sign out',exact:true})).toBeVisible();
+ await signIn(page);await openAccount(page);await expect(page.getByRole('button',{name:'Sign out',exact:true})).toBeVisible();
+ await page.reload();await openAccount(page);await expect(page.getByRole('button',{name:'Sign out',exact:true})).toBeVisible();
  expect(requests.filter(r=>r.method!=='GET')).toHaveLength(0);
 });
 for(const afterLogin of [false,true])test(`delayed unauthenticated scan cannot erase ${afterLogin?'a new login':'password-manager input'}`,async({page})=>{
@@ -82,6 +83,6 @@ for(const afterLogin of [false,true])test(`delayed unauthenticated scan cannot e
   await expect(page.getByLabel('Device password',{exact:true})).toHaveValue('synthetic password');
   await page.getByRole('button',{name:'Sign in',exact:true}).click();
  }
- await expect(page.getByRole('button',{name:'Sign out',exact:true})).toBeVisible();
+ await openAccount(page);await expect(page.getByRole('button',{name:'Sign out',exact:true})).toBeVisible();
  await expect(page.locator('#status')).toHaveText('1 networks found');
 });

@@ -838,69 +838,166 @@ remain unavailable. The implementation follows the manufacturer's
 [user guide](https://www.yoctopuce.com/EN/products/yocto-watt-v2-c/doc/YWATMK2C.usermanual.html).
 No physical Yocto-Watt has yet been exercised in this project.
 
-## DL24M Bench page
+## Modular Bench page
 
-Open `/dl24` on the node (also linked from `/devices`). The complete DL24 Bench
-interface is adapted from the GPL-3.0-or-later upstream page. Its unchanged source,
-licence and SHA-256 are recorded in `web/vendor/dl24-bench`; the device serves the
-licence and corresponding frontend source at `/dl24-license.txt` and
-`/dl24-source.tar.gz`. All runtime assets are local and use the existing CSP.
+Open `/dl24` on the node (also linked from `/devices`). The Bench interface
+supports DL24M loads, RD60xx supplies and discoverable actor/sensor components
+on the same node. The unchanged GPL-3.0-or-later upstream snapshot, licence and
+SHA-256 remain in `web/vendor/dl24-bench`. The node serves the licence and
+corresponding frontend source at `/dl24-license.txt` and `/dl24-source.tar.gz`.
+All runtime assets are local and use the existing CSP.
 
-Sign in with the shared device password, then choose one configured DL24M.
-The same cookie session works across `/wifi`, `/devices` and `/dl24`, including
-reloads. Login resumes read-only discovery and never reserves or repeats a
-device command. Cookie mutations, heartbeats and independent STOP carry the
-session CSRF header. Reading does not reserve devices. **Reserve device**
-acquires only the selected physical device, with a 10 s lease and 1 s heartbeat. Setpoints and output
-changes wait for confirmed operations. **STOP** remains available independently
-of a lease. Device switching and release first request STOP and confirm OFF;
-a failed STOP prevents the switch. Closing the page attempts STOP, but delivery
-is not guaranteed: the existing node-side lease expiry remains the fallback.
-Loss of the connection, reservation or boot invalidates control; reconnect never
-replays an ON command. Session expiry cancels queued commands and requires a
-new explicit reservation after login. Sign out first attempts confirmed STOP
-and release, then ends the session even if shutdown could not be confirmed;
-the UI reports that uncertainty and relies on lease expiry as the fallback.
-Settings and device-counter reset require confirmed OFF.
+Sign in with the shared device password. Cookie sessions work across `/wifi`,
+`/devices` and `/dl24`, including reloads. Login resumes read-only discovery;
+it never reserves devices or repeats a command. Cookie mutations, heartbeats
+and independent STOP carry the session CSRF header.
 
-CC current, cutoff, minute-resolution timer, display settings and supported
-protection limits use the existing typed API. Device language is explicitly the
-backend's raw 0/1 enum, and standby time is a raw value with unconfirmed units.
-Typed CV/CR/CP mode and target routes use native BLE scaling, confirmed OFF,
-original-setting recovery and mode-specific activation guards. Controls follow
-the device capability status; uncommissioned modes stay locked. Calibration,
-no-load zero, factory reset, external temperature and fan RPM retain concrete
-restrictions. Passive diagnostics capture actual BLE traffic, cached register
-snapshots, browser-side comparison and export. No HID commands are sent.
-See the [capability and protocol matrix](dl24m-bench-extension.md).
+### Graph-first workspace
 
-The page authenticates one `/api/v1/ws` connection with the shared UI password
-session: its first message proves the session CSRF token, bound to the upgrade
-cookie and trusted origin. API clients can still use a bearer first message. Discovery, commands and explicit lease heartbeats use the same
-USB-shaped API envelopes; monitoring, settings and operation completion are
-pushed. The default measurement interval is 1 s (selectable 500 ms/1 s/2 s),
-without changing BLE polling. There is no normal HTTP polling. STOP has priority
-and cancels queued commands; transport loss cancels requests without replay.
-An explicit STOP after socket loss can use HTTP and confirm OFF independently;
-it does not reconnect or reacquire control. Settings reflect the driver's cached
-readback. Live records continuously; Load
+The global header is one row and at most 56 px high. Node connection, STOP-all,
+CSV export, recording options, display/channel selection, node status and
+account/navigation are opened from there. Narrow screens group the less common
+actions under **•••**; STOP-all stays directly reachable. Login, errors and
+expanded panels do not add header rows or move the plot.
 
-Password work uses a separate HTTP connection and does not hold the instrument queue.
-records only during confirmed ON, while state monitoring and heartbeat continue.
-The graph retains 900 points. At 100,000 CSV rows, recording pauses visibly until
-export/clear; device control and monitoring continue. Recording lives only in
-the browser session. Export before switching devices or closing/reloading.
+The left panel contains device/component selection, reservation, selected-device
+STOP, setpoints, output control and **Device settings**. On mobile, **Device**
+opens that same panel as a drawer, closed by default; the graph stays visible
+immediately below the header. Global panels and the drawer are keyboard
+accessible and close with Escape. The password panel is modeless so independent
+STOP remains reachable while password work runs.
 
-Capacity (mAh), energy (Wh) and observed time are browser-session values, not native
-DL24M counters or certified battery-test results. Native elapsed/counter readings
-are shown separately with source, units and freshness; uncommissioned counter
-scales remain raw. DL24M read 14 counts mAh and read 15 counts mWh; native
-values use Ah/Wh with per-register freshness, also available as common charge and
-energy sensors. Relative scaling was bench-checked; absolute accuracy remains
-unverified. Integration uses trapezoids
-between distinct, fresh, finite samples with increasing device-monotonic time,
-within the configured freshness limit and one device/boot. Missing/stale samples
-and larger gaps break the trace/integration. CSV retains sample identity, boot,
-sequence, timestamps, units and quality. Missing measurements appear as unknown,
-never measured zero. Internal temperature is not a cell probe. **Clear** affects
-only the browser recording; **Zero all data** explicitly resets device counters.
+The graph fills the available workspace height. The measurement values below
+use exactly the same channel colours as their curves, replacing a separate
+legend. Colours remain stable across discovery order and adapt to the theme.
+Click or tap a value to toggle its curve; focused values also accept Space or
+Enter. Plotted values have a filled dot, tinted background and coloured underline.
+The Canvas rendering buffer tracks its actual viewport size and device-pixel
+ratio. Content-sized measurement groups retain thin separators and monospaced
+values.
+Several devices share a row when space permits; groups and channels wrap to fit.
+The measurement dock defaults to at most 144 px. Drag its top grip up or down
+with a mouse or touch to resize it; the grip also accepts Arrow Up/Down (20 px)
+and Home/End (minimum/maximum). The preferred height is saved in this browser
+and clamped to the viewport so the graph stays usable. Extra values scroll inside
+the dock while the grip remains visible.
+Each device has one freshness summary; invalid individual values remain unknown.
+Additional selected-device readings (resistance, session integrals, elapsed time,
+cutoff and unavailable fan telemetry) expand inside the same dock. Output V/I/W
+are not repeated in a second visible panel. **Display → Channels** selects which
+values appear below and also configures curves. On mobile, open **••• → Display**.
+New channels show all measured values by default, with only output voltage and
+current curves enabled. Value and curve selections are saved independently;
+existing preferences take precedence over these defaults. Selection never changes
+recording scope or sends instrument commands.
+
+### Selected controls, independent devices
+
+The device dropdown selects the visible controls only. If a device has multiple
+actors, select its actor component separately. **Reserve device** explicitly
+acquires the selected physical device with a 10 s lease and 1 s heartbeat.
+Reservations, output states, input drafts and pending confirmations survive
+selection changes. For example, set the DL24M current, select an RD supply,
+reserve it and set voltage/current or enable its output. The load remains
+reserved and retains its output state. The global **Status** panel lists the other devices' outputs, reservations and
+uncertainty and flags errors on its header button. Changing the selected controls
+does not start or coordinate an electrical test sequence.
+
+Common controls follow advertised component actions. RD current/voltage use
+0.01 A/V steps and configured limits. The source switches CC/CV automatically;
+the UI displays observed regulation and the raw protection code instead of
+pretending that a mode button selects regulation. Confirmed setpoints appear
+as input placeholders, separately from measured output. DL24M retains its
+commissioned CC operation, cutoff, minute-resolution timer, display settings,
+protection settings and explicit counter reset. Its module also owns the native
+CV/CR/CP mode/target controls and passive BLE diagnostics, gated by backend
+capabilities. Calibration, no-load zero, factory reset and fan RPM retain their
+specific backend restrictions; no HID commands are sent. Settings and
+counter reset require confirmed OFF. RD Wi-Fi provisioning and configuration
+remain on **Instruments**; the Bench does not implement another pairing flow.
+
+Setpoints/output commands wait for terminal operations and readback using the
+original device/component/lease/boot identity, even if the dropdown changes.
+**STOP selected** works without a lease. The global **STOP all** button targets every
+device owned by this page, including devices with uncertain ownership. All
+priority STOP requests are submitted before waiting for individual operation
+results. One slow or failed device does not prevent the other STOP attempts.
+STOP cancels queued mutations only for its targets. **Release and stop** confirms
+that device OFF before releasing its lease. Internal navigation and sign out
+attempt STOP/release for every owned device; a failed STOP prevents navigation
+but does not prevent shutdown attempts for the other devices. Sign out still
+ends the session and reports unconfirmed shutdown. Page closure attempts STOP;
+delivery is not guaranteed, so node-side lease expiry remains the fallback.
+
+A lost reservation or invalid device state locks that device's mutations while
+other devices remain available. Connection loss, session expiry or a node boot
+change invalidates control and queued commands. Reconnection does not replay ON
+or automatically reacquire reservations. The page must finish initial discovery
+before exposing controls. Password work uses a separate connection so it cannot
+hold up STOP or heartbeats.
+
+### Shared measurement view and recording
+
+All sensor components, including standalone INA228/Yocto meters and future
+component-based drivers, appear in **Display → Channels**. Toggle a channel's
+value and curve independently. All measured values are visible below by default;
+only output voltage/current curves start enabled. Compact measurement groups
+identify device, channel and unit; each value toggles its matching-colour curve. Channels with the same
+unit share a scale, and all curves use the node's monotonic timestamps. Extra
+unit axes can scroll within the plot on narrow screens. Display preferences
+are stored locally; hiding channels does not stop acquisition or CSV recording.
+
+RD telemetry includes output V/I/W, input voltage, battery-sense voltage and
+presence, internal/external temperature and native Ah/Wh counters. A missing
+external NTC remains unavailable. Internal and external-probe channel identities
+are preserved; neither is implicitly a cell-temperature guard. Invalid or old
+values show unknown, never measured zero. Curves break at invalid samples,
+disconnects and excessive gaps. Sensor epoch/boot changes break integration;
+old boot timelines are not combined with the current plot.
+
+One authenticated WebSocket carries discovery, instrument RPC and tracked
+operation results for every device. The selected device supplies snapshots;
+serial RPC rounds read bundled sensor channels and cached aggregate/actor/status
+for the other devices. The default interval is 1 s (500 ms/1 s/2 s selectable),
+without changing instrument polling. STOP has priority over heartbeat, command
+and monitoring requests. Poll rounds do not overlap; age determines freshness.
+An explicit STOP after socket loss can recover over bounded HTTP requests,
+without replaying a write, reconnecting or reacquiring a reservation.
+
+**Live** records all channels. **While output ON** records each actor device only
+while one of its actors is confirmed ON; standalone sensors, state monitoring
+and all lease heartbeats continue. The dropdown and tile/curve visibility never
+clear the shared recording. The buffer holds at most 100,000 channel/status/
+computed-value rows; recording then pauses visibly until export/clear while
+monitoring and controls continue. Each channel's plot retains at most 900 points.
+Recording exists only in the browser; export before reloading or closing.
+
+The CSV uses long-format rows with `device_id`, `component_id`, `boot_id`,
+`epoch`, `sequence`, `received_ms`, `age_ms`, `quality`, `quantity`, `unit`,
+`kind` and `value`. `native` rows retain provider values, `status` rows retain
+output/setpoint/module status, and `session` rows hold browser charge/energy
+integrals. Invalid values retain their quality metadata; missing values stay
+empty. This replaces the former single-device wide-format Bench CSV.
+
+Selected-device capacity (mAh), energy (Wh) and observed time are browser-session
+values, distinct from native counters. Integration requires aligned, finite,
+fresh V/I/W samples from the same device/boot/epoch, with increasing timestamps
+and distinct sequences. Ambiguous quantity mappings do not integrate. Gaps,
+missing channels and paused recording break continuity. **Clear recording**
+affects only browser history/integrals. The DL24M **Zero all data** operation
+explicitly resets device counters and does not clear browser history.
+
+Native DL24M mode/target controls use the native BLE scales, confirmed OFF and
+backend capability status; CC current remains adjustable while ON. The module
+keeps the CV notice preference, confirmed counter reset, native counter/fine
+instrument-temperature origins and passive BLE capture/comparison/export.
+Unverified calibration and destructive maintenance actions remain restricted.
+See the [capability and protocol matrix](dl24m-bench-extension.md). Instrument
+temperature magnitude is not a cell-temperature guard, and counter resolution
+is not an absolute accuracy claim.
+
+Native DL24M read 14 counts mAh and read 15 counts mWh. The corresponding
+readings expose Ah/Wh with per-register freshness and common charge/energy
+sensor components. Relative scaling was bench-checked; absolute accuracy remains
+unverified. The CSV retains native sources and quality independently of browser
+integrals.
