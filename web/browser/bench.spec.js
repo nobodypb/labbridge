@@ -324,3 +324,13 @@ test('instrument temperature uses fresh fine-resolution magnitude and never beco
  await expect(page.locator('#nativeReadings')).toContainText('temperature_magnitude: —');
  expect(s.writes).toHaveLength(0);
 });
+
+test('passive snapshot waits visibly while a settings operation is still confirming',async({page})=>{
+ const s=await backend(page,{hold:true});await connect(page);await page.locator('#reserve').click();
+ await page.locator('details').filter({has:page.locator('#snapBtn')}).locator('summary').click();
+ await page.locator('#gear').click();await page.locator('#dispBri').fill('7');await page.locator('#dispBriBtn').click();
+ await expect.poll(()=>s.writes.filter(w=>w.path.endsWith('/dl24m/settings')).length).toBe(1);
+ await page.keyboard.press('Escape');await expect(page.locator('#snapBtn')).toBeDisabled();
+ s.hold=false;await expect(page.locator('#snapBtn')).toBeEnabled();await page.locator('#snapBtn').click();
+ await expect(page.locator('#rawLive')).toContainText('TX');
+});

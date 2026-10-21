@@ -59,7 +59,7 @@ function render(){
  for(const [id,f] of Object.entries(features)){
   const state=f.capability?api.device?.features?.find(s=>s.id===f.capability):undefined;
   const reason=f.capability?(state?.status==='supported'?'':state?.reason??'Connect to discover backend support.'):f.reason;
-  if(f.capability||f.reason){disable(id,!!reason||!api.connected||id.startsWith('mode-')&&!off);$(id).title=reason??state?.reason??'';$(id).dataset.help=$(id).title;}
+  if(f.capability||f.reason){disable(id,!!reason||!api.connected||id==='snapBtn'&&(pending||api.busy)||id.startsWith('mode-')&&!off);$(id).title=reason??state?.reason??'';$(id).dataset.help=$(id).title;}
  }
  $('unsupported').textContent='Backend feature status: '+(api.device?.features?.filter(f=>f.status!=='supported').map(f=>`${f.id}: ${f.status} — ${f.reason}`).join(' · ')||'Connect to discover supported and unverified functions.');
  for(const note of Array.from(document.querySelectorAll<HTMLElement>('[data-feature-note]'))){
