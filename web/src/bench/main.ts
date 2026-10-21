@@ -158,7 +158,11 @@ $<HTMLSelectElement>('deviceSelect').onchange=()=>{const id=input('deviceSelect'
 bind('setBtn',()=>{const range=targetRange();return api.target(number('setVal',range.min,range.max,range.step));});
 bind('loadBtn',()=>api.actor?.output==='on'?api.stop():api.enable(),true);
 bind('stop',()=>api.stop(),true);
-for(const mode of ['cc','cv','cr','cp'] as const)bind('mode-'+mode,()=>api.modeWrite(mode));
+for(const mode of ['cc','cv','cr','cp'] as const)bind('mode-'+mode,async()=>{
+ const result=await api.modeWrite(mode);
+ if(mode==='cv'&&store('cvNotice')!=='off')$('cvToast').classList.add('show');
+ return result;
+});
 bind('timeBtn',()=>{const hr=number('thr',0,24,1),min=number('tmin',0,59,1),seconds=(hr*60+min)*60;if(seconds>86400)throw Error('Timer must not exceed 24 hours');return api.duration(seconds);});
 bind('limBtn',async()=>{
  const settings:Dl24mSettings={};for(const id of ['ocp','opp','otext','otmos','cutv'])if(input(id).value.trim())settings[settingsFields[id].key]=field(id);
@@ -184,7 +188,8 @@ addEventListener('keydown',e=>{
   const first=items[0],last=items[items.length-1];if(e.shiftKey&&document.activeElement===first){e.preventDefault();last?.focus();}else if(!e.shiftKey&&document.activeElement===last){e.preventDefault();first?.focus();}
  }
 });
-$('cvDismiss').onclick=$('cvNever').onclick=()=>$('cvToast').classList.remove('show');
+$('cvDismiss').onclick=()=>$('cvToast').classList.remove('show');
+$('cvNever').onclick=()=>{store('cvNotice','off');$('cvToast').classList.remove('show');};
 for(const s of Array.from(document.querySelectorAll<HTMLElement>('.legend span'))){
  const b=document.createElement('button');b.textContent=s.textContent;b.style.cssText=s.style.cssText;b.dataset.s=s.dataset.s;b.setAttribute('aria-pressed','true');s.replaceWith(b);
  b.onclick=()=>{const off=b.classList.toggle('off');b.setAttribute('aria-pressed',String(!off));chart.setVisible(({1:'v',2:'i',3:'w'} as Record<string,string>)[b.dataset.s!],!off);};

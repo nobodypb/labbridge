@@ -24,7 +24,7 @@
       <option value="500">500 ms</option><option value="1000" selected>1 s</option><option value="2000">2 s</option>
     </select></label>
   <div class="toggle" id="theme" data-help="Switch between light and dark themes."><button data-th="light">Light</button><button data-th="dark" class="sel">Dark</button></div>
-  <button id="connect" class="btn connbtn off" data-help="Connect to the LabBridge backend with the API token, then select a DL24M. Green indicates an authenticated connection."><span class="led"></span><span id="connLbl">Connect</span></button>
+  <button id="connect" class="btn connbtn off" data-help="Connect using the shared device password session, then select a DL24M. Green indicates an authenticated connection."><span class="led"></span><span id="connLbl">Connect</span></button>
   <button id="export" class="btn" disabled data-help="Download all logged samples (time, V/I/W, temps, Wh, mAh) as a CSV file.">Export CSV</button>
   <button id="gear" class="iconbtn" title="Settings" aria-label="Settings" data-help="Settings: brightness, standby, language, protection limits, calibration, and device resets.">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -183,8 +183,9 @@
 </div>
 <div id="cvToast" class="toast">
   <h4>Constant-voltage mode</h4>
-  <p>If a battery or charged source is connected, the unit shows a safety warning
-     that must be cleared on its front panel — it can’t be bypassed over USB.</p>
+  <p>CV can draw current up to the configured protection limits. Use a
+     current-limited source and follow front-panel warnings. A voltage target
+     alone does not limit current.</p>
   <div class="acts"><button class="btn" id="cvDismiss">Got it</button><button class="btn" id="cvNever">Don’t show again</button></div>
 </div>
 <div id="helpbar" data-help="Hover any control for a short description."></div>

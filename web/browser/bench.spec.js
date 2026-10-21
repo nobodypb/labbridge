@@ -334,3 +334,30 @@ test('passive snapshot waits visibly while a settings operation is still confirm
  s.hold=false;await expect(page.locator('#snapBtn')).toBeEnabled();await page.locator('#snapBtn').click();
  await expect(page.locator('#rawLive')).toContainText('TX');
 });
+
+test('CV notice can be dismissed once or suppressed persistently without enabling the load',async({page})=>{
+ const s=await backend(page,{activeModes:true});await connect(page);await page.locator('#reserve').click();
+ await page.locator('[data-mode="cv"]').click();await expect(page.locator('#cvToast')).toBeVisible();
+ await expect(page.locator('#cvToast')).toContainText('current-limited source');
+ await page.locator('#cvDismiss').click();await expect(page.locator('#cvToast')).toBeHidden();
+ await page.locator('[data-mode="cc"]').click();await expect(page.locator('#setUnit')).toHaveText('(A)');
+ await page.locator('[data-mode="cv"]').click();await expect(page.locator('#cvToast')).toBeVisible();
+ await page.locator('#cvNever').click();await expect(page.locator('#cvToast')).toBeHidden();
+ await page.reload();await expect(page.locator('#reserve')).toHaveText('Reserve device');await page.locator('#reserve').click();
+ await page.locator('[data-mode="cc"]').click();await expect(page.locator('#setUnit')).toHaveText('(A)');
+ await page.locator('[data-mode="cv"]').click();await expect(page.locator('#setUnit')).toHaveText('(V)');
+ await expect(page.locator('#cvToast')).toBeHidden();expect(s.writes.filter(w=>w.path.endsWith('/output'))).toHaveLength(0);
+});
+
+test('device counter reset requires confirmation and OFF without clearing the browser recording',async({page})=>{
+ const s=await backend(page);await connect(page);await page.locator('#reserve').click();
+ await expect(page.locator('#rCap')).not.toHaveText('—');await page.locator('#gear').click();
+ page.once('dialog',dialog=>dialog.dismiss());await page.locator('#zeroData').click();expect(s.writes).toHaveLength(0);
+ const capacity=Number(await page.locator('#rCap').textContent());
+ page.once('dialog',dialog=>dialog.accept());await page.locator('#zeroData').click();
+ await expect.poll(()=>s.writes.filter(w=>w.path.endsWith('/counters/reset')).length).toBe(1);
+ await expect(page.locator('#benchStatus')).toContainText('succeeded');
+ expect(Number(await page.locator('#rCap').textContent())).toBeGreaterThanOrEqual(capacity);
+ s.output='on';await expect(page.locator('#zeroData')).toBeDisabled();
+ expect(s.writes.filter(w=>w.path.endsWith('/output'))).toHaveLength(0);
+});
