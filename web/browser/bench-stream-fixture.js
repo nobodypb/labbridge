@@ -37,7 +37,7 @@ export async function mockBenchStream(page,state,handle,{devices,operations=()=>
     if(r.type==='auth'&&r.csrf_token==='synthetic-csrf'&&!state.auth.revoked&&cookies.some(c=>c.name==='LabBridgeSession'&&c.value==='synthetic-session')){authenticated=true;ws.send(JSON.stringify({type:'authenticated',boot_id:state.boot}));}
     else{ws.send(JSON.stringify({status:401,body:{detail:'Sign in required'}}));ws.close();}return;
    }
-   if(r.type==='subscribe'){if(state.expireDuringSubscribe){state.auth.revoked=true;ws.close();return;}selected=r.device_id;ws.send(JSON.stringify({id:r.id,status:200,body:{subscribed:selected}}));return;}
+   if(r.type==='subscribe'){if(state.expireDuringSubscribe){state.auth.revoked=true;ws.close();return;}selected=r.device_id;if(state.beforeSubscribe)await state.beforeSubscribe(r);ws.send(JSON.stringify({id:r.id,status:200,body:{subscribed:selected}}));return;}
    state.rpc.push(r);if(state.beforeRpc)await state.beforeRpc(r);
    const headers=Object.fromEntries(Object.entries(r.headers??{}).map(([k,v])=>[k.toLowerCase(),v]));
    const result=await call(r.method,r.path,r.body,headers,true);if(result&&!closed)ws.send(JSON.stringify({id:r.id,...result}));
