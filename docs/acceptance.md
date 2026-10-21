@@ -920,5 +920,5 @@ newly typed input. The regression checks both immediate restoration and retained
 input while making zero instrument writes. Validation passes all 93 browser
 scenarios, 28 Web unit tests, portable/reference/host checks, TypeScript/web build,
 deterministic generation/drift, Black and public-tree checks. The integration's
-three board builds and required CI jobs pass; the deployed images fit their
+three board builds and required CI jobs pass; the built images fit their
 partitions with 45%, 43% and 28% free on StickS3, USB-OTG and ESP32 respectively.
