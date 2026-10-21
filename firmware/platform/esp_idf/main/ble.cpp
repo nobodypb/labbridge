@@ -19,7 +19,26 @@ public:
   uint8_t properties = 0;
   std::atomic<int> ack{-1};
   uint64_t connecting_at = 0;
-  std::mutex io;
+  mutable std::mutex io;
+  std::deque<WireObservation> observations;
+  uint64_t observation_sequence = 0;
+  bool trace_supported() const override { return true; }
+  std::vector<WireObservation> traffic() const override {
+    std::lock_guard<std::mutex> lock(io);
+    return {observations.begin(), observations.end()};
+  }
+  void observe(const Bytes &bytes, bool transmitted) {
+    if (observations.size() == 32)
+      observations.pop_front();
+    auto n = std::min(bytes.size(), size_t(64));
+    observations.push_back({++observation_sequence, now_ms(), generation(),
+                            transmitted, bytes.size() > n,
+                            Bytes(bytes.begin(), bytes.begin() + n)});
+  }
+  void submitted(const Bytes &bytes) {
+    std::lock_guard<std::mutex> lock(io);
+    observe(bytes, true);
+  }
   Bytes rx;
   std::deque<Bytes> tx;
   explicit Ble(std::string a) : address(std::move(a)) {}
@@ -54,6 +73,7 @@ public:
       ble_gap_terminate(connection, BLE_ERR_REM_USER_CONN_TERM);
       return;
     }
+    observe(Bytes(p, p + n), false);
     rx.insert(rx.end(), p, p + n);
   }
   static int written(uint16_t conn, const ble_gatt_error *e, ble_gatt_attr *,
@@ -82,6 +102,7 @@ public:
         if (self->online && (self->properties & BLE_GATT_CHR_PROP_WRITE)) {
           if (ble_gattc_write_flat(conn, self->value_handle, b.data(), b.size(),
                                    written, self) == 0) {
+            self->submitted(b);
             auto end = now_ms() + 1200;
             while (now_ms() < end && self->online && self->epoch == epoch &&
                    self->ack < 0)
@@ -92,6 +113,8 @@ public:
                    (self->properties & BLE_GATT_CHR_PROP_WRITE_NO_RSP))
           ok = ble_gattc_write_no_rsp_flat(conn, self->value_handle, b.data(),
                                            b.size()) == 0;
+        if (ok && !(self->properties & BLE_GATT_CHR_PROP_WRITE))
+          self->submitted(b);
         if (!ok && self->connection != BLE_HS_CONN_HANDLE_NONE) {
           self->online = false;
           ble_gap_terminate(conn, BLE_ERR_REM_USER_CONN_TERM);

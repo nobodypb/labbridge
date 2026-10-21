@@ -15,6 +15,8 @@
 
 typedef struct measurements_t measurements_t;
 
+#include "dl24m_target_request.h"
+#include "native_reading.h"
 #include "temperature_channel.h"
 
 // Enum QUALITY for measurements
@@ -27,11 +29,19 @@ labbridge_api_measurements_QUALITY_e measurements_quality_FromString(char* quali
 
 // Enum REGULATIONMODE for measurements
 
-typedef enum  { labbridge_api_measurements_REGULATIONMODE_NULL = 0, labbridge_api_measurements_REGULATIONMODE_cc, labbridge_api_measurements_REGULATIONMODE_cv, labbridge_api_measurements_REGULATIONMODE_unknown } labbridge_api_measurements_REGULATIONMODE_e;
+typedef enum  { labbridge_api_measurements_REGULATIONMODE_NULL = 0, labbridge_api_measurements_REGULATIONMODE_cc, labbridge_api_measurements_REGULATIONMODE_cv, labbridge_api_measurements_REGULATIONMODE_cr, labbridge_api_measurements_REGULATIONMODE_cp, labbridge_api_measurements_REGULATIONMODE_unknown } labbridge_api_measurements_REGULATIONMODE_e;
 
 char* measurements_regulation_mode_ToString(labbridge_api_measurements_REGULATIONMODE_e regulation_mode);
 
 labbridge_api_measurements_REGULATIONMODE_e measurements_regulation_mode_FromString(char* regulation_mode);
+
+// Enum LOADMODE for measurements
+
+typedef enum  { labbridge_api_measurements_LOADMODE_NULL = 0, labbridge_api_measurements_LOADMODE_cc, labbridge_api_measurements_LOADMODE_cv, labbridge_api_measurements_LOADMODE_cr, labbridge_api_measurements_LOADMODE_cp } labbridge_api_measurements_LOADMODE_e;
+
+char* measurements_load_mode_ToString(labbridge_api_measurements_LOADMODE_e load_mode);
+
+labbridge_api_measurements_LOADMODE_e measurements_load_mode_FromString(char* load_mode);
 
 
 
@@ -52,6 +62,9 @@ typedef struct measurements_t {
     labbridge_api_measurements_REGULATIONMODE_e regulation_mode; //enum
     int protection_code; //numeric
     char *boot_id; // string
+    list_t *native_readings; //nonprimitive container
+    labbridge_api_measurements_LOADMODE_e load_mode; //enum
+    struct dl24m_target_request_t *load_target; //model
     double input_voltage_v; //numeric
     double battery_voltage_v; //numeric
     int battery_detected; //boolean
@@ -76,6 +89,9 @@ __attribute__((deprecated)) measurements_t *measurements_create(
     labbridge_api_measurements_REGULATIONMODE_e regulation_mode,
     int protection_code,
     char *boot_id,
+    list_t *native_readings,
+    labbridge_api_measurements_LOADMODE_e load_mode,
+    dl24m_target_request_t *load_target,
     double input_voltage_v,
     double battery_voltage_v,
     int battery_detected

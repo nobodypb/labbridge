@@ -8,13 +8,16 @@
 #include "driver/usb_serial_jtag_vfs.h"
 #endif
 namespace labbridge::esp {
+namespace {
+constexpr size_t maximum_request_bytes = 16384;
+}
 void console_respond(const std::string &id, Response response) {
   Json reply, headers;
   for (const auto &p : response.headers)
     headers.set(p.first, p.second);
   reply.set("id", id)
       .set("status", double(response.status))
-      .set("body", response.body)
+      .set("body", std::move(response.body))
       .set("headers", headers);
   // One stdio call preserves complete LABJSON lines from console and worker.
   printf("LABJSON %s\n", reply.dump().c_str());
@@ -56,7 +59,7 @@ static void console(void *) {
       line.clear();
       overflow = false;
     } else if (c != '\r' && !overflow) {
-      if (line.size() >= 16384) {
+      if (line.size() >= maximum_request_bytes) {
         line.clear();
         overflow = true;
       } else
@@ -71,7 +74,10 @@ void start_console() {
   // stalls.
   usb_serial_jtag_driver_config_t config = {};
   config.tx_buffer_size = 4096;
-  config.rx_buffer_size = 2048;
+  // A JSON-escaped 128-character Unicode password and its confirmation exceed
+  // 2 KiB. Keep an entire allowed frame plus its delimiter while the console
+  // task is descheduled; the ISR otherwise discards bytes from a full buffer.
+  config.rx_buffer_size = maximum_request_bytes + 64;
   ESP_ERROR_CHECK(usb_serial_jtag_driver_install(&config));
   usb_serial_jtag_vfs_use_driver();
 #endif

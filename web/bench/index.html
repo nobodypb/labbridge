@@ -62,7 +62,7 @@
       </div>
       <div class="hint" style="margin-top:4px">Auto-stops the load when it expires. 0:00 = no limit. LabBridge confirms the setting by readback; bridge safety deadlines still apply.</div>
     </details>
-    <details class="rail-help" data-module="dl24m"><summary>About these controls</summary><div class="hint">CC is supported. CV/CR/CP remain visible for future backend support. Changes require a reservation; settings require confirmed OFF.
+    <details class="rail-help" data-module="dl24m"><summary>About these controls</summary><div class="hint">Modes and diagnostic actions follow the capabilities reported by the selected instrument. Changes require a reservation; settings require confirmed OFF.
       Brightness, limits, calibration &amp; device resets are in <b>Device settings</b> above.</div></details>
   </aside>
   <div class="main">
@@ -74,6 +74,7 @@
     <div id="measurementContent">
     <div id="measurements" aria-label="All device measurements"></div>
     <details id="selectedReadings"><summary>Selected device · additional readings</summary>
+    <div id="nativeReadings" class="hint" data-module="dl24m">Native device readings: —</div>
     <div class="meas">
       <div class="cell v" hidden><div class="lab">Voltage</div><div class="val"><span id="rV">—</span><span class="un">V</span></div></div>
       <div class="cell i" hidden><div class="lab">Current</div><div class="val"><span id="rI">—</span><span class="un">A</span></div></div>
@@ -206,8 +207,9 @@
 </div>
 <div id="cvToast" class="toast">
   <h4>Constant-voltage mode</h4>
-  <p>If a battery or charged source is connected, the unit shows a safety warning
-     that must be cleared on its front panel — it can’t be bypassed over USB.</p>
+  <p>CV can draw current up to the configured protection limits. Use a
+     current-limited source and follow front-panel warnings. A voltage target
+     alone does not limit current.</p>
   <div class="acts"><button class="btn" id="cvDismiss">Got it</button><button class="btn" id="cvNever">Don’t show again</button></div>
 </div>
 <div id="helpbar" data-help="Hover any control for a short description."></div>

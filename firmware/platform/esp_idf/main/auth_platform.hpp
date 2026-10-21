@@ -2,6 +2,8 @@
 #include "esp_http_server.h"
 #include "labbridge/auth.hpp"
 namespace labbridge::esp {
+Headers http_headers(httpd_req_t *);
+AuthContext http_auth_context(httpd_req_t *, const Headers &);
 void start_auth();
 Auth &authentication();
 Response local_auth(const std::string &, const std::string &, const Json &,

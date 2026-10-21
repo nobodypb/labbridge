@@ -5,13 +5,13 @@
 
 
 char* actuator_settings_regulation_mode_ToString(labbridge_api_actuator_settings_REGULATIONMODE_e regulation_mode) {
-    char* regulation_modeArray[] =  { "NULL", "cc", "cv", "unknown" };
+    char* regulation_modeArray[] =  { "NULL", "cc", "cv", "cr", "cp", "unknown" };
     return regulation_modeArray[regulation_mode];
 }
 
 labbridge_api_actuator_settings_REGULATIONMODE_e actuator_settings_regulation_mode_FromString(char* regulation_mode){
     int stringToReturn = 0;
-    char *regulation_modeArray[] =  { "NULL", "cc", "cv", "unknown" };
+    char *regulation_modeArray[] =  { "NULL", "cc", "cv", "cr", "cp", "unknown" };
     size_t sizeofArray = sizeof(regulation_modeArray) / sizeof(regulation_modeArray[0]);
     while(stringToReturn < sizeofArray) {
         if(strcmp(regulation_mode, regulation_modeArray[stringToReturn]) == 0) {

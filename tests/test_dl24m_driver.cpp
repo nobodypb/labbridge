@@ -40,6 +40,26 @@ struct Wire : Endpoint {
   }
 };
 int main() {
+  {
+    Wire delayed;
+    Dl24mDriver checked(
+        "fixture", "synthetic", delayed, {25, .2, 5, 150, 0},
+        [](const Json &) {}, Json());
+    uint64_t now = 0;
+    for (; now < 1000; now += 5)
+      checked.tick(now);
+    checked.execute("setDl24mSettings", Json::parse(R"({"overvoltage_v":19})"),
+                    now);
+    for (; now < 2500; now += 5) {
+      checked.tick(now);
+      auto result = checked.operation(now);
+      if (result.text("status") == "succeeded") {
+        assert(result.text("final_output") == "off");
+        break;
+      }
+    }
+    assert(checked.operation(now).text("status") == "succeeded");
+  }
   Wire w;
   bool pending = false;
   uint32_t snapshot_wire = 0;
@@ -103,4 +123,27 @@ int main() {
          w.targets[1] == 750);
   assert(w.regs[0x21] == 0 && w.regs[0x17] == cc_before_banks &&
          w.regs[0x10] == 0);
+  d.execute("setDl24mMode", Json::parse(R"({"mode":"cr"})"), 11000);
+  for (uint64_t t = 11000; t < 13000; t += 5)
+    d.tick(t);
+  assert(d.operation(13000).text("status") == "succeeded" &&
+         w.regs[0x21] == 2 && w.regs[0x10] == 0);
+  d.execute("setDl24mTarget",
+            Json::parse(R"({"mode":"cr","value":240,"unit":"Ohm"})"), 13000);
+  for (uint64_t t = 13000; t < 14000; t += 5)
+    d.tick(t);
+  assert(d.operation(14000).text("status") == "succeeded" &&
+         w.regs[0x17] == 2400);
+  auto m = d.measurements(14000);
+  assert(m.text("load_mode") == "cr" &&
+         m.item("load_target").number("value") == 240);
+  d.execute("setOutput",
+            Json::parse(R"({"enabled":true,"max_duration_ms":300})"), 14000);
+  for (uint64_t t = 14000; t < 16000; t += 5)
+    d.tick(t);
+  assert(w.on == 2 && w.regs[0x10] == 0);
+  d.execute("setDl24mMode", Json::parse(R"({"mode":"cc"})"), 16000);
+  for (uint64_t t = 16000; t < 17500; t += 5)
+    d.tick(t);
+  assert(w.regs[0x21] == 0 && w.regs[0x17] == cc_before_banks);
 }

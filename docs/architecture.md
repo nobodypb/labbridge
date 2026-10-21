@@ -81,19 +81,24 @@ CSV/integrals; `modules/` owns specialized device behavior. Device/component
 selection does not change ownership or recording state.
 
 `BenchModule` declares matching, input steps, control prerequisites, optional
-typed settings/reset adapters, status descriptors and an optional UI mount.
+typed settings/reset/target adapters, pushed-settings decoding, status descriptors
+and an optional UI mount.
 Its view supplies render and draft save/restore hooks. Register an extension
 in `benchModules`; specialized UI can mount elements marked `data-module` with
 its module ID. Common components work without a module: actor actions generate
 the available controls and scalar readings generate channel tiles/curves.
 Driver-specific clients, setting fields and protocol interpretation belong in
 modules, not the common adapter or chart. Backend protocol facts stay in drivers.
-No API contract change is needed for the DL24M/RD60xx Bench integration.
+The existing single-device stream subscription supplies selected-device pushes;
+all instruments share its authenticated RPC channel for cache polling and
+commands. Operation events resolve per-device waiters without operation polling.
+Cookie/CSRF binding, conservative sample clocks and explicit HTTP STOP recovery
+are retained from the native DL24M stream integration.
 
 The UI keeps one state per physical device and actor states keyed by actual
 component IDs. Pending operations capture their target and generation rather
 than consulting the dropdown during confirmation. Multi-device shutdown submits
-all STOPs through the same serial HTTP queue before awaiting their results;
+all STOPs through the same serial RPC queue before awaiting their results;
 confirmation failures are collected independently. Heartbeats retain priority
 over ordinary work. Display preferences do not control acquisition. Native
 counters and computed per-device integrals use separate CSV row kinds.

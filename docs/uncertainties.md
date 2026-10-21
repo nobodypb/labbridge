@@ -183,11 +183,13 @@ failure was reproduced, corrected and covered by a shared transport test.
 The original version-one verifier took approximately 114–116 seconds for setup,
 login and USB recovery on a 160 MHz StickS3. Version two uses 6,000 rounds under
 the operator-approved basic-protection policy. Seventeen API logins measured
-0.817–0.984 s and all five real browser entry points stayed below 1.208 s on an
+0.841–0.955 s and all five real browser entry points stayed below 1.021 s on an
 isolated StickS3. Eight sessions retain valid cookies when idle HTTP connections
 are reclaimed. The original full flash was restored and device-verified. STOP
-acceptance remained below 100 ms in the final HTTP-login run, with the load
-already OFF. Shutdown from ON under hashing was not exercised. One earlier real
+acceptance remained below 100 ms in the earlier physical run, with the load
+already OFF. The final isolated run used an unconfigured synthetic device ID:
+HTTP/USB dispatch responded in 27.7/21.9 ms while hashing, without connecting an
+instrument. Shutdown from ON under hashing was not exercised. One earlier real
 browser scan wait timed out without a captured cause; an instrumented repeat
 passed. Repetition and coexistence soak evidence remains open.
 

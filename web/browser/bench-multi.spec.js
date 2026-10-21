@@ -1,4 +1,16 @@
 import {test,expect} from '@playwright/test';
+
+test('LB-024 integration: DL24 and RD share one authenticated stream without losing independent reservations',async({page})=>{
+ const s=await mixedBackend(page),http=[];
+ page.on('request',r=>{const path=new URL(r.url()).pathname;if(path.startsWith('/api/v1/')&&!path.startsWith('/api/v1/auth/'))http.push(path);});
+ await openBench(page);await selectReserve(page,'load');await selectReserve(page,'supply');
+ await page.locator('#voltageVal').fill('2');await page.locator('#voltageBtn').click();await expect(page.locator('#deviceFeedback')).toContainText('succeeded');
+ await page.locator('#deviceSelect').selectOption('load');await expect(page.locator('#reserve')).toHaveText('Release and stop');
+ expect(s.sockets).toHaveLength(1);expect(http).toEqual([]);
+ expect(s.rpc.some(r=>r.path==='/api/v1/devices/supply/components/source/voltage')).toBe(true);
+ expect(s.rpc.some(r=>r.path?.includes('/operations/'))).toBe(false);
+ await page.locator('#stopAll').click();await expect(page.locator('#benchStatus')).toContainText('All reserved devices confirmed OFF');
+});
 import {mixedBackend,openBench,selectReserve} from './bench-multi-fixture.js';
 import {openHeaderAction,openAccount} from './bench-controls.js';
 
@@ -70,7 +82,7 @@ test('LB-024: RD steps, source status and separate second-source settings',async
 
 test('LB-024: selected STOP cancels only its queued ON, STOP all cancels both',async({page})=>{
  const s=await mixedBackend(page);await openBench(page);await selectReserve(page,'load');await selectReserve(page,'supply');
- let held=false,release;await page.route('**/api/v1/node',async route=>{held=true;await new Promise(r=>{release=r;});await route.fallback();});await expect.poll(()=>held).toBe(true);
+ let held=false,release;await s.intercept('**/api/v1/node',async route=>{held=true;await new Promise(r=>{release=r;});await route.fallback();});await expect.poll(()=>held).toBe(true);
  await page.locator('#loadBtn').click();await page.locator('#deviceSelect').selectOption('load');await page.locator('#loadBtn').click();
  await page.locator('#stopAll').click();release();await page.unroute('**/api/v1/node');
  await expect.poll(()=>s.writes.filter(w=>w.path.endsWith('/stop')&&w.path.includes('/devices/')).length).toBe(2);
@@ -96,7 +108,7 @@ test('LB-024: multiple actor components retain the command target during confirm
 
 test('LB-024: selected STOP preserves the other device queued ON',async({page})=>{
  const s=await mixedBackend(page);await openBench(page);await selectReserve(page,'load');await selectReserve(page,'supply');
- let held=false,release;await page.route('**/api/v1/node',async route=>{held=true;await new Promise(r=>{release=r;});await route.fallback();});await expect.poll(()=>held).toBe(true);
+ let held=false,release;await s.intercept('**/api/v1/node',async route=>{held=true;await new Promise(r=>{release=r;});await route.fallback();});await expect.poll(()=>held).toBe(true);
  await page.locator('#loadBtn').click();await page.locator('#deviceSelect').selectOption('load');await page.locator('#loadBtn').click();await page.locator('#stop').click();release();await page.unroute('**/api/v1/node');
  await expect.poll(()=>s.outputs.supply).toBe('on');await expect.poll(()=>s.writes.some(w=>w.path==='/api/v1/devices/load/stop')).toBe(true);
  expect(s.writes.filter(w=>w.path.endsWith('/output')).map(w=>w.path)).toEqual(['/api/v1/devices/supply/components/source/output']);
@@ -128,8 +140,8 @@ test('LB-024: mixed monitoring stays usable on a narrow screen and exposes curve
 });
 
 test('LB-024: discovery cannot expose controls before all initial device state has arrived',async({page})=>{
- await mixedBackend(page);let held=false,release;
- await page.route('**/api/v1/devices/meter/readings',async route=>{held=true;await new Promise(r=>{release=r;});await route.fallback();});
+ const s=await mixedBackend(page);let held=false,release;
+ await s.intercept('**/api/v1/devices/meter/readings',async route=>{held=true;await new Promise(r=>{release=r;});await route.fallback();});
  await page.goto('/dl24');await page.getByLabel('Device password',{exact:true}).fill('synthetic password');await page.getByRole('button',{name:'Sign in',exact:true}).click();
  await expect.poll(()=>held).toBe(true);await expect(page.locator('#reserve')).toBeDisabled();await expect(page.locator('#deviceSelect')).toBeDisabled();
  release();await page.unroute('**/api/v1/devices/meter/readings');await expect(page.locator('#connLbl')).toHaveText('Connected');
@@ -137,7 +149,7 @@ test('LB-024: discovery cannot expose controls before all initial device state h
 
 for(const expired of [false,true])test(`LB-024: lost heartbeat cancels that device ON queued behind it (${expired?'inactive response':'HTTP error'})`,async({page})=>{
  const s=await mixedBackend(page);await openBench(page);await selectReserve(page,'load');await selectReserve(page,'supply');
- let held=false,release;await page.route('**/api/v1/leases/lease-load/heartbeat',async route=>{held=true;await new Promise(r=>{release=r;});await route.fallback();});
+ let held=false,release;await s.intercept('**/api/v1/leases/lease-load/heartbeat',async route=>{held=true;await new Promise(r=>{release=r;});await route.fallback();});
  await expect.poll(()=>held).toBe(true);await page.locator('#deviceSelect').selectOption('load');await page.locator('#loadBtn').click();if(expired)s.leases.get('lease-load').state='expired';else s.failHeartbeat.add('lease-load');release();await page.unroute('**/api/v1/leases/lease-load/heartbeat');
  await expect(page.locator('#deviceOverview')).toContainText('Lease lost');await expect(page.locator('#loadBtn')).toBeDisabled();
  expect(s.writes.filter(w=>w.path==='/api/v1/devices/load/components/sink/output')).toHaveLength(0);

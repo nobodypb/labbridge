@@ -48,7 +48,8 @@ static device_t *device_create_internal(
     labbridge_api_device_STATE_e state,
     labbridge_api_device_OUTPUT_e output,
     safety_limits_t *limits,
-    list_t *components
+    list_t *components,
+    list_t *features
     ) {
     device_t *device_local_var = malloc(sizeof(device_t));
     if (!device_local_var) {
@@ -63,6 +64,7 @@ static device_t *device_create_internal(
     device_local_var->output = output;
     device_local_var->limits = limits;
     device_local_var->components = components;
+    device_local_var->features = features;
 
     device_local_var->_library_owned = 1;
     return device_local_var;
@@ -77,7 +79,8 @@ __attribute__((deprecated)) device_t *device_create(
     labbridge_api_device_STATE_e state,
     labbridge_api_device_OUTPUT_e output,
     safety_limits_t *limits,
-    list_t *components
+    list_t *components,
+    list_t *features
     ) {
     return device_create_internal (
         id,
@@ -88,7 +91,8 @@ __attribute__((deprecated)) device_t *device_create(
         state,
         output,
         limits,
-        components
+        components,
+        features
         );
 }
 
@@ -134,6 +138,13 @@ void device_free(device_t *device) {
         }
         list_freeList(device->components);
         device->components = NULL;
+    }
+    if (device->features) {
+        list_ForEach(listEntry, device->features) {
+            feature_status_free(listEntry->data);
+        }
+        list_freeList(device->features);
+        device->features = NULL;
     }
     free(device);
 }
@@ -247,6 +258,26 @@ cJSON *device_convertToJSON(device_t *device) {
     }
     }
 
+
+    // device->features
+    if(device->features) {
+    cJSON *features = cJSON_AddArrayToObject(item, "features");
+    if(features == NULL) {
+    goto fail; //nonprimitive container
+    }
+
+    listEntry_t *featuresListEntry;
+    if (device->features) {
+    list_ForEach(featuresListEntry, device->features) {
+    cJSON *itemLocal = feature_status_convertToJSON(featuresListEntry->data);
+    if(itemLocal == NULL) {
+    goto fail;
+    }
+    cJSON_AddItemToArray(features, itemLocal);
+    }
+    }
+    }
+
     return item;
 fail:
     if (item) {
@@ -267,6 +298,9 @@ device_t *device_parseFromJSON(cJSON *deviceJSON){
 
     // define the local list for device->components
     list_t *componentsList = NULL;
+
+    // define the local list for device->features
+    list_t *featuresList = NULL;
 
     // device->id
     cJSON *id = cJSON_GetObjectItemCaseSensitive(deviceJSON, "id");
@@ -420,6 +454,30 @@ device_t *device_parseFromJSON(cJSON *deviceJSON){
     }
     }
 
+    // device->features
+    cJSON *features = cJSON_GetObjectItemCaseSensitive(deviceJSON, "features");
+    if (cJSON_IsNull(features)) {
+        features = NULL;
+    }
+    if (features) { 
+    cJSON *features_local_nonprimitive = NULL;
+    if(!cJSON_IsArray(features)){
+        goto end; //nonprimitive container
+    }
+
+    featuresList = list_createList();
+
+    cJSON_ArrayForEach(features_local_nonprimitive,features )
+    {
+        if(!cJSON_IsObject(features_local_nonprimitive)){
+            goto end;
+        }
+        feature_status_t *featuresItem = feature_status_parseFromJSON(features_local_nonprimitive);
+
+        list_addElement(featuresList, featuresItem);
+    }
+    }
+
 
     device_local_var = device_create_internal (
         strdup(id->valuestring),
@@ -430,7 +488,8 @@ device_t *device_parseFromJSON(cJSON *deviceJSON){
         stateVariable,
         outputVariable,
         limits ? limits_local_nonprim : NULL,
-        components ? componentsList : NULL
+        components ? componentsList : NULL,
+        features ? featuresList : NULL
         );
 
     return device_local_var;
@@ -456,6 +515,15 @@ end:
         }
         list_freeList(componentsList);
         componentsList = NULL;
+    }
+    if (featuresList) {
+        listEntry_t *listEntry = NULL;
+        list_ForEach(listEntry, featuresList) {
+            feature_status_free(listEntry->data);
+            listEntry->data = NULL;
+        }
+        list_freeList(featuresList);
+        featuresList = NULL;
     }
     return NULL;
 

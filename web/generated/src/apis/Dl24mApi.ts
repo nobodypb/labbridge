@@ -2,7 +2,7 @@
 /* eslint-disable */
 /**
  * LabBridge API
- * Configure and automate laboratory instruments through one ESP32 bridge. Physical devices expose discoverable source, sink and scalar sensor components; prefer their common routes for portable scripts. Driver-specific routes remain available for specialized settings and compatibility.  ## Typical automation sequence 1. Read node identity/boot_id and discover devices, components, actions and limits. 2. Reserve all actor devices on this node with createLease and heartbeat at least once per second. Ownership is per physical device, not per component. 3. Send a setting/output mutation with X-Lab-Lease and a new Idempotency-Key. A 202 response is only acceptance: poll Location until a terminal Operation, checking final_output and restore_pending. 4. Use valid, fresh sensor readings; preserve sign and units. Integrate only across consecutive samples with unchanged boot_id/epoch and bounded gaps. 5. Request independent STOP when finished or uncertain, verify OFF, then release the lease. Output OFF is not electrical isolation.  ## Failure and retry contract The bridge performs bounded device retries, write/readback verification and recovery. Never infer hardware success from an ATT acknowledgement, an HTTP 202 or a saved setpoint. A terminal failure can still have changed hardware. Device/component STOP requires no lease. Reconnect/reboot never resumes ON. Leases, operation IDs and idempotency keys are boot-local; do not replay an uncertain mutation after a reboot. Monotonic timestamps are not Unix time and cannot be compared across nodes/boots.  ## Access and provisioning LAN HTTP accepts Authorization: Bearer <token> for scripts or a UI password session on a trusted network. The UI redirects unauthenticated access to password login and resumes read-only discovery, never an uncertain mutation. UI passwords use salted version-two PBKDF2-HMAC-SHA256 verifiers with 6,000 iterations, deliberately tuned for basic protection and a login below three seconds on the ESP. Experimental 600,000-round verifiers require trusted USB password recovery; their hashes are never reinterpreted with fewer rounds. Choose the first password via the setup AP or trusted USB. HTTP is unencrypted; HTTPS with optional mTLS authentication is a separate planned feature. Obtain the API bearer secret using getManagementToken over physically trusted USB. The open LabBridge-Setup AP at 192.168.4.1 allows Wi-Fi setup/scan without bearer credentials; it does not grant laboratory control. The separate UI pages are /wifi, /devices and /dl24 (DL24M Bench). The Bench page shares the UI password session and CSRF protection and uses the same laboratory APIs; unsupported original controls remain visible but disabled. USB uses the same methods/paths with JSON-line requests {id, method, path, headers, body} and replies prefixed LABJSON; ignore other boot/log lines and correlate IDs. Target Wi-Fi PSKs are never returned.  ## Local safeguards and hardware scope Configured limits, lease expiry, measurement freshness, activation deadlines and optional external cell-temperature guards operate on the node. They supplement instrument protections and an explicit external battery test profile/wiring arrangement. Read-only sensors may omit actuator limits. Supported endpoint/pin combinations depend on the board. DL24M BLE behavior is commissioned on display Ver: 2.0; RD6018/RD6024, INA228 and Yocto physical commissioning is tracked separately. RD6018 original Wi-Fi modules connect to the ESP AP using RTU-over-TCP; use the module provisioning operations to configure them. Native Yocto USB on ESP is not implemented (use native PC USB or HTTP VirtualHub/YoctoHub).
+ * Configure and automate laboratory instruments through one ESP32 bridge. Physical devices expose discoverable source, sink and scalar sensor components; prefer their common routes for portable scripts. Driver-specific routes remain available for specialized settings and compatibility.  ## Typical automation sequence 1. Read node identity/boot_id and discover devices, components, actions and limits. 2. Reserve all actor devices on this node with createLease and heartbeat at least once per second. Ownership is per physical device, not per component. 3. Send a setting/output mutation with X-Lab-Lease and a new Idempotency-Key. A 202 response is only acceptance: poll Location until a terminal Operation, checking final_output and restore_pending. 4. Use valid, fresh sensor readings; preserve sign and units. Integrate only across consecutive samples with unchanged boot_id/epoch and bounded gaps. 5. Request independent STOP when finished or uncertain, verify OFF, then release the lease. Output OFF is not electrical isolation.  ## Failure and retry contract The bridge performs bounded device retries, write/readback verification and recovery. Never infer hardware success from an ATT acknowledgement, an HTTP 202 or a saved setpoint. A terminal failure can still have changed hardware. Device/component STOP requires no lease. Reconnect/reboot never resumes ON. Leases, operation IDs and idempotency keys are boot-local; do not replay an uncertain mutation after a reboot. Monotonic timestamps are not Unix time and cannot be compared across nodes/boots.  ## Access and provisioning LAN HTTP accepts Authorization: Bearer <token> for scripts or a UI password session on a trusted network. The UI redirects unauthenticated access to password login and resumes read-only discovery, never an uncertain mutation. UI passwords use salted version-two PBKDF2-HMAC-SHA256 verifiers with 6,000 iterations, deliberately tuned for basic protection and a login below three seconds on the ESP. Experimental 600,000-round verifiers require trusted USB password recovery; their hashes are never reinterpreted with fewer rounds. Choose the first password via the setup AP or trusted USB. HTTP is unencrypted; HTTPS with optional mTLS authentication is a separate planned feature. Obtain the API bearer secret using getManagementToken over physically trusted USB. The open LabBridge-Setup AP at 192.168.4.1 allows Wi-Fi setup/scan without bearer credentials; it does not grant laboratory control. The separate UI pages are /wifi, /devices and /dl24 (DL24M Bench). The Bench page shares the UI password session and CSRF protection and uses the same laboratory APIs; unsupported original controls remain visible but disabled. USB uses the same methods/paths with JSON-line requests {id, method, path, headers, body} and replies prefixed LABJSON; ignore other boot/log lines and correlate IDs. Target Wi-Fi PSKs are never returned.  ## Local safeguards and hardware scope Configured limits, lease expiry, measurement freshness, activation deadlines and optional external cell-temperature guards operate on the node. They supplement instrument protections and an explicit external battery test profile/wiring arrangement. Read-only sensors may omit actuator limits. Supported endpoint/pin combinations depend on the board. DL24M BLE behavior is commissioned on display Ver: 2.0; RD6018/RD6024, INA228 and Yocto physical commissioning is tracked separately. RD6018 original Wi-Fi modules connect to the ESP AP using RTU-over-TCP; use the module provisioning operations to configure them. Native Yocto USB on ESP is not implemented (use native PC USB or HTTP VirtualHub/YoctoHub).  ## WebSocket Connect /api/v1/ws, authenticate with StreamAuth as the first text message, then use StreamRpc (the USB envelope) and StreamSubscription. Initial/full StreamSnapshot events include boot_id, stream sequence, measurement sequences, output, settings and tracked operations. Continue explicit lease heartbeats over RPC. See x-labbridge-websocket for message schemas and bounded resource rules. /dl24 uses this connection without HTTP polling.
  *
  * The version of the OpenAPI document: 0.1.0
  * 
@@ -18,8 +18,11 @@ import type {
   CurrentRequest,
   Dl24mBankRequest,
   Dl24mBankTargetRequest,
+  Dl24mDiagnostics,
+  Dl24mModeRequest,
   Dl24mRegisters,
   Dl24mSettings,
+  Dl24mTargetRequest,
   Operation,
   Problem,
   StopRequest,
@@ -31,10 +34,16 @@ import {
     Dl24mBankRequestToJSON,
     Dl24mBankTargetRequestFromJSON,
     Dl24mBankTargetRequestToJSON,
+    Dl24mDiagnosticsFromJSON,
+    Dl24mDiagnosticsToJSON,
+    Dl24mModeRequestFromJSON,
+    Dl24mModeRequestToJSON,
     Dl24mRegistersFromJSON,
     Dl24mRegistersToJSON,
     Dl24mSettingsFromJSON,
     Dl24mSettingsToJSON,
+    Dl24mTargetRequestFromJSON,
+    Dl24mTargetRequestToJSON,
     OperationFromJSON,
     OperationToJSON,
     ProblemFromJSON,
@@ -42,6 +51,10 @@ import {
     StopRequestFromJSON,
     StopRequestToJSON,
 } from '../models/index';
+
+export interface GetDl24mDiagnosticsRequest {
+    deviceId: string;
+}
 
 export interface GetDl24mRegistersRequest {
     deviceId: string;
@@ -72,11 +85,25 @@ export interface SetDl24mBankTargetRequest {
     dl24mBankTargetRequest: Dl24mBankTargetRequest;
 }
 
+export interface SetDl24mModeRequest {
+    deviceId: string;
+    xLabLease: string;
+    idempotencyKey: string;
+    dl24mModeRequest: Dl24mModeRequest;
+}
+
 export interface SetDl24mSettingsRequest {
     deviceId: string;
     xLabLease: string;
     idempotencyKey: string;
     dl24mSettings: Dl24mSettings;
+}
+
+export interface SetDl24mTargetRequest {
+    deviceId: string;
+    xLabLease: string;
+    idempotencyKey: string;
+    dl24mTargetRequest: Dl24mTargetRequest;
 }
 
 export interface SetLoadCurrentRequest {
@@ -90,6 +117,49 @@ export interface SetLoadCurrentRequest {
  * 
  */
 export class Dl24mApi extends runtime.BaseAPI {
+
+    /**
+     * Read the last 32 actual transmitted/received BLE byte chunks and cached register snapshot. Does not issue an additional device command. Chunks are transport observations, not HID frames; parser remains authoritative. dropped counts overwritten entries. All values are boot-local.
+     * Read bounded passive DL24M BLE diagnostics
+     */
+    async getDl24mDiagnosticsRaw(requestParameters: GetDl24mDiagnosticsRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<Dl24mDiagnostics>> {
+        if (requestParameters['deviceId'] == null) {
+            throw new runtime.RequiredError(
+                'deviceId',
+                'Required parameter "deviceId" was null or undefined when calling getDl24mDiagnostics().'
+            );
+        }
+
+        const queryParameters: any = {};
+
+        const headerParameters: runtime.HTTPHeaders = {};
+
+        if (this.configuration && this.configuration.accessToken) {
+            const token = this.configuration.accessToken;
+            const tokenString = await token("bearerAuth", []);
+
+            if (tokenString) {
+                headerParameters["Authorization"] = `Bearer ${tokenString}`;
+            }
+        }
+        const response = await this.request({
+            path: `/api/v1/devices/{deviceId}/dl24m/diagnostics`.replace(`{${"deviceId"}}`, encodeURIComponent(String(requestParameters['deviceId']))),
+            method: 'GET',
+            headers: headerParameters,
+            query: queryParameters,
+        }, initOverrides);
+
+        return new runtime.JSONApiResponse(response, (jsonValue) => Dl24mDiagnosticsFromJSON(jsonValue));
+    }
+
+    /**
+     * Read the last 32 actual transmitted/received BLE byte chunks and cached register snapshot. Does not issue an additional device command. Chunks are transport observations, not HID frames; parser remains authoritative. dropped counts overwritten entries. All values are boot-local.
+     * Read bounded passive DL24M BLE diagnostics
+     */
+    async getDl24mDiagnostics(requestParameters: GetDl24mDiagnosticsRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<Dl24mDiagnostics> {
+        const response = await this.getDl24mDiagnosticsRaw(requestParameters, initOverrides);
+        return await response.value();
+    }
 
     /**
      * Return the 22 audited passive numeric registers with raw unsigned 24-bit values and individual quality/age. This is a cached diagnostic view, not an arbitrary register command interface. Side-effecting reads such as menu entry or event clearing and uncommissioned calibration/factory commands are excluded. See the protocol handbook for scales and command numbers.
@@ -178,7 +248,7 @@ export class Dl24mApi extends runtime.BaseAPI {
     }
 
     /**
-     * This read uses POST because the instrument must temporarily change mode. Requires CC, confirmed OFF and a lease. Snapshot the bank/CC state, select the requested inactive bank, read its raw target, then restore CC and its original target. Poll the operation for confirmed_value (raw bank units) and restoration status. The active meaning/units of banks 1..3 are not commissioned.  Returns 202 with an Operation and Location, not an instrument acknowledgement. Keep the lease alive where required and poll until terminal. Bounded device retries/readback recovery run on the bridge; callers receive a terminal failure when recovery is exhausted. Do not automatically replay an uncertain mutation.
+     * This read uses POST because the instrument must temporarily change mode. Requires CC, confirmed OFF and a lease. Snapshot the bank/CC state, select the requested inactive bank, read its raw target, then restore CC and its original target. Poll the operation for confirmed_value (raw bank units) and restoration status. Native banks are 1 CV (raw/100 V), 2 CR (raw/10 Ohm), 3 CP (raw/10 W). Prefer the typed mode/target API for normal control.  Returns 202 with an Operation and Location, not an instrument acknowledgement. Keep the lease alive where required and poll until terminal. Bounded device retries/readback recovery run on the bridge; callers receive a terminal failure when recovery is exhausted. Do not automatically replay an uncertain mutation.
      * Inspect an inactive DL24M target bank
      */
     async readDl24mBankTargetRaw(requestParameters: ReadDl24mBankTargetRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<Operation>> {
@@ -244,7 +314,7 @@ export class Dl24mApi extends runtime.BaseAPI {
     }
 
     /**
-     * This read uses POST because the instrument must temporarily change mode. Requires CC, confirmed OFF and a lease. Snapshot the bank/CC state, select the requested inactive bank, read its raw target, then restore CC and its original target. Poll the operation for confirmed_value (raw bank units) and restoration status. The active meaning/units of banks 1..3 are not commissioned.  Returns 202 with an Operation and Location, not an instrument acknowledgement. Keep the lease alive where required and poll until terminal. Bounded device retries/readback recovery run on the bridge; callers receive a terminal failure when recovery is exhausted. Do not automatically replay an uncertain mutation.
+     * This read uses POST because the instrument must temporarily change mode. Requires CC, confirmed OFF and a lease. Snapshot the bank/CC state, select the requested inactive bank, read its raw target, then restore CC and its original target. Poll the operation for confirmed_value (raw bank units) and restoration status. Native banks are 1 CV (raw/100 V), 2 CR (raw/10 Ohm), 3 CP (raw/10 W). Prefer the typed mode/target API for normal control.  Returns 202 with an Operation and Location, not an instrument acknowledgement. Keep the lease alive where required and poll until terminal. Bounded device retries/readback recovery run on the bridge; callers receive a terminal failure when recovery is exhausted. Do not automatically replay an uncertain mutation.
      * Inspect an inactive DL24M target bank
      */
     async readDl24mBankTarget(requestParameters: ReadDl24mBankTargetRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<Operation> {
@@ -403,7 +473,82 @@ export class Dl24mApi extends runtime.BaseAPI {
     }
 
     /**
-     * Apply only the supplied fields; omitted settings remain unchanged. Requires a lease and confirmed output OFF for settings changes. Snapshot original values before the multi-step operation, use device timing and bounded readback retries, and restore on failure. Check restore_pending before issuing new work. mode 0 is CC; other banks may be edited OFF, but active non-CC operation is not commissioned and ON is blocked.  Returns 202 with an Operation and Location, not an instrument acknowledgement. Keep the lease alive where required and poll until terminal. Bounded device retries/readback recovery run on the bridge; callers receive a terminal failure when recovery is exhausted. Do not automatically replay an uncertain mutation.
+     * Snapshot original mode and target before switching; journal rollback before any mutation. Does not enable output. Follow the Operation to verified completion. On failure STOP and restore original mode and target.
+     * Select DL24M load mode with OFF readback
+     */
+    async setDl24mModeRaw(requestParameters: SetDl24mModeRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<Operation>> {
+        if (requestParameters['deviceId'] == null) {
+            throw new runtime.RequiredError(
+                'deviceId',
+                'Required parameter "deviceId" was null or undefined when calling setDl24mMode().'
+            );
+        }
+
+        if (requestParameters['xLabLease'] == null) {
+            throw new runtime.RequiredError(
+                'xLabLease',
+                'Required parameter "xLabLease" was null or undefined when calling setDl24mMode().'
+            );
+        }
+
+        if (requestParameters['idempotencyKey'] == null) {
+            throw new runtime.RequiredError(
+                'idempotencyKey',
+                'Required parameter "idempotencyKey" was null or undefined when calling setDl24mMode().'
+            );
+        }
+
+        if (requestParameters['dl24mModeRequest'] == null) {
+            throw new runtime.RequiredError(
+                'dl24mModeRequest',
+                'Required parameter "dl24mModeRequest" was null or undefined when calling setDl24mMode().'
+            );
+        }
+
+        const queryParameters: any = {};
+
+        const headerParameters: runtime.HTTPHeaders = {};
+
+        headerParameters['Content-Type'] = 'application/json';
+
+        if (requestParameters['xLabLease'] != null) {
+            headerParameters['X-Lab-Lease'] = String(requestParameters['xLabLease']);
+        }
+
+        if (requestParameters['idempotencyKey'] != null) {
+            headerParameters['Idempotency-Key'] = String(requestParameters['idempotencyKey']);
+        }
+
+        if (this.configuration && this.configuration.accessToken) {
+            const token = this.configuration.accessToken;
+            const tokenString = await token("bearerAuth", []);
+
+            if (tokenString) {
+                headerParameters["Authorization"] = `Bearer ${tokenString}`;
+            }
+        }
+        const response = await this.request({
+            path: `/api/v1/devices/{deviceId}/dl24m/mode`.replace(`{${"deviceId"}}`, encodeURIComponent(String(requestParameters['deviceId']))),
+            method: 'PUT',
+            headers: headerParameters,
+            query: queryParameters,
+            body: Dl24mModeRequestToJSON(requestParameters['dl24mModeRequest']),
+        }, initOverrides);
+
+        return new runtime.JSONApiResponse(response, (jsonValue) => OperationFromJSON(jsonValue));
+    }
+
+    /**
+     * Snapshot original mode and target before switching; journal rollback before any mutation. Does not enable output. Follow the Operation to verified completion. On failure STOP and restore original mode and target.
+     * Select DL24M load mode with OFF readback
+     */
+    async setDl24mMode(requestParameters: SetDl24mModeRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<Operation> {
+        const response = await this.setDl24mModeRaw(requestParameters, initOverrides);
+        return await response.value();
+    }
+
+    /**
+     * Apply only the supplied fields; omitted settings remain unchanged. Requires a lease and confirmed output OFF for settings changes. Snapshot original values before the multi-step operation, use device timing and bounded readback retries, and restore on failure. Check restore_pending before issuing new work. Native modes are 0 CC, 1 CV, 2 CR, 3 CP. Prefer the typed mode/target operations for changes; activation independently checks mode-specific safety prerequisites.  Returns 202 with an Operation and Location, not an instrument acknowledgement. Keep the lease alive where required and poll until terminal. Bounded device retries/readback recovery run on the bridge; callers receive a terminal failure when recovery is exhausted. Do not automatically replay an uncertain mutation.
      * Apply and verify DL24M settings
      */
     async setDl24mSettingsRaw(requestParameters: SetDl24mSettingsRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<Operation>> {
@@ -469,11 +614,86 @@ export class Dl24mApi extends runtime.BaseAPI {
     }
 
     /**
-     * Apply only the supplied fields; omitted settings remain unchanged. Requires a lease and confirmed output OFF for settings changes. Snapshot original values before the multi-step operation, use device timing and bounded readback retries, and restore on failure. Check restore_pending before issuing new work. mode 0 is CC; other banks may be edited OFF, but active non-CC operation is not commissioned and ON is blocked.  Returns 202 with an Operation and Location, not an instrument acknowledgement. Keep the lease alive where required and poll until terminal. Bounded device retries/readback recovery run on the bridge; callers receive a terminal failure when recovery is exhausted. Do not automatically replay an uncertain mutation.
+     * Apply only the supplied fields; omitted settings remain unchanged. Requires a lease and confirmed output OFF for settings changes. Snapshot original values before the multi-step operation, use device timing and bounded readback retries, and restore on failure. Check restore_pending before issuing new work. Native modes are 0 CC, 1 CV, 2 CR, 3 CP. Prefer the typed mode/target operations for changes; activation independently checks mode-specific safety prerequisites.  Returns 202 with an Operation and Location, not an instrument acknowledgement. Keep the lease alive where required and poll until terminal. Bounded device retries/readback recovery run on the bridge; callers receive a terminal failure when recovery is exhausted. Do not automatically replay an uncertain mutation.
      * Apply and verify DL24M settings
      */
     async setDl24mSettings(requestParameters: SetDl24mSettingsRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<Operation> {
         const response = await this.setDl24mSettingsRaw(requestParameters, initOverrides);
+        return await response.value();
+    }
+
+    /**
+     * Only modifies the selected bank, with journaled original target and readback. Activation uses mode-specific predictions plus measured V/I/P guards: CR at configured maximum voltage, CP at fresh cutoff voltage, CV requires fresh device OCP/OPP no greater than local limits. CV cannot promise a current ceiling from its voltage target alone.
+     * Set typed DL24M target while OFF
+     */
+    async setDl24mTargetRaw(requestParameters: SetDl24mTargetRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<Operation>> {
+        if (requestParameters['deviceId'] == null) {
+            throw new runtime.RequiredError(
+                'deviceId',
+                'Required parameter "deviceId" was null or undefined when calling setDl24mTarget().'
+            );
+        }
+
+        if (requestParameters['xLabLease'] == null) {
+            throw new runtime.RequiredError(
+                'xLabLease',
+                'Required parameter "xLabLease" was null or undefined when calling setDl24mTarget().'
+            );
+        }
+
+        if (requestParameters['idempotencyKey'] == null) {
+            throw new runtime.RequiredError(
+                'idempotencyKey',
+                'Required parameter "idempotencyKey" was null or undefined when calling setDl24mTarget().'
+            );
+        }
+
+        if (requestParameters['dl24mTargetRequest'] == null) {
+            throw new runtime.RequiredError(
+                'dl24mTargetRequest',
+                'Required parameter "dl24mTargetRequest" was null or undefined when calling setDl24mTarget().'
+            );
+        }
+
+        const queryParameters: any = {};
+
+        const headerParameters: runtime.HTTPHeaders = {};
+
+        headerParameters['Content-Type'] = 'application/json';
+
+        if (requestParameters['xLabLease'] != null) {
+            headerParameters['X-Lab-Lease'] = String(requestParameters['xLabLease']);
+        }
+
+        if (requestParameters['idempotencyKey'] != null) {
+            headerParameters['Idempotency-Key'] = String(requestParameters['idempotencyKey']);
+        }
+
+        if (this.configuration && this.configuration.accessToken) {
+            const token = this.configuration.accessToken;
+            const tokenString = await token("bearerAuth", []);
+
+            if (tokenString) {
+                headerParameters["Authorization"] = `Bearer ${tokenString}`;
+            }
+        }
+        const response = await this.request({
+            path: `/api/v1/devices/{deviceId}/dl24m/target`.replace(`{${"deviceId"}}`, encodeURIComponent(String(requestParameters['deviceId']))),
+            method: 'PUT',
+            headers: headerParameters,
+            query: queryParameters,
+            body: Dl24mTargetRequestToJSON(requestParameters['dl24mTargetRequest']),
+        }, initOverrides);
+
+        return new runtime.JSONApiResponse(response, (jsonValue) => OperationFromJSON(jsonValue));
+    }
+
+    /**
+     * Only modifies the selected bank, with journaled original target and readback. Activation uses mode-specific predictions plus measured V/I/P guards: CR at configured maximum voltage, CP at fresh cutoff voltage, CV requires fresh device OCP/OPP no greater than local limits. CV cannot promise a current ceiling from its voltage target alone.
+     * Set typed DL24M target while OFF
+     */
+    async setDl24mTarget(requestParameters: SetDl24mTargetRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<Operation> {
+        const response = await this.setDl24mTargetRaw(requestParameters, initOverrides);
         return await response.value();
     }
 

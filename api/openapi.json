@@ -7,7 +7,7 @@
       "name": "MIT",
       "url": "https://opensource.org/licenses/MIT"
     },
-    "description": "Configure and automate laboratory instruments through one ESP32 bridge. Physical devices expose discoverable source, sink and scalar sensor components; prefer their common routes for portable scripts. Driver-specific routes remain available for specialized settings and compatibility.\n\n## Typical automation sequence\n1. Read node identity/boot_id and discover devices, components, actions and limits.\n2. Reserve all actor devices on this node with createLease and heartbeat at least once per second. Ownership is per physical device, not per component.\n3. Send a setting/output mutation with X-Lab-Lease and a new Idempotency-Key. A 202 response is only acceptance: poll Location until a terminal Operation, checking final_output and restore_pending.\n4. Use valid, fresh sensor readings; preserve sign and units. Integrate only across consecutive samples with unchanged boot_id/epoch and bounded gaps.\n5. Request independent STOP when finished or uncertain, verify OFF, then release the lease. Output OFF is not electrical isolation.\n\n## Failure and retry contract\nThe bridge performs bounded device retries, write/readback verification and recovery. Never infer hardware success from an ATT acknowledgement, an HTTP 202 or a saved setpoint. A terminal failure can still have changed hardware. Device/component STOP requires no lease. Reconnect/reboot never resumes ON. Leases, operation IDs and idempotency keys are boot-local; do not replay an uncertain mutation after a reboot. Monotonic timestamps are not Unix time and cannot be compared across nodes/boots.\n\n## Access and provisioning\nLAN HTTP accepts Authorization: Bearer <token> for scripts or a UI password session on a trusted network. The UI redirects unauthenticated access to password login and resumes read-only discovery, never an uncertain mutation. UI passwords use salted version-two PBKDF2-HMAC-SHA256 verifiers with 6,000 iterations, deliberately tuned for basic protection and a login below three seconds on the ESP. Experimental 600,000-round verifiers require trusted USB password recovery; their hashes are never reinterpreted with fewer rounds. Choose the first password via the setup AP or trusted USB. HTTP is unencrypted; HTTPS with optional mTLS authentication is a separate planned feature. Obtain the API bearer secret using getManagementToken over physically trusted USB. The open LabBridge-Setup AP at 192.168.4.1 allows Wi-Fi setup/scan without bearer credentials; it does not grant laboratory control. The separate UI pages are /wifi, /devices and /dl24 (DL24M Bench). The Bench page shares the UI password session and CSRF protection and uses the same laboratory APIs; unsupported original controls remain visible but disabled. USB uses the same methods/paths with JSON-line requests {id, method, path, headers, body} and replies prefixed LABJSON; ignore other boot/log lines and correlate IDs. Target Wi-Fi PSKs are never returned.\n\n## Local safeguards and hardware scope\nConfigured limits, lease expiry, measurement freshness, activation deadlines and optional external cell-temperature guards operate on the node. They supplement instrument protections and an explicit external battery test profile/wiring arrangement. Read-only sensors may omit actuator limits. Supported endpoint/pin combinations depend on the board. DL24M BLE behavior is commissioned on display Ver: 2.0; RD6018/RD6024, INA228 and Yocto physical commissioning is tracked separately. RD6018 original Wi-Fi modules connect to the ESP AP using RTU-over-TCP; use the module provisioning operations to configure them. Native Yocto USB on ESP is not implemented (use native PC USB or HTTP VirtualHub/YoctoHub)."
+    "description": "Configure and automate laboratory instruments through one ESP32 bridge. Physical devices expose discoverable source, sink and scalar sensor components; prefer their common routes for portable scripts. Driver-specific routes remain available for specialized settings and compatibility.\n\n## Typical automation sequence\n1. Read node identity/boot_id and discover devices, components, actions and limits.\n2. Reserve all actor devices on this node with createLease and heartbeat at least once per second. Ownership is per physical device, not per component.\n3. Send a setting/output mutation with X-Lab-Lease and a new Idempotency-Key. A 202 response is only acceptance: poll Location until a terminal Operation, checking final_output and restore_pending.\n4. Use valid, fresh sensor readings; preserve sign and units. Integrate only across consecutive samples with unchanged boot_id/epoch and bounded gaps.\n5. Request independent STOP when finished or uncertain, verify OFF, then release the lease. Output OFF is not electrical isolation.\n\n## Failure and retry contract\nThe bridge performs bounded device retries, write/readback verification and recovery. Never infer hardware success from an ATT acknowledgement, an HTTP 202 or a saved setpoint. A terminal failure can still have changed hardware. Device/component STOP requires no lease. Reconnect/reboot never resumes ON. Leases, operation IDs and idempotency keys are boot-local; do not replay an uncertain mutation after a reboot. Monotonic timestamps are not Unix time and cannot be compared across nodes/boots.\n\n## Access and provisioning\nLAN HTTP accepts Authorization: Bearer <token> for scripts or a UI password session on a trusted network. The UI redirects unauthenticated access to password login and resumes read-only discovery, never an uncertain mutation. UI passwords use salted version-two PBKDF2-HMAC-SHA256 verifiers with 6,000 iterations, deliberately tuned for basic protection and a login below three seconds on the ESP. Experimental 600,000-round verifiers require trusted USB password recovery; their hashes are never reinterpreted with fewer rounds. Choose the first password via the setup AP or trusted USB. HTTP is unencrypted; HTTPS with optional mTLS authentication is a separate planned feature. Obtain the API bearer secret using getManagementToken over physically trusted USB. The open LabBridge-Setup AP at 192.168.4.1 allows Wi-Fi setup/scan without bearer credentials; it does not grant laboratory control. The separate UI pages are /wifi, /devices and /dl24 (DL24M Bench). The Bench page shares the UI password session and CSRF protection and uses the same laboratory APIs; unsupported original controls remain visible but disabled. USB uses the same methods/paths with JSON-line requests {id, method, path, headers, body} and replies prefixed LABJSON; ignore other boot/log lines and correlate IDs. Target Wi-Fi PSKs are never returned.\n\n## Local safeguards and hardware scope\nConfigured limits, lease expiry, measurement freshness, activation deadlines and optional external cell-temperature guards operate on the node. They supplement instrument protections and an explicit external battery test profile/wiring arrangement. Read-only sensors may omit actuator limits. Supported endpoint/pin combinations depend on the board. DL24M BLE behavior is commissioned on display Ver: 2.0; RD6018/RD6024, INA228 and Yocto physical commissioning is tracked separately. RD6018 original Wi-Fi modules connect to the ESP AP using RTU-over-TCP; use the module provisioning operations to configure them. Native Yocto USB on ESP is not implemented (use native PC USB or HTTP VirtualHub/YoctoHub).\n\n## WebSocket\nConnect /api/v1/ws, authenticate with StreamAuth as the first text message, then use StreamRpc (the USB envelope) and StreamSubscription. Initial/full StreamSnapshot events include boot_id, stream sequence, measurement sequences, output, settings and tracked operations. Continue explicit lease heartbeats over RPC. See x-labbridge-websocket for message schemas and bounded resource rules. /dl24 uses this connection without HTTP polling."
   },
   "servers": [
     {
@@ -2028,7 +2028,7 @@
           "description": "JSON request with the fields documented by the referenced schema. Unknown properties are rejected; use {} for an empty StopRequest."
         },
         "summary": "Apply and verify DL24M settings",
-        "description": "Apply only the supplied fields; omitted settings remain unchanged. Requires a lease and confirmed output OFF for settings changes. Snapshot original values before the multi-step operation, use device timing and bounded readback retries, and restore on failure. Check restore_pending before issuing new work. mode 0 is CC; other banks may be edited OFF, but active non-CC operation is not commissioned and ON is blocked.\n\nReturns 202 with an Operation and Location, not an instrument acknowledgement. Keep the lease alive where required and poll until terminal. Bounded device retries/readback recovery run on the bridge; callers receive a terminal failure when recovery is exhausted. Do not automatically replay an uncertain mutation."
+        "description": "Apply only the supplied fields; omitted settings remain unchanged. Requires a lease and confirmed output OFF for settings changes. Snapshot original values before the multi-step operation, use device timing and bounded readback retries, and restore on failure. Check restore_pending before issuing new work. Native modes are 0 CC, 1 CV, 2 CR, 3 CP. Prefer the typed mode/target operations for changes; activation independently checks mode-specific safety prerequisites.\n\nReturns 202 with an Operation and Location, not an instrument acknowledgement. Keep the lease alive where required and poll until terminal. Bounded device retries/readback recovery run on the bridge; callers receive a terminal failure when recovery is exhausted. Do not automatically replay an uncertain mutation."
       }
     },
     "/api/v1/devices/{deviceId}/dl24m/counters/reset": {
@@ -2238,7 +2238,7 @@
           "description": "JSON request with the fields documented by the referenced schema. Unknown properties are rejected; use {} for an empty StopRequest."
         },
         "summary": "Inspect an inactive DL24M target bank",
-        "description": "This read uses POST because the instrument must temporarily change mode. Requires CC, confirmed OFF and a lease. Snapshot the bank/CC state, select the requested inactive bank, read its raw target, then restore CC and its original target. Poll the operation for confirmed_value (raw bank units) and restoration status. The active meaning/units of banks 1..3 are not commissioned.\n\nReturns 202 with an Operation and Location, not an instrument acknowledgement. Keep the lease alive where required and poll until terminal. Bounded device retries/readback recovery run on the bridge; callers receive a terminal failure when recovery is exhausted. Do not automatically replay an uncertain mutation."
+        "description": "This read uses POST because the instrument must temporarily change mode. Requires CC, confirmed OFF and a lease. Snapshot the bank/CC state, select the requested inactive bank, read its raw target, then restore CC and its original target. Poll the operation for confirmed_value (raw bank units) and restoration status. Native banks are 1 CV (raw/100 V), 2 CR (raw/10 Ohm), 3 CP (raw/10 W). Prefer the typed mode/target API for normal control.\n\nReturns 202 with an Operation and Location, not an instrument acknowledgement. Keep the lease alive where required and poll until terminal. Bounded device retries/readback recovery run on the bridge; callers receive a terminal failure when recovery is exhausted. Do not automatically replay an uncertain mutation."
       }
     },
     "/api/v1/devices/{deviceId}/dl24m/bank-target": {
@@ -2322,6 +2322,216 @@
         },
         "summary": "Write an inactive DL24M target bank",
         "description": "Requires CC, confirmed OFF and a lease. Temporarily select the inactive bank, write and read back its raw target, then return to CC and restore the original CC target. Conservative raw maxima are bank 1: 1000, bank 2: 2400, bank 3: 100. This does not enable or commission CV/CR/CP operation. Recovery must complete before further commands.\n\nReturns 202 with an Operation and Location, not an instrument acknowledgement. Keep the lease alive where required and poll until terminal. Bounded device retries/readback recovery run on the bridge; callers receive a terminal failure when recovery is exhausted. Do not automatically replay an uncertain mutation."
+      }
+    },
+    "/api/v1/devices/{deviceId}/dl24m/diagnostics": {
+      "get": {
+        "operationId": "getDl24mDiagnostics",
+        "tags": [
+          "dl24m"
+        ],
+        "responses": {
+          "200": {
+            "description": "Current Dl24mRegisters result. Cached telemetry still requires per-value quality/freshness checks; a management result confirms only the documented management action.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Dl24mDiagnostics"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Request rejected or unavailable: 400 malformed/invalid request, 401 missing LAN credentials, 403 forbidden transport, 404 unknown resource, 409 state/ownership/idempotency conflict, 412 stale configuration ETag, 422 unsupported or unsafe setting, 423 missing/expired device lease, or 503 resource/transport unavailable, as applicable. An accepted operation can later fail through Operation.error; HTTP acceptance is not hardware success.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "deviceId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9_-]{1,48}$"
+            },
+            "description": "Configured physical device ID on this node. Discover IDs with listDevices; do not use a model name unless it is the configured ID."
+          }
+        ],
+        "summary": "Read bounded passive DL24M BLE diagnostics",
+        "description": "Read the last 32 actual transmitted/received BLE byte chunks and cached register snapshot. Does not issue an additional device command. Chunks are transport observations, not HID frames; parser remains authoritative. dropped counts overwritten entries. All values are boot-local."
+      }
+    },
+    "/api/v1/devices/{deviceId}/dl24m/mode": {
+      "put": {
+        "operationId": "setDl24mMode",
+        "tags": [
+          "dl24m"
+        ],
+        "responses": {
+          "default": {
+            "description": "Request rejected or unavailable: 400 malformed/invalid request, 401 missing LAN credentials, 403 forbidden transport, 404 unknown resource, 409 state/ownership/idempotency conflict, 412 stale configuration ETag, 422 unsupported or unsafe setting, 423 missing/expired device lease, or 503 resource/transport unavailable, as applicable. An accepted operation can later fail through Operation.error; HTTP acceptance is not hardware success.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "202": {
+            "description": "Command accepted for asynchronous execution. Follow Location to getOperation until succeeded, failed or cancelled; inspect final_output and restore_pending.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Operation"
+                }
+              }
+            },
+            "headers": {
+              "Location": {
+                "description": "Relative URL /api/v1/operations/{operationId} for polling in this node boot.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "deviceId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9_-]{1,48}$"
+            },
+            "description": "Configured physical device ID on this node. Discover IDs with listDevices; do not use a model name unless it is the configured ID."
+          },
+          {
+            "name": "X-Lab-Lease",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Active lease ID covering this physical device. Components share ownership; heartbeats must continue while commands are pending."
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 96
+            },
+            "description": "Unique key per logical mutation (1..96 characters). Repeating the same method/path/semantic JSON body within this boot returns the existing operation; reusing it for different content returns 409. Retention is bounded. After an uncertain timeout or reboot, inspect state and STOP as needed instead of replaying ON."
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Dl24mModeRequest"
+              }
+            }
+          },
+          "description": "JSON request with the fields documented by the referenced schema. Unknown properties are rejected; use {} for an empty StopRequest."
+        },
+        "summary": "Select DL24M load mode with OFF readback",
+        "description": "Snapshot original mode and target before switching; journal rollback before any mutation. Does not enable output. Follow the Operation to verified completion. On failure STOP and restore original mode and target."
+      }
+    },
+    "/api/v1/devices/{deviceId}/dl24m/target": {
+      "put": {
+        "operationId": "setDl24mTarget",
+        "tags": [
+          "dl24m"
+        ],
+        "responses": {
+          "default": {
+            "description": "Request rejected or unavailable: 400 malformed/invalid request, 401 missing LAN credentials, 403 forbidden transport, 404 unknown resource, 409 state/ownership/idempotency conflict, 412 stale configuration ETag, 422 unsupported or unsafe setting, 423 missing/expired device lease, or 503 resource/transport unavailable, as applicable. An accepted operation can later fail through Operation.error; HTTP acceptance is not hardware success.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "202": {
+            "description": "Command accepted for asynchronous execution. Follow Location to getOperation until succeeded, failed or cancelled; inspect final_output and restore_pending.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Operation"
+                }
+              }
+            },
+            "headers": {
+              "Location": {
+                "description": "Relative URL /api/v1/operations/{operationId} for polling in this node boot.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "deviceId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9_-]{1,48}$"
+            },
+            "description": "Configured physical device ID on this node. Discover IDs with listDevices; do not use a model name unless it is the configured ID."
+          },
+          {
+            "name": "X-Lab-Lease",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Active lease ID covering this physical device. Components share ownership; heartbeats must continue while commands are pending."
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 96
+            },
+            "description": "Unique key per logical mutation (1..96 characters). Repeating the same method/path/semantic JSON body within this boot returns the existing operation; reusing it for different content returns 409. Retention is bounded. After an uncertain timeout or reboot, inspect state and STOP as needed instead of replaying ON."
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Dl24mTargetRequest"
+              }
+            }
+          },
+          "description": "JSON request with the fields documented by the referenced schema. Unknown properties are rejected; use {} for an empty StopRequest."
+        },
+        "summary": "Set typed DL24M target while OFF",
+        "description": "Only modifies the selected bank, with journaled original target and readback. Activation uses mode-specific predictions plus measured V/I/P guards: CR at configured maximum voltage, CP at fresh cutoff voltage, CV requires fresh device OCP/OPP no greater than local limits. CV cannot promise a current ceiling from its voltage target alone."
       }
     },
     "/api/v1/devices/{deviceId}/temperature/channels": {
@@ -2980,6 +3190,13 @@
               "$ref": "#/components/schemas/Component"
             },
             "description": "Actor and sensor descriptors exposed by this physical device."
+          },
+          "features": {
+            "type": "array",
+            "description": "Discoverable per-feature support, restrictions and commissioning scope. Missing features are not supported.",
+            "items": {
+              "$ref": "#/components/schemas/FeatureStatus"
+            }
           }
         },
         "required": [
@@ -3133,12 +3350,12 @@
           "capacity_ah": {
             "type": "number",
             "format": "double",
-            "description": "Native instrument capacity counter in Ah when its scale is supported; do not assume DL24M raw counter scales are commissioned."
+            "description": "Native instrument capacity counter in Ah, emitted only while its own reading is fresh. DL24M read 14 counts integer mAh (divide by 1000); native_readings[id=capacity] provides origin and individual age. Native counters and browser/host integrals are separate; absolute accuracy is not certified."
           },
           "energy_wh": {
             "type": "number",
             "format": "double",
-            "description": "Native instrument energy counter in Wh when its scale is supported. Prefer traceable host integration where native scaling is uncertain."
+            "description": "Native instrument energy counter in Wh, emitted only while its own reading is fresh. DL24M read 15 counts integer mWh (divide by 1000); native_readings[id=energy] provides origin and individual age. This is separate from host/browser integration; absolute accuracy is not certified."
           },
           "temperature_channels": {
             "type": "array",
@@ -3162,9 +3379,11 @@
             "enum": [
               "cc",
               "cv",
+              "cr",
+              "cp",
               "unknown"
             ],
-            "description": "Observed/selected regulation mode where available: cc (constant current), cv (constant voltage), or unknown. Do not infer it solely from a setpoint."
+            "description": "Observed/selected regulation mode: CC (A), CV (V), CR (Ohm), CP (W), or unknown. Targets alone do not confirm active output."
           },
           "protection_code": {
             "type": "integer",
@@ -3175,6 +3394,26 @@
           "boot_id": {
             "type": "string",
             "description": "Opaque identifier for this node boot. A change invalidates prior monotonic timestamps, leases and operation IDs."
+          },
+          "native_readings": {
+            "type": "array",
+            "description": "Independent native readings; browser integrals are not device counters.",
+            "items": {
+              "$ref": "#/components/schemas/NativeReading"
+            }
+          },
+          "load_mode": {
+            "type": "string",
+            "description": "Confirmed selected native load mode.",
+            "enum": [
+              "cc",
+              "cv",
+              "cr",
+              "cp"
+            ]
+          },
+          "load_target": {
+            "$ref": "#/components/schemas/Dl24mTargetRequest"
           },
           "input_voltage_v": {
             "type": "number",
@@ -3767,6 +4006,251 @@
           }
         }
       },
+      "FeatureStatus": {
+        "type": "object",
+        "description": "Per-device evidence and prerequisites. Unverified is not enabled merely because a wire command is known.",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "Stable feature identifier."
+          },
+          "status": {
+            "type": "string",
+            "description": "Backend evidence state.",
+            "enum": [
+              "supported",
+              "unverified",
+              "unavailable"
+            ]
+          },
+          "reason": {
+            "type": "string",
+            "description": "Concrete restriction or evidence summary."
+          },
+          "unit": {
+            "type": "string",
+            "description": "Physical unit or raw if uncommissioned."
+          },
+          "operation": {
+            "type": "string",
+            "description": "API operation identifier, where implemented."
+          },
+          "requires_off": {
+            "type": "boolean",
+            "description": "Confirmed OFF required."
+          },
+          "requires_lease": {
+            "type": "boolean",
+            "description": "Active device lease required."
+          },
+          "evidence": {
+            "type": "string",
+            "description": "Protocol and hardware evidence scope."
+          }
+        },
+        "required": [
+          "id",
+          "status",
+          "reason"
+        ],
+        "additionalProperties": false
+      },
+      "NativeReading": {
+        "type": "object",
+        "description": "Native instrument reading with independent freshness, explicit unit and origin. Reception quality is not calibration accuracy. Keep device counters separate from browser/host session integrals; any uncommissioned counter scale remains raw.",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "Reading name."
+          },
+          "value": {
+            "type": "number",
+            "description": "Native value; omitted if invalid/unavailable."
+          },
+          "unit": {
+            "type": "string",
+            "description": "s, Ah, Wh, degC, rpm or raw."
+          },
+          "origin": {
+            "type": "string",
+            "description": "Protocol register/source."
+          },
+          "quality": {
+            "type": "string",
+            "description": "Quality at snapshot time.",
+            "enum": [
+              "valid",
+              "stale",
+              "unavailable"
+            ]
+          },
+          "received_ms": {
+            "type": "integer",
+            "description": "Monotonic bridge receive time in current boot.",
+            "minimum": 0
+          },
+          "age_ms": {
+            "type": "integer",
+            "description": "Age of the register observation.",
+            "minimum": 0
+          }
+        },
+        "required": [
+          "id",
+          "unit",
+          "origin",
+          "quality"
+        ],
+        "additionalProperties": false
+      },
+      "StreamAuth": {
+        "type": "object",
+        "description": "First WebSocket text message within three seconds, with exactly one credential: API bearer token, or the UI session CSRF token bound to the HttpOnly upgrade cookie and trusted same Origin. Cookie sessions are revalidated during RPC and pushes; logout, expiry and password replacement terminate access. Secrets never enter URLs or subprotocols.",
+        "properties": {
+          "type": {
+            "type": "string",
+            "description": "Message kind.",
+            "enum": [
+              "auth"
+            ]
+          },
+          "token": {
+            "type": "string",
+            "description": "Existing LAN bearer token.",
+            "minLength": 1,
+            "maxLength": 255
+          },
+          "csrf_token": {
+            "type": "string",
+            "minLength": 64,
+            "maxLength": 64,
+            "description": "CSRF proof from the authenticated UI session. The browser supplies its HttpOnly session cookie during the upgrade; the same trusted Origin and shared HTTP authorization policy apply."
+          }
+        },
+        "required": [
+          "type"
+        ],
+        "additionalProperties": false,
+        "minProperties": 2,
+        "maxProperties": 2
+      },
+      "StreamSubscription": {
+        "type": "object",
+        "description": "Select one device and measurement interval. Snapshot also contains output, settings and tracked operations. Ping/open socket does not renew leases.",
+        "properties": {
+          "type": {
+            "type": "string",
+            "description": "Message kind.",
+            "enum": [
+              "subscribe"
+            ]
+          },
+          "device_id": {
+            "type": "string",
+            "description": "Configured device ID.",
+            "maxLength": 48
+          },
+          "interval_ms": {
+            "type": "integer",
+            "description": "Measurement push period in milliseconds.",
+            "enum": [
+              500,
+              1000,
+              2000
+            ]
+          },
+          "id": {
+            "type": "string",
+            "description": "Correlation ID."
+          }
+        },
+        "required": [
+          "type",
+          "device_id"
+        ],
+        "additionalProperties": false
+      },
+      "StreamRpc": {
+        "type": "object",
+        "description": "USB-compatible request envelope. API routes, validation, leases, operation execution and idempotency are shared; no write replay on reconnect.",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "Correlation ID."
+          },
+          "method": {
+            "type": "string",
+            "description": "HTTP method.",
+            "enum": [
+              "GET",
+              "POST",
+              "PUT",
+              "DELETE"
+            ]
+          },
+          "path": {
+            "type": "string",
+            "description": "Local /api/v1 path only."
+          },
+          "headers": {
+            "type": "object",
+            "description": "X-Lab-Lease, Idempotency-Key and If-Match; Authorization is session-owned.",
+            "additionalProperties": {
+              "type": "string"
+            }
+          },
+          "body": {
+            "type": "object",
+            "description": "Normal API request body.",
+            "additionalProperties": true
+          }
+        },
+        "required": [
+          "id",
+          "method",
+          "path"
+        ],
+        "additionalProperties": false
+      },
+      "StreamSnapshot": {
+        "type": "object",
+        "description": "Full initial snapshot after subscription, then cached state/settings/operation snapshots with periodic measurements. Node/device catalogue is repeated every five seconds and may be absent from intervening snapshots. sequence increases per offered snapshot; gap reports coalescing or skipped intervals. Each measurement keeps its native sequence/receive time. Boot change invalidates all leases and operations.",
+        "properties": {
+          "type": {
+            "type": "string",
+            "description": "Message kind.",
+            "enum": [
+              "snapshot"
+            ]
+          },
+          "boot_id": {
+            "type": "string",
+            "description": "Bridge boot identity."
+          },
+          "sequence": {
+            "type": "integer",
+            "description": "Monotonic stream sequence, independent of measurement sequence.",
+            "minimum": 1
+          },
+          "gap": {
+            "type": "boolean",
+            "description": "A pending snapshot was replaced."
+          },
+          "body": {
+            "type": "object",
+            "description": "node (NodeInfo), devices (Device[]), device_id, measurements (Measurements), actors (ActuatorState[]), details (driver settings) and operations (Operation[]).",
+            "additionalProperties": true
+          }
+        },
+        "required": [
+          "type",
+          "boot_id",
+          "sequence",
+          "gap",
+          "body"
+        ],
+        "additionalProperties": false
+      },
       "UiLogin": {
         "type": "object",
         "description": "Password login on the current node. JSON and same-origin browser requests only.",
@@ -4098,9 +4582,11 @@
             "enum": [
               "cc",
               "cv",
+              "cr",
+              "cp",
               "unknown"
             ],
-            "description": "Observed/selected regulation mode where available: cc (constant current), cv (constant voltage), or unknown. Do not infer it solely from a setpoint."
+            "description": "Observed/selected regulation mode: CC (A), CV (V), CR (Ohm), CP (W), or unknown. Targets alone do not confirm active output."
           }
         },
         "required": [],
@@ -4275,7 +4761,7 @@
             "type": "integer",
             "minimum": 0,
             "maximum": 3,
-            "description": "0 selects CC; 1..3 select inactive banks. Output ON outside CC is blocked because active CV/CR/CP behavior is not commissioned."
+            "description": "Native selected mode: 0 CC, 1 CV, 2 CR, 3 CP. Prefer setDl24mMode and setDl24mTarget for typed changes with a fresh OFF/mode/target snapshot and checked restoration. Activation independently validates fresh mode-specific current, voltage and power limits; consult Device.features for commissioning status."
           },
           "standby_time": {
             "type": "integer",
@@ -4384,7 +4870,7 @@
               2,
               3
             ],
-            "description": "Inactive bank 1, 2 or 3; active semantics/units are uncommissioned."
+            "description": "Inactive bank 1 CV, 2 CR or 3 CP. This legacy raw interface always returns to CC; prefer typed mode/target operations for normal control."
           },
           "target_raw": {
             "type": "integer",
@@ -4394,6 +4880,150 @@
           }
         },
         "description": "Inactive bank target in raw register units. This interface does not claim that the corresponding active CV/CR/CP behavior or scales are commissioned."
+      },
+      "Dl24mTraceEntry": {
+        "type": "object",
+        "description": "One actual BLE transport byte chunk. Receive chunks can contain partial or multiple frames; do not reinterpret as HID.",
+        "properties": {
+          "sequence": {
+            "type": "integer",
+            "description": "Increasing trace sequence.",
+            "minimum": 1
+          },
+          "received_ms": {
+            "type": "integer",
+            "description": "Observation timestamp.",
+            "minimum": 0
+          },
+          "generation": {
+            "type": "integer",
+            "description": "BLE connection generation.",
+            "minimum": 0
+          },
+          "direction": {
+            "type": "string",
+            "description": "Wire direction.",
+            "enum": [
+              "tx",
+              "rx"
+            ]
+          },
+          "hex": {
+            "type": "string",
+            "description": "Hexadecimal bytes, at most 64 per entry."
+          },
+          "truncated": {
+            "type": "boolean",
+            "description": "Oversized chunk truncated to preserve memory bounds."
+          },
+          "origin": {
+            "type": "string",
+            "description": "ble-stack records accepted BLE GATT submissions and actual notifications; tx does not imply ATT/application success. endpoint is a non-radio test/fallback observation.",
+            "enum": [
+              "ble-stack",
+              "endpoint"
+            ]
+          }
+        },
+        "required": [
+          "sequence",
+          "received_ms",
+          "generation",
+          "direction",
+          "hex",
+          "truncated",
+          "origin"
+        ],
+        "additionalProperties": false
+      },
+      "Dl24mDiagnostics": {
+        "type": "object",
+        "description": "Passive bounded diagnostics, independent of driver parsing.",
+        "properties": {
+          "entries": {
+            "type": "array",
+            "description": "Newest at most 32 byte chunks.",
+            "items": {
+              "$ref": "#/components/schemas/Dl24mTraceEntry"
+            }
+          },
+          "dropped": {
+            "type": "integer",
+            "description": "Overwritten/truncated entry count.",
+            "minimum": 0
+          },
+          "registers": {
+            "type": "array",
+            "description": "Cached audited registers only.",
+            "items": {
+              "$ref": "#/components/schemas/Dl24mRegister"
+            }
+          }
+        },
+        "required": [
+          "entries",
+          "dropped",
+          "registers"
+        ],
+        "additionalProperties": false
+      },
+      "Dl24mModeRequest": {
+        "type": "object",
+        "description": "Select a native mode without enabling output or modifying that bank target. Confirmed OFF, live original mode/target snapshot, persistent rollback and checked readback required.",
+        "required": [
+          "mode"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "mode": {
+            "type": "string",
+            "description": "Native DL24M BLE mapping: CC=0, CV=1, CR=2, CP=3. HID scaling is not used.",
+            "enum": [
+              "cc",
+              "cv",
+              "cr",
+              "cp"
+            ]
+          }
+        }
+      },
+      "Dl24mTargetRequest": {
+        "type": "object",
+        "description": "Set the selected mode target while OFF. Mode and unit must agree. CC 0.001 A; CV 0.01 V; CR 0.1 Ohm; CP 0.1 W. Configured local limits and activation prerequisites still apply.",
+        "required": [
+          "mode",
+          "value",
+          "unit"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "mode": {
+            "type": "string",
+            "description": "Expected selected mode; mismatches reject without writes.",
+            "enum": [
+              "cc",
+              "cv",
+              "cr",
+              "cp"
+            ]
+          },
+          "value": {
+            "type": "number",
+            "description": "Physical target at native resolution.",
+            "minimum": 0,
+            "maximum": 240
+          },
+          "unit": {
+            "type": "string",
+            "description": "A for CC, V for CV, Ohm for CR, W for CP.",
+            "enum": [
+              "A",
+              "V",
+              "Ohm",
+              "W"
+            ]
+          }
+        }
       },
       "SwitchPathRequest": {
         "type": "object",
@@ -4797,6 +5427,19 @@
   "externalDocs": {
     "description": "Consolidated hardware, API and protocol handbook, including supported boards and driver-specific wire formats.",
     "url": "https://github.com/nobodypb/labbridge/blob/main/docs/handbook.md"
+  },
+  "x-labbridge-websocket": {
+    "path": "/api/v1/ws",
+    "auth_schema": "StreamAuth",
+    "request_schema": "StreamRpc",
+    "subscription_schema": "StreamSubscription",
+    "event_schema": "StreamSnapshot",
+    "max_message_bytes": 16384,
+    "max_sessions": 1,
+    "description": "One authenticated UI session per board. Reliable RPC replies precede telemetry. Bounded latest-snapshot slot; gap or connection close under overload. Authentication failure closes the socket. No device data before authentication. Network sends never hold the node safety mutex. Reconnect explicitly, re-read state, never replay mutations. HTTP remains available. Completed operation IDs leave the stream send list after their confirmation frame is queued for transmission; normal HTTP/USB lookup remains unchanged. Exceeding the outstanding-operation budget returns the newly accepted operation ID before closing, so results can be read over HTTP without replaying writes. Input JSON nesting is limited to 16 before parsing, including the envelope.",
+    "max_outbound_message_bytes": 32768,
+    "max_outstanding_operations": 16,
+    "max_json_depth": 16
   },
   "x-labbridge-modules": [
     {

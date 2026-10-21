@@ -20,7 +20,10 @@ export interface BenchModule {
  matches:(device:Device)=>boolean;
  currentStep:number;
  voltageStep:number;
- canControl:(settings:BenchSettings)=>boolean;
+ canControl:(settings:BenchSettings,device?:Device)=>boolean;
+ parseSettings?:(raw:unknown)=>BenchSettings;
+ target?:(device:Device,settings:BenchSettings)=>{min:number;max:number;step:number;unit:string;live:boolean};
+ writeTarget?:(config:Configuration,params:{deviceId:string;componentId:string;xLabLease:string;idempotencyKey:string},settings:BenchSettings,value:number)=>Promise<import('../../../generated/src/index').Operation>;
  readSettings?:(config:Configuration,deviceId:string)=>Promise<BenchSettings>;
  writeSettings?:(config:Configuration,params:{deviceId:string;xLabLease:string;idempotencyKey:string},settings:BenchSettings)=>Promise<import('../../../generated/src/index').Operation>;
  resetCounters?:(config:Configuration,params:{deviceId:string;xLabLease:string;idempotencyKey:string})=>Promise<import('../../../generated/src/index').Operation>;

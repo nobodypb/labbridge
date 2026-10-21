@@ -38,3 +38,8 @@ test('full-buffer and paused recording gaps stay bounded',()=>{
  for(let i=0;i<20;i++)s.break();
  assert.ok(s.points.length<=3);assert.equal(s.rows.length,2);
 });
+
+test('CSV preserves native counters, provenance and quality separately from session integrals',()=>{
+ const s=new BenchSession(3000);s.add(sample(1000,{nativeReadings:[{id:'capacity',value:123,unit:'raw',origin:'dl24m.ble.14',quality:'valid',receivedMs:1000,ageMs:0}]}));
+ assert.match(s.csv(),/native_readings_json/);assert.match(s.csv(),/dl24m.ble.14/);assert.match(s.csv(),/session_capacity_Ah/);
+});

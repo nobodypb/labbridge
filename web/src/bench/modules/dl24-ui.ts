@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
+import {Dl24mApi} from '../../../generated/src/index';
 import type {Dl24mSettings} from '../../../generated/src/index';
 import type {BenchModuleContext,BenchModuleView} from './types';
 import {features,settingsFields} from './dl24-features';
@@ -14,16 +15,38 @@ export function mountDl24(context:BenchModuleContext):BenchModuleView {
   const el=element(id);if(!el)throw Error(`Missing Bench feature ${id}`);
   if(f.reason){el.title=f.reason;el.dataset.help=f.reason;disable(id,true);}
  }
- for(const id of ['calV','zeroNoLoad','restoreDefaults','snapBtn']){
-  const note=document.createElement('p');note.className='hint';note.dataset.unavailable='true';note.textContent=features[id].reason!;
+ for(const id of ['calV','zeroNoLoad','restoreDefaults','snapBtn','mode-cv']){
+  const note=document.createElement('p');note.className='hint';note.dataset.unavailable='true';note.dataset.featureNote=id;note.textContent=features[id].reason??'Connect to discover backend support.';
   (id.startsWith('mode-')?element(id).closest('.grp')!:element(id).closest('.sgrp')??element(id).parentElement!).append(note);
  }
- element('rawLive').textContent=element('rawSet').textContent=element('snapState').textContent='Unavailable: backend does not expose HID frames.';
+ element('rawLive').textContent=element('rawSet').textContent='Passive BLE diagnostics: use Snapshot for bounded capture and cached registers.';
+ element('snapState').textContent='No browser snapshot captured.';
+ let previousRegisters=new Map<string,number|undefined>(),diagnosticExport:unknown,diagnosticIdentity='';
+ bind('snapBtn',async()=>{
+  const state=api.selected;if(!state||!api.connected||state.device.features?.find(f=>f.id==='diagnostics')?.status!=='supported')throw Error('Passive diagnostics unavailable');
+  const boot=api.boot,d=await new Dl24mApi(api.config).getDl24mDiagnostics({deviceId:state.device.id});
+  if(api.selected!==state||boot!==api.boot)throw Error('Device changed during diagnostic capture');
+  const changes=d.registers.filter(r=>previousRegisters.has(r.name)&&previousRegisters.get(r.name)!==r.value);
+  element('rawLive').textContent=d.entries.map(e=>`${e.sequence} ${e.receivedMs}ms gen ${e.generation} ${e.direction.toUpperCase()} ${e.hex}${e.truncated?' [truncated]':''}`).join('\n');
+  element('rawSet').textContent=d.registers.map(r=>`${r.name} [${r.command.toString(16)}] ${r.value??'—'} · ${r.quality} · ${r.ageMs??'—'}ms`).join('\n');
+  element('snapState').textContent=`${input('snapLabel').value||'Snapshot'} · ${d.entries.length} BLE chunks · ${d.dropped} overwritten · `+(previousRegisters.size?`${changes.length} changed: ${changes.map(r=>r.name).join(', ')||'none'}`:'first snapshot');
+  element('snapDiff').textContent=changes.map(r=>`${r.name}: ${previousRegisters.get(r.name)??'—'} → ${r.value??'—'} (${r.quality})`).join('\n');
+  previousRegisters=new Map(d.registers.map(r=>[r.name,r.value]));diagnosticExport={boot_id:boot,device_id:state.device.id,label:input('snapLabel').value,diagnostics:d};
+ });
+ element('snapClear').onclick=()=>{previousRegisters.clear();diagnosticExport=undefined;element('snapState').textContent='Browser snapshots cleared; instrument unchanged.';element('snapDiff').textContent='';};
+ const exportButton=document.createElement('button');exportButton.textContent='Export BLE diagnostics';exportButton.type='button';element('snapClear').after(exportButton);
+ exportButton.onclick=()=>{if(!diagnosticExport)return;const url=URL.createObjectURL(new Blob([JSON.stringify(diagnosticExport,null,2)],{type:'application/json'})),a=document.createElement('a');a.href=url;a.download='dl24m-ble-diagnostics.json';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);};
+
  for(const [id,f] of Object.entries(settingsFields)){
   const e=input(id);e.addEventListener('input',()=>dirty.add(id));e.addEventListener('change',()=>dirty.add(id));e.min=String(f.min);e.max=String(f.max);e.step=String(f.step);
   if(f.button)bind(f.button,async()=>{const state=api.selected,result=await api.settingsWrite({[f.key]:field(id)});if(api.selected===state)dirty.delete(id);return result;});
  }
- bind('mode-cc',()=>api.settingsWrite({mode:0}));
+ for(const mode of ['cc','cv','cr','cp'] as const)bind('mode-'+mode,async()=>{
+  if(mode!=='cc'&&!api.device?.features?.some(f=>f.id===mode&&f.status==='supported'))throw Error('Mode is not supported');
+  const result=await api.command((config,params)=>new Dl24mApi(config).setDl24mMode({...params,dl24mModeRequest:{mode}}));
+  let notice=true;try{notice=localStorage.getItem('bench:cvNotice')!=='off';}catch{}
+  if(mode==='cv'&&notice)element('cvToast').classList.add('show');return result;
+ });
  bind('limBtn',async()=>{
   const settings:Dl24mSettings={};for(const id of ['ocp','opp','otext','otmos','cutv'])if(input(id).value.trim())settings[settingsFields[id].key]=field(id);
   if(!Object.keys(settings).length)throw Error('Enter at least one protection setting');
@@ -39,8 +62,20 @@ export function mountDl24(context:BenchModuleContext):BenchModuleView {
    const off=api.off&&!pending&&api.module?.id==='dl24m',settings=api.settings as Dl24mSettings;
    disable('limBtn',!off);disable('zeroData',!off);disable('mode-cc',!off);
    for(const f of Object.values(settingsFields))if(f.button)disable(f.button,!off);
-   for(const [id,f] of Object.entries(features))if(f.reason)disable(id,true);
-   document.querySelectorAll<HTMLElement>('[data-mode]').forEach(b=>b.classList.toggle('sel',settings.mode===0&&b.dataset.mode==='cc'));
+   const identity=JSON.stringify([api.device?.id,api.boot]);
+   if(identity!==diagnosticIdentity){diagnosticIdentity=identity;previousRegisters.clear();diagnosticExport=undefined;element('snapDiff').textContent='';element('snapState').textContent='No browser snapshot captured for this device/boot.';element('rawLive').textContent=element('rawSet').textContent='Capture passive diagnostics for the selected device.';}
+   for(const [id,f] of Object.entries(features)){
+    const status=f.capability?api.device?.features?.find(s=>s.id===f.capability):undefined;
+    const reason=f.capability?(status?.status==='supported'?'':status?.reason??f.reason):f.reason;
+    if(f.capability||f.reason){disable(id,!!reason||!api.connected||id==='snapBtn'&&(pending||api.busy)||id.startsWith('mode-')&&!off);element(id).title=reason??status?.reason??'';element(id).dataset.help=element(id).title;}
+   }
+   document.querySelectorAll<HTMLElement>('[data-mode]').forEach(b=>{const mode=b.dataset.mode!;b.classList.toggle('sel',settings.mode===['cc','cv','cr','cp'].indexOf(mode));disable(b.id,!off||mode!=='cc'&&!api.device?.features?.some(f=>f.id===mode&&f.status==='supported'));});
+   element('unsupported').textContent='Backend feature status: '+(api.device?.features?.filter(f=>f.status!=='supported').map(f=>`${f.id}: ${f.status} — ${f.reason}`).join(' · ')||'Backend support is discovered per instrument.');
+   for(const note of Array.from(document.querySelectorAll<HTMLElement>('[data-feature-note]'))){const f=features[note.dataset.featureNote!];note.textContent=api.device?.features?.find(s=>s.id===f.capability)?.reason??f.reason??'Connect to discover backend support.';}
+   const m=api.measurement;
+   if(m?.loadTarget&&m.loadTarget.mode===['cc','cv','cr','cp'][settings.mode??-1])input('setVal').placeholder=String(m.loadTarget.value);
+   const native=api.connected?m?.nativeReadings??[]:[];
+   element('nativeReadings').textContent=native.length?'Native device readings · '+native.map(r=>{const fresh=r.quality==='valid'&&r.ageMs!==undefined&&r.ageMs+performance.now()-api.selected!.receivedAt<=(api.device?.limits?.maxAgeMs??0);return `${r.id}: ${fresh?r.value:'—'} ${r.unit} [${r.origin}; ${fresh?'valid':r.quality==='unavailable'?'unavailable':'stale'}]`;}).join(' · '):'Native device readings: —';
    for(const [id,f] of Object.entries(settingsFields)){
     const e=input(id),value=settings[f.key];
     if(e.tagName==='SELECT'){if(!dirty.has(id))e.value=value===undefined?'':String(value);}else e.placeholder=value===undefined?'—':String(value);

@@ -512,8 +512,9 @@ Experimental version-one/600,000-round records require `ui-password` recovery
 over trusted USB. Firmware rejects them promptly and never treats their hashes
 as lower-cost verifiers. Recovery preserves the API bearer token and other
 settings; it does not open LAN password setup.
-The isolated 160 MHz StickS3 measured 0.817–0.984 s for API login and at most
-1.207 s from browser submission to signed-in controls across all user pages.
+The isolated 160 MHz StickS3 measured 0.841–0.955 s for API login and at most
+1.020 s from browser submission to signed-in controls across all user pages.
+One WLAN-page login also remained valid when navigating to Bench and devices.
 Cookie sessions are independent of TCP connections: the HTTP server keeps at
 most four connections, reclaims idle ones and uses a 16-socket platform budget.
 This permits eight authenticated sessions without exhausting the shared sockets.
@@ -908,9 +909,10 @@ the UI displays observed regulation and the raw protection code instead of
 pretending that a mode button selects regulation. Confirmed setpoints appear
 as input placeholders, separately from measured output. DL24M retains its
 commissioned CC operation, cutoff, minute-resolution timer, display settings,
-protection settings and explicit counter reset. Its unsupported original
-CV/CR/CP, calibration, no-load zero, factory reset, HID diagnostics and fan RPM
-remain visible, disabled and explained inside the DL24M module. Settings and
+protection settings and explicit counter reset. Its module also owns the native
+CV/CR/CP mode/target controls and passive BLE diagnostics, gated by backend
+capabilities. Calibration, no-load zero, factory reset and fan RPM retain their
+specific backend restrictions; no HID commands are sent. Settings and
 counter reset require confirmed OFF. RD Wi-Fi provisioning and configuration
 remain on **Instruments**; the Bench does not implement another pairing flow.
 
@@ -938,8 +940,9 @@ hold up STOP or heartbeats.
 
 All sensor components, including standalone INA228/Yocto meters and future
 component-based drivers, appear in **Display → Channels**. Toggle a channel's
-value and curve independently. Output V/I/W are visible by default. Compact
-measurement strips group values by device; curve labels identify device, channel and unit. Channels with the same
+value and curve independently. All measured values are visible below by default;
+only output voltage/current curves start enabled. Compact measurement groups
+identify device, channel and unit; each value toggles its matching-colour curve. Channels with the same
 unit share a scale, and all curves use the node's monotonic timestamps. Extra
 unit axes can scroll within the plot on narrow screens. Display preferences
 are stored locally; hiding channels does not stop acquisition or CSV recording.
@@ -952,13 +955,14 @@ values show unknown, never measured zero. Curves break at invalid samples,
 disconnects and excessive gaps. Sensor epoch/boot changes break integration;
 old boot timelines are not combined with the current plot.
 
-The default HTTP refresh target is 1 s (selectable 500 ms/1 s/2 s). It reads
-backend caches without changing instrument polling. One shared in-flight HTTP
-request serves all instruments: STOP has priority over heartbeats, commands and
-monitoring. Each device's sensor channels use one bundled read, with additional
-aggregate/actor/status reads where needed. Poll rounds never overlap; their
-actual duration grows with the number of devices and network latency. Per-sample
-age, rather than the selected interval, determines freshness.
+One authenticated WebSocket carries discovery, instrument RPC and tracked
+operation results for every device. The selected device supplies snapshots;
+serial RPC rounds read bundled sensor channels and cached aggregate/actor/status
+for the other devices. The default interval is 1 s (500 ms/1 s/2 s selectable),
+without changing instrument polling. STOP has priority over heartbeat, command
+and monitoring requests. Poll rounds do not overlap; age determines freshness.
+An explicit STOP after socket loss can recover over bounded HTTP requests,
+without replaying a write, reconnecting or reacquiring a reservation.
 
 **Live** records all channels. **While output ON** records each actor device only
 while one of its actors is confirmed ON; standalone sensors, state monitoring
@@ -982,3 +986,18 @@ and distinct sequences. Ambiguous quantity mappings do not integrate. Gaps,
 missing channels and paused recording break continuity. **Clear recording**
 affects only browser history/integrals. The DL24M **Zero all data** operation
 explicitly resets device counters and does not clear browser history.
+
+Native DL24M mode/target controls use the native BLE scales, confirmed OFF and
+backend capability status; CC current remains adjustable while ON. The module
+keeps the CV notice preference, confirmed counter reset, native counter/fine
+instrument-temperature origins and passive BLE capture/comparison/export.
+Unverified calibration and destructive maintenance actions remain restricted.
+See the [capability and protocol matrix](dl24m-bench-extension.md). Instrument
+temperature magnitude is not a cell-temperature guard, and counter resolution
+is not an absolute accuracy claim.
+
+Native DL24M read 14 counts mAh and read 15 counts mWh. The corresponding
+readings expose Ah/Wh with per-register freshness and common charge/energy
+sensor components. Relative scaling was bench-checked; absolute accuracy remains
+unverified. The CSV retains native sources and quality independently of browser
+integrals.

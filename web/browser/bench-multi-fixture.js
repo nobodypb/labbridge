@@ -1,3 +1,4 @@
+import {mockBenchStream} from './bench-stream-fixture.js';
 import {mockAuth,signIn} from './auth-helper.js';
 import {expect} from '@playwright/test';
 export async function mixedBackend(page,{onlyMeters=false,waveform=false}={}){
@@ -12,7 +13,7 @@ export async function mixedBackend(page,{onlyMeters=false,waveform=false}={}){
  ];
  const state={devices,calls:[],writes:[],outputs:Object.fromEntries(devices.map(d=>[d.id,'off'])),settings:{mode:0,working_brightness:5},leases:new Map(),operations:new Map(),hold:new Set(),failStops:new Set(),stale:new Set(),unavailable:new Set(),epoch:'1',boot:'boot-a',failHeartbeat:new Set(),measurements:new Map(),next:0};
  let auth;
- await page.route('**/api/v1/**',async route=>{
+ const handle=async route=>{
   const r=route.request(),path=new URL(r.url()).pathname,method=r.method(),body=r.postDataJSON(),id=path.split('/')[4],device=devices.find(d=>d.id===id);
   const reply=(data,status=200)=>route.fulfill({status,contentType:'application/json',body:JSON.stringify(data)});
   state.calls.push({path,method});
@@ -46,7 +47,9 @@ export async function mixedBackend(page,{onlyMeters=false,waveform=false}={}){
    state.operations.set(op.id,op);return reply(op,202);
   }
   return reply({detail:'Unmocked '+path},404);
- });
+ };
+ await page.route('**/api/v1/**',handle);
+ await mockBenchStream(page,state,handle,{devices:()=>devices.map(d=>({...d,output:state.outputs[d.id]})),operations:()=>[...state.operations.keys()],settings:()=>state.settings});
  auth=await mockAuth(page);state.auth=auth;return state;
 }
 export async function openBench(page){await page.goto('/dl24');await signIn(page);await expect(page.locator('#connLbl')).toHaveText('Connected');}

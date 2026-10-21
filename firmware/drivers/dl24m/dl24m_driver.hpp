@@ -2,6 +2,7 @@
 #include "labbridge/guard.hpp"
 #include "labbridge/node.hpp"
 #include "labbridge/transaction.hpp"
+#include "trace.hpp"
 #include <map>
 namespace labbridge {
 class Dl24mDriver : public Driver {
@@ -10,7 +11,17 @@ public:
   Dl24mDriver(std::string id, std::string identity, Endpoint &, Limits, Persist,
               Json journal);
   Json describe(uint64_t) override;
+  bool available(uint64_t now) override {
+    return std::strcmp(state(now), "fault") != 0 &&
+           std::strcmp(state(now), "unavailable") != 0;
+  }
   Json measurements(uint64_t) override;
+  Json components(uint64_t) override;
+  Json component_reading(const std::string &, uint64_t) override;
+  Json actuator_state(const std::string &, uint64_t) override;
+  Json stream_details(uint64_t now) override {
+    return Json().set("settings", execute("getDl24mSettings", Json(), now));
+  }
   Json actuator_settings(const std::string &, uint64_t) override;
   bool supports(const std::string &) const override;
   void tick(uint64_t) override;
@@ -27,10 +38,12 @@ private:
   enum class Work { none, stop, drain, poll, snapshot, user, restore };
   std::string id_, identity_;
   Endpoint &wire_;
+  dl24m::TraceEndpoint trace_;
   Transaction tx_;
   Limits limits_;
   Persist persist_;
   Json journal_, result_, snapshot_body_;
+  std::string snapshot_operation_ = "setDl24mSettings";
   bool snapshot_ready_ = false;
   uint64_t operation_started_ = 0;
   unsigned snapshot_reads_ = 0, snapshot_writes_ = 0;
@@ -55,6 +68,7 @@ private:
   void begin_stop(uint64_t);
   bool fresh(uint8_t, uint64_t) const;
   int output(uint64_t) const;
+  const char *state(uint64_t) const;
   void build_restore();
   void finish_user(uint64_t);
 };

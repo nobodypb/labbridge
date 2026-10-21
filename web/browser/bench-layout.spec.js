@@ -125,9 +125,9 @@ test('LB-024 layout: global STOP stays reachable while device settings are open'
 });
 
 test('LB-024 layout: command feedback does not show an earlier success during a pending STOP',async({page})=>{
- await mixedBackend(page);await openBench(page);await selectReserve(page,'load');
+ const s=await mixedBackend(page);await openBench(page);await selectReserve(page,'load');
  await page.locator('#setVal').fill('.15');await page.locator('#setBtn').click();await expect(page.locator('#deviceFeedback')).toContainText('succeeded');
- let held=false,release;await page.route('**/api/v1/devices/load/stop',async route=>{held=true;await new Promise(r=>{release=r;});await route.fallback();});
+ let held=false,release;await s.intercept('**/api/v1/devices/load/stop',async route=>{held=true;await new Promise(r=>{release=r;});await route.fallback();});
  await page.locator('#stop').click();await expect.poll(()=>held).toBe(true);await expect(page.locator('#deviceFeedback')).not.toContainText('succeeded',{timeout:1000});
  release();await expect(page.locator('#deviceFeedback')).toContainText('succeeded');
 });
