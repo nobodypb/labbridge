@@ -178,7 +178,7 @@ test('priority STOP cancels an ON request still waiting for the API connection',
 
 test('stream gaps and disconnect never replay writes or mix browser integrals',async({page})=>{
  const s=await backend(page);await connect(page);await page.locator('#reserve').click();
- s.gap=true;await expect(page.locator('#benchStatus')).toContainText('Stream gap');
+ s.gap=true;await expect(page.locator('#recordingStatus')).toContainText('Stream gap');
  s.fail=true;await expect(page.locator('#benchStatus')).toContainText('Connection lost');s.fail=false;
  await page.locator('#connect').click();await expect(page.locator('#connLbl')).toHaveText('Connected');
  expect(s.sockets).toHaveLength(2);expect(s.writes.filter(w=>w.path.endsWith('/output'))).toHaveLength(0);
@@ -360,4 +360,13 @@ test('device counter reset requires confirmation and OFF without clearing the br
  expect(Number(await page.locator('#rCap').textContent())).toBeGreaterThanOrEqual(capacity);
  s.output='on';await expect(page.locator('#zeroData')).toBeDisabled();
  expect(s.writes.filter(w=>w.path.endsWith('/output'))).toHaveLength(0);
+});
+
+
+test('a recording gap does not erase the confirmed STOP result',async({page})=>{
+ const s=await backend(page);await connect(page);await page.locator('#reserve').click();
+ await page.locator('#stop').click();await expect(page.locator('#benchStatus')).toContainText('succeeded');
+ s.gap=true;await expect(page.locator('#recordingStatus')).toContainText('Stream gap');
+ await expect(page.locator('#benchStatus')).toContainText('succeeded');
+ await page.locator('#clearBtn').click();await expect(page.locator('#recordingStatus')).not.toContainText('Stream gap');
 });

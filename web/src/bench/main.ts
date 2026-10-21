@@ -10,7 +10,7 @@ const input=(id:string)=>$<HTMLInputElement>(id);
 const button=(id:string)=>$<HTMLButtonElement>(id);
 const api=new BenchAdapter();
 const dirtySettings=new Set<string>();
-let session=new BenchSession(3000),sessionIdentity='',pollMode='live',localPending=false,request=0;
+let session=new BenchSession(3000),sessionIdentity='',pollMode='live',recordingGap=false,localPending=false,request=0;
 const chart=new CanvasChart($<HTMLCanvasElement>('chart'),{maxpts:900,css:(v:string)=>getComputedStyle(document.documentElement).getPropertyValue(v).trim(),series:[{key:'v',cssVar:'--v'},{key:'i',cssVar:'--i'},{key:'w',cssVar:'--w'}]});
 function report(text:string,error=false){$('benchStatus').textContent=text;$('benchStatus').classList.toggle('error',error);}
 async function run(fn:()=>Promise<unknown>,priority=false){
@@ -82,14 +82,14 @@ function render(){
   return `${r.id}: ${fresh?r.value:'—'} ${r.unit} [${r.origin}; ${fresh?'valid':r.quality==='unavailable'?'unavailable':'stale'}]`;
  }).join(' · '):'Native device readings: —';
  if(!api.fresh){for(const id of ['rV','rI','rW','rR','rT','rExt'])$(id).textContent='—';}
- $('recordingStatus').textContent=session.full?'Recording paused: 100,000 samples reached. Export CSV, then Clear to record again.':'';
+ $('recordingStatus').textContent=[session.full?'Recording paused: 100,000 samples reached. Export CSV, then Clear to record again.':'',recordingGap?'Stream gap: recording interrupted; integration resumes with fresh consecutive samples.':''].filter(Boolean).join(' ');
 }
 api.onChange=render;
-api.onGap=()=>{session.break();chart.setPoints(session.points);report('Stream gap: recording interrupted; integration resumes with fresh consecutive samples.');};
+api.onGap=()=>{recordingGap=true;session.break();chart.setPoints(session.points);render();};
 api.onError=text=>{session.break();chart.setPoints(session.points);report(text,true);};
 api.onSample=m=>{
  const identity=JSON.stringify([m.deviceId,m.bootId]);
- if(identity!==sessionIdentity){previousRegisters.clear();diagnosticExport=undefined;$('snapState').textContent='No browser snapshot captured for this device/boot.';$('snapDiff').textContent='';$('rawLive').textContent=$('rawSet').textContent='Capture passive diagnostics for the selected device.';dirtySettings.clear();for(const id of Object.keys(settingsFields))if(input(id).tagName!=='SELECT')input(id).value='';input('setVal').value='';input('thr').value='';input('tmin').value='';session=new BenchSession(api.device?.limits?.maxAgeMs??3000);sessionIdentity=identity;chart.setPoints([]);}
+ if(identity!==sessionIdentity){recordingGap=false;previousRegisters.clear();diagnosticExport=undefined;$('snapState').textContent='No browser snapshot captured for this device/boot.';$('snapDiff').textContent='';$('rawLive').textContent=$('rawSet').textContent='Capture passive diagnostics for the selected device.';dirtySettings.clear();for(const id of Object.keys(settingsFields))if(input(id).tagName!=='SELECT')input(id).value='';input('setVal').value='';input('thr').value='';input('tmin').value='';session=new BenchSession(api.device?.limits?.maxAgeMs??3000);sessionIdentity=identity;chart.setPoints([]);}
  const good=api.fresh;
  val('rV',good?m.voltageV:undefined);val('rI',good?m.currentA:undefined,4);val('rW',good?m.powerW:undefined);
  val('rR',good&&m.currentA!==undefined&&m.currentA!==0&&m.voltageV!==undefined?m.voltageV/m.currentA:undefined);
@@ -171,7 +171,7 @@ bind('limBtn',async()=>{
  return api.settingsWrite(settings);
 });
 bind('zeroData',async()=>{if(confirm('Reset device counters? Their previous contents cannot be restored. Browser recording is unchanged.'))return api.resetCounters();});
-$('clearBtn').onclick=()=>{session.clear();chart.setPoints([]);val('rCap',0);val('rWh',0);$('rTime').textContent='00:00:00';report('Browser recording cleared; device counters unchanged');render();};
+$('clearBtn').onclick=()=>{recordingGap=false;session.clear();chart.setPoints([]);val('rCap',0);val('rWh',0);$('rTime').textContent='00:00:00';report('Browser recording cleared; device counters unchanged');render();};
 $('export').onclick=()=>{const url=URL.createObjectURL(new Blob([session.csv()],{type:'text/csv;charset=utf-8'}));const a=document.createElement('a');a.href=url;a.download=`dl24-${api.device?.id??'session'}.csv`;a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);};
 $('pollRate').onchange=()=>{void run(()=>api.interval(Number(input('pollRate').value)));store('pollMs',input('pollRate').value);};
 for(const b of Array.from(document.querySelectorAll<HTMLElement>('[data-pm]')))b.onclick=()=>{pollMode=b.dataset.pm!;session.break();document.querySelectorAll<HTMLElement>('[data-pm]').forEach(e=>e.classList.toggle('sel',e===b));render();};
