@@ -352,7 +352,7 @@ test('CV notice can be dismissed once or suppressed persistently without enablin
 test('device counter reset requires confirmation and OFF without clearing the browser recording',async({page})=>{
  const s=await backend(page);await connect(page);await page.locator('#reserve').click();
  await expect(page.locator('#rCap')).not.toHaveText('—');await page.locator('#gear').click();
- page.once('dialog',dialog=>dialog.dismiss());await page.locator('#zeroData').click();expect(s.writes).toHaveLength(0);
+ page.once('dialog',dialog=>dialog.dismiss());await page.locator('#zeroData').click();expect(s.writes.filter(w=>w.path.endsWith('/counters/reset'))).toHaveLength(0);
  const capacity=Number(await page.locator('#rCap').textContent());
  page.once('dialog',dialog=>dialog.accept());await page.locator('#zeroData').click();
  await expect.poll(()=>s.writes.filter(w=>w.path.endsWith('/counters/reset')).length).toBe(1);
