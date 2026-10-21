@@ -124,7 +124,13 @@ public:
           due_ = now + steps_[index_].before_ms;
           return;
         }
-        if (step.write && writes_ < 3) {
+        if (enabling_ && step.write && reads_ < 3) {
+          // The write may already have taken effect or hit a protection.
+          // Verify by reading; never repeat a sent activation.
+          due_ = now + 60;
+          return;
+        }
+        if (!enabling_ && step.write && writes_ < 3) {
           reads_ = 0;
           write_sent_ = false;
           due_ = now + 200;
@@ -144,7 +150,7 @@ public:
           return;
         }
         if (reads_ >= 3) {
-          if (!step.write || writes_ >= 3) {
+          if (!step.write || writes_ >= 3 || enabling_) {
             finish(TxState::failed, "read_timeout", now);
             return;
           }

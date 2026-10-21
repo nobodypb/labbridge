@@ -98,4 +98,22 @@ int main() {
   invalidated.rx = reply(0x11, 24000);
   stale_reply.tick(185);
   assert(stale_reply.result().state == TxState::failed);
+  // An uncertain activation is never repeated. Read-only verification may
+  // continue, but neither absent replies nor OFF readback permits a second ON.
+  Wire silent_on;
+  Transaction uncertain_on(silent_on);
+  uncertain_on.start({{1, 0x010000, 0x10, 1, 0}}, 0, true);
+  for (uint64_t clock = 0; clock < 4000; ++clock)
+    uncertain_on.tick(clock);
+  assert(uncertain_on.result().state == TxState::failed);
+  assert(uncertain_on.result().write_attempts == 1);
+  Wire protected_on;
+  Transaction rejected_on(protected_on);
+  rejected_on.start({{1, 0x010000, 0x10, 1, 0}}, 0, true);
+  for (uint64_t clock = 0; clock < 4000; ++clock) {
+    protected_on.rx = reply(0x10, 0);
+    rejected_on.tick(clock);
+  }
+  assert(rejected_on.result().state == TxState::failed);
+  assert(rejected_on.result().write_attempts == 1);
 }
