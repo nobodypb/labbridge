@@ -18,7 +18,7 @@ import re  # noqa: F401
 import json
 
 from pydantic import BaseModel, ConfigDict, Field, StrictStr, field_validator
-from typing import Any, ClassVar, Dict, List
+from typing import Any, ClassVar, Dict, List, Optional
 from typing_extensions import Annotated
 from typing import Optional, Set
 from typing_extensions import Self
@@ -26,13 +26,15 @@ from typing_extensions import Self
 
 class StreamAuth(BaseModel):
     """
-    First WebSocket text message within three seconds. Bearer token is never placed in URL or subprotocol.
+    First WebSocket text message within three seconds, with exactly one credential: API bearer token, or the UI session CSRF token bound to the HttpOnly upgrade cookie and trusted same Origin. Cookie sessions are revalidated during RPC and pushes; logout, expiry and password replacement terminate access. Secrets never enter URLs or subprotocols.
     """ # noqa: E501
 
     type: StrictStr = Field(description="Message kind.")
 
-    token: Annotated[str, Field(min_length=1, strict=True, max_length=255)] = Field(description="Existing LAN bearer token.")
-    __properties: ClassVar[List[str]] = ["type", "token"]
+    token: Optional[Annotated[str, Field(min_length=1, strict=True, max_length=255)]] = Field(default=None, description="Existing LAN bearer token.")
+
+    csrf_token: Optional[Annotated[str, Field(min_length=64, strict=True, max_length=64)]] = Field(default=None, description="CSRF proof from the authenticated UI session. The browser supplies its HttpOnly session cookie during the upgrade; the same trusted Origin and shared HTTP authorization policy apply.")
+    __properties: ClassVar[List[str]] = ["type", "token", "csrf_token"]
 
     @field_validator('type')
     def type_validate_enum(cls, value):
@@ -94,7 +96,8 @@ class StreamAuth(BaseModel):
 
         _obj = cls.model_validate({
             "type": obj.get("type"),
-            "token": obj.get("token")
+            "token": obj.get("token"),
+            "csrf_token": obj.get("csrf_token")
         })
         return _obj
 

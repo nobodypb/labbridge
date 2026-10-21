@@ -14,7 +14,7 @@
 
 import { mapValues } from '../runtime';
 /**
- * First WebSocket text message within three seconds. Bearer token is never placed in URL or subprotocol.
+ * First WebSocket text message within three seconds, with exactly one credential: API bearer token, or the UI session CSRF token bound to the HttpOnly upgrade cookie and trusted same Origin. Cookie sessions are revalidated during RPC and pushes; logout, expiry and password replacement terminate access. Secrets never enter URLs or subprotocols.
  * @export
  * @interface StreamAuth
  */
@@ -30,7 +30,13 @@ export interface StreamAuth {
      * @type {string}
      * @memberof StreamAuth
      */
-    token: string;
+    token?: string;
+    /**
+     * CSRF proof from the authenticated UI session. The browser supplies its HttpOnly session cookie during the upgrade; the same trusted Origin and shared HTTP authorization policy apply.
+     * @type {string}
+     * @memberof StreamAuth
+     */
+    csrfToken?: string;
 }
 
 
@@ -48,7 +54,6 @@ export type StreamAuthTypeEnum = typeof StreamAuthTypeEnum[keyof typeof StreamAu
  */
 export function instanceOfStreamAuth(value: object): value is StreamAuth {
     if (!('type' in value) || value['type'] === undefined) return false;
-    if (!('token' in value) || value['token'] === undefined) return false;
     return true;
 }
 
@@ -63,7 +68,8 @@ export function StreamAuthFromJSONTyped(json: any, ignoreDiscriminator: boolean)
     return {
         
         'type': json['type'],
-        'token': json['token'],
+        'token': json['token'] == null ? undefined : json['token'],
+        'csrfToken': json['csrf_token'] == null ? undefined : json['csrf_token'],
     };
 }
 
@@ -80,6 +86,7 @@ export function StreamAuthToJSONTyped(value?: StreamAuth | null, ignoreDiscrimin
         
         'type': value['type'],
         'token': value['token'],
+        'csrf_token': value['csrfToken'],
     };
 }
 
