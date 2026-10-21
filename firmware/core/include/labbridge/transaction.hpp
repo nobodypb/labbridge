@@ -61,6 +61,7 @@ public:
     index_ = 0;
     writes_ = reads_ = 0;
     waiting_ = false;
+    reply_pending_ = false;
     prepared_ = false;
     drain_ = false;
     write_sent_ = false;
@@ -98,7 +99,7 @@ public:
         step.prepare(step);
       prepared_ = true;
     }
-    if (waiting_) {
+    if (waiting_ || reply_pending_) {
       for (auto &frame : frames) {
         uint32_t value = 0;
         if (!dl24m::px3_reply(frame, step.read, value))
@@ -107,6 +108,7 @@ public:
         if (observer_)
           observer_(step.read, value, now);
         waiting_ = false;
+        reply_pending_ = false;
         if (drain_) {
           finish(TxState::cancelled, "cancelled", now);
           return;
@@ -131,25 +133,29 @@ public:
         finish(TxState::failed, "readback_mismatch", now);
         return;
       }
-      if (now < due_)
-        return;
-      waiting_ = false;
-      if (drain_) {
-        finish(TxState::cancelled, "cancelled_timeout", now);
-        return;
-      }
-      if (reads_ >= 3) {
-        if (!step.write || writes_ >= 3) {
-          finish(TxState::failed, "read_timeout", now);
+      // Backoff still accepts the outstanding step/generation above, before
+      // another query or write is sent. Only an active timer expires here.
+      if (waiting_) {
+        if (now < due_)
+          return;
+        waiting_ = false;
+        if (drain_) {
+          finish(TxState::cancelled, "cancelled_timeout", now);
           return;
         }
-        reads_ = 0;
-        write_sent_ = false;
-        due_ = now + 200;
+        if (reads_ >= 3) {
+          if (!step.write || writes_ >= 3) {
+            finish(TxState::failed, "read_timeout", now);
+            return;
+          }
+          reads_ = 0;
+          write_sent_ = false;
+          due_ = now + 200;
+          return;
+        }
+        due_ = now + 60;
         return;
       }
-      due_ = now + 60;
-      return;
     }
     if (now < due_ || !endpoint_.writable())
       return;
@@ -157,6 +163,7 @@ public:
     // operation. Protocol has no request IDs: see handbook residual ambiguity.
     stream_.clear();
     if (step.write && reads_ == 0 && !write_sent_) {
+      reply_pending_ = false;
       ++writes_;
       ++result_.write_attempts;
       if (!endpoint_.send(dl24m::px3_command(step.write, step.value))) {
@@ -186,6 +193,7 @@ public:
       return;
     }
     waiting_ = true;
+    reply_pending_ = true;
     due_ = now + 160;
   }
   void cancel_after_io() {
@@ -203,6 +211,7 @@ public:
 
 private:
   void finish(TxState s, const std::string &reason, uint64_t now) {
+    reply_pending_ = false;
     result_.state = s;
     result_.reason = reason;
     result_.duration_ms = now - start_;
@@ -216,7 +225,7 @@ private:
   size_t index_ = 0;
   unsigned writes_ = 0, reads_ = 0;
   uint64_t start_ = 0, generation_ = 0, due_ = 0;
-  bool waiting_ = false, enabling_ = false, write_sent_ = false,
-       prepared_ = false, drain_ = false;
+  bool waiting_ = false, reply_pending_ = false, enabling_ = false,
+       write_sent_ = false, prepared_ = false, drain_ = false;
 };
 } // namespace labbridge
