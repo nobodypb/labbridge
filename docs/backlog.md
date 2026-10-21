@@ -151,7 +151,7 @@ the existing physical limitations in LB-014 remain open.
   laboratory connections until the operator resumes them. See acceptance.md.
 - **LB-021:** HTTPS with optional mTLS as an alternative login for both browser and API clients; valid client certificates authenticate directly. Password and bearer alternatives remain available. Define trust-anchor provisioning, certificate renewal/revocation and Secure cookies; no certificate requirement is introduced by LB-020.
 
-## LB-023 — DL24M capabilities and one-connection Bench (accepted; completion in progress)
+## LB-023 — DL24M capabilities and one-connection Bench (implemented; bounded hardware acceptance)
 
 Provide a factual supported/unverified/unavailable status for every retained
 Bench feature. Extend the typed API, DL24M driver and UI for confirmed modes,
@@ -175,28 +175,43 @@ reference is available, so absolute accuracy/calibration are not commissioned.
 
 
 LB-023 capability evidence and restrictions: [protocol/stream matrix](dl24m-bench-extension.md).
-Remaining physical limits are explicit: external probe mapping and fan RPM;
-calibration 46/4F reference, full data backup
-and restore; no-load zero effects; full factory-reset restoration. No destructive
-maintenance operation is exposed merely because its command number is known.
-Intermittent BLE readback timeouts occurred in both legacy inactive-bank and
-typed mode/target operations after trials. Checked STOP/recovery was retained;
-failed operations were not replayed. A separate explicit read/restore procedure
-confirmed all original settings, targets and OFF. BLE transaction timing, recovery
-soak and memory headroom under prolonged concurrent traffic remain follow-ups;
-the bounded successful mode pulses do not establish long-term reliability.
+All retained areas have a native/local implementation or an explicit restriction
+for the audited protocol revision. CC/CV/CR/CP, targets, audited settings, native
+runtime/Ah/Wh, internal temperature magnitude, passive BLE/register diagnostics,
+snapshot comparison/export and browser recording are integrated. The CV notice
+and its persistent dismissal remain functional. Browser counter reset requires
+confirmation and OFF and does not clear browser integrals.
 
-LB-023 evidence: [bounded hardware and automated acceptance](acceptance.md#dl24m-native-capabilities-and-websocket-lb-023).
-Calibration/zero/reset commissioning needs an external reference and proven full
-backup/restore; external-temperature and fan-RPM work needs an audited native
-register mapping. Those controls remain visible and locked.
+The native switch/status sender supplies no fan RPM, external/cell probe or HID
+gain/backup equivalent. Read 36 exposes the same internal temperature as 16 with
+finer unsigned-magnitude encoding; write 46 is a volatile live-value overwrite,
+not a calibration parameter. Native 4F/4B rewrite calibration without coefficient
+backup/readback/restore. They cannot implement checked reversible zero or the
+original calibration-preserving reset under this story's recovery contract.
+These controls stay visible and unavailable with concrete reasons; an external
+reference alone does not supply missing protocol primitives.
 
+The current shared password session, cookie/CSRF and trusted Origin also bind the
+WebSocket upgrade and every RPC. API bearer authentication remains compatible.
+Logout, expiry, password replacement, transport loss and reboot lock control;
+reconnect never replays a write or acquires a lease automatically. ON is sent
+once; uncertain activation uses bounded read-only verification. A matching late
+reply is accepted during readback backoff without crossing a connection epoch.
 
-LB-023 completion scope accepted by the operator: integrate every retained Bench
-function that is realizable through the native device/backend contract; distinguish
-an uninvestigated function from a demonstrated protocol limitation. Execute all
-checks possible without operator attendance, including bounded recovery/stream
-checks on the authorized exclusive device, before merging. Retain confirmed OFF,
-original-setting restoration, credential protection and the unchanged frame
-codec. Track only genuinely remaining operator/reference/wiring-dependent tests
-in an appropriate hardware ticket; do not substitute simulation for those results.
+All automatable planned behavior, generation, Web/browser and three-board checks
+were executed. Actual StickS3 LAN tests include native modes, STOP, active lease
+expiry, restart during ON, cookie/CSRF authorization, heartbeat/hash concurrency,
+slow clients, diagnostics, recording and a bounded standalone stream run.
+Original instrument settings/targets and confirmed OFF are restored. See
+[acceptance](acceptance.md#dl24m-native-capabilities-and-websocket-lb-023) for
+successful results, failed attempts and the distinction between physical and
+simulated evidence.
+
+Intermittent native replies still go missing during successive OFF-only mode
+operations; failure invalidates ownership and invokes checked STOP/recovery.
+The reproduced reliability limitation and follow-up characterization are
+[issue #34](https://github.com/nobodypb/labbridge/issues/34). This is not a claim of
+fault-free BLE operation. Remaining operator/reference/wiring/other-board checks
+are in [issue #35](https://github.com/nobodypb/labbridge/issues/35), linked to battery
+release #14 and actual RD/AP/STA/BLE coexistence #28. No destructive calibration,
+factory-reset or current-offset experiment was performed automatically.

@@ -4,7 +4,7 @@ This is a development baseline, not a fully commissioned battery-test system.
 
 ## Automated acceptance
 
-- 23 portable C++ behavior executables cover framing, queued transactions,
+- 30 portable C++ behavior executables cover framing, queued transactions,
   connection changes, resource validation, driver identity, leases, idempotency,
   local guards, per-activation deadlines, interlock feedback and temperature.
 - Python tests validate actual runtime responses against OpenAPI, generated
@@ -12,7 +12,7 @@ This is a development baseline, not a fully commissioned battery-test system.
   propagation. Host tests include both chemistries through complete simulated
   cycles, cleanup and reboot rejection, plus the CLI.
 - The frozen baseline's codec/controller and 13 Python tests remain mandatory.
-- Three UI policy tests and five browser scenarios cover Wi-Fi scan/select/PSK,
+- 21 Web unit tests and 56 browser scenarios cover Wi-Fi scan/select/PSK,
   operation polling, lease/output behavior, unknown-state STOP and mixed modules.
 - CI regenerates the API, checks drift, builds Python/TypeScript/C and firmware
   for StickS3, ESP32-S3-USB-OTG and classic ESP32. Board builds do not establish
@@ -475,7 +475,8 @@ regression reproduced an enabled CC setpoint button rejecting an adjustment whil
 ON; the common current operation now retains that existing behavior. Codec files
 and the upstream vendored Bench remain unchanged.
 
-Validation: `tools/check.sh` passes (27 portable C++ executables, API/Python/host
+Initial stream validation before password-session integration: `tools/check.sh`
+passes (27 portable C++ executables, API/Python/host
 and frozen reference suites), generated drift is zero across 306 files, Black and
 public-tree checks pass. TypeScript/Webbuild, 20 Web unit tests and 27 browser
 scenarios pass. Browser scenarios cover all upstream control IDs, unavailable
@@ -576,3 +577,131 @@ readiness or RD-source/BLE coexistence acceptance. Final read-only checks on the
 integrated application reconfirmed all 14 settings, CC 0.100 A, ready/OFF, fresh
 measurements and Ah/Wh units on both native and common sensor routes; no mode
 mutations occurred after the original inactive targets were restored.
+
+
+### Completion with the current password-session baseline
+
+The final implementation includes the current main branch's password worker,
+sessions, console and PSRAM profile. Portable authentication tests bind stream
+access to the upgrade cookie, CSRF and trusted Origin; reject credential/header
+replacement; and revoke access on logout, expiry and password replacement.
+Browser tests preserve the existing password flows and all original control IDs.
+Additional red tests reproduced loss of a late native readback during backoff,
+repeated uncertain activation, missing fine temperature rendering, an enabled but
+ignored Snapshot during an in-flight settings operation, and a missing persistent
+CV-notice preference and a recording-gap notice erasing a confirmed STOP result. Those cases now pass. Counter-reset confirmation/cancellation
+and OFF gating are characterized without discarding real device counters.
+
+Final software validation: 30 C++ executables, three contract tests, 37 host tests,
+the frozen reference suites including 13 Python cases, 21 Web unit tests and 55
+browser scenarios pass. TypeScript/Webbuild, Black, public-tree and deterministic
+generation drift checks pass (321 tracked generated files). All three ESP-IDF
+5.5.2 application builds fit their board partitions. The unchanged native codec
+and vendored upstream snapshot have no diff against the main baseline.
+
+The actual integrated StickS3 implementation was exercised over station LAN with
+an operator-confirmed 24 V / 0.15 A PSU and no battery. Deployment assignments,
+credentials, exact configuration backups and raw captures remain private.
+Successful separate native mode trials again confirmed ON, fresh readings and
+STOP/OFF: CR 240 Ohm at 23.991 V / 0.101 A; CP 2.4 W at 23.990 V / 0.100 A;
+CV 23.5 V at 23.470 V / 0.153 A. Each activation had a 5,000 ms local deadline
+and was stopped after about 3.2–3.8 s. These are instrument readings, not an
+independent verification of the PSU limit or absolute accuracy.
+
+A separate CC 0.050 A acceptance confirmed that a two-second lease expires to
+OFF, and resetting the ESP during a bounded four-second ON activation returns
+to a new boot, confirmed OFF and no automatic resumption. The helper waits for
+fresh zero-current measurements and a complete post-boot settings catalogue;
+OFF readback alone is not treated as a simultaneous fresh V/I/settings snapshot.
+All 14 original settings, three original inactive targets and CC 0.100 A were
+separately confirmed/restored. No native counter reset, calibration, no-load zero
+or factory reset was used in this unattended completion run.
+
+Actual cookie-stream authentication rejected absent cookies, wrong CSRF and
+foreign Origin, and accepted the correct browser binding. A complete API password
+login took 1.311 s. During a real password replacement, physical STOP admission
+took 180 ms and an explicit lease heartbeat took 103 ms; the replacement then
+revoked the existing stream. Independent bearer recovery confirmed physical OFF.
+These are actual instrument routes, unlike the earlier isolated auth-only
+unconfigured-ID latency probes.
+
+The final real-browser acceptance loaded the ESP's own assets under its CSP,
+with external requests blocked. Login, cookie reload, selected-device reservation,
+brightness change/readback/restoration, locked maintenance, passive capture and
+register snapshots, CSV, browser Clear, keyboard Escape, both themes and a 390 px
+viewport pass. Normal monitoring/commands use one WebSocket with zero HTTP API
+polling; explicit STOP after socket loss succeeds over HTTP. A boot change loses
+the session and requires a new login, with OFF/no lease and no replayed ON.
+One immediate post-flash connection attempt did not establish a stream; the
+instrumented explicit-login repeat passed. No uncertain command was repeated.
+
+The current raw-protocol hardware run again rejected unauthenticated/wrong-token
+RPC, enforced the three-second auth deadline and one-session limit, distinguished
+ping from explicit heartbeat, and confirmed independent STOP. A slow receiver
+with 1,000 read-only diagnostics requests released its server slot; the lease
+expired/OFF and fresh HTTP recovery reads completed in 0.406 s. Buffered data
+prevented observing client EOF within the short drain window; a new authenticated
+probe established slot release. Oversized/deep messages closed. The run recorded
+no panic, stack overflow or allocation abort; aggregate minimum free 8-bit heap
+was 8,343,075 bytes including PSRAM, stream-worker stack headroom 4,004 bytes,
+and maximum snapshot construction 39 ms. This does not separately measure
+internal-only RAM or establish other boards' physical memory headroom.
+
+The repeated mode sequence still reproduced native `read_timeout`, including an
+OFF-only sequence. A passive capture showed three submitted read-10 requests with
+no matching native reply after a successful OFF snapshot. The failed operation
+reported uncertainty, invalidated its lease and did not proceed to ON. STOP and
+separate original-setting restoration passed. The late-reply fix does not pretend
+to fix absent replies: this known reliability limitation is tracked in
+[issue #34](https://github.com/nobodypb/labbridge/issues/34).
+
+The firmware audit established why gain/backup, reversible zero, fan/external
+telemetry and calibration-preserving reset cannot be mapped on the audited
+native revision; see [the protocol matrix](dl24m-bench-extension.md#native-protocol-boundary).
+In particular, parser-only 46/36 round-trip evidence was rejected after tracing
+both to the live sensor field. Only read 36 is integrated, explicitly as a
+signless temperature magnitude, never a cell probe or accuracy guarantee.
+Remaining physical acceptance is [issue #35](https://github.com/nobodypb/labbridge/issues/35).
+The RD/AP/STA/BLE 60-minute topology in #28 and battery release #14 remain open.
+
+
+A 600.9 s standalone station/BLE/WebSocket run at a 500 ms subscription interval
+inspected 1,218 snapshots: zero reported stream gaps, zero expired/invalid scalar
+measurement cases and no boot change. It maintained an explicit lease heartbeat
+while OFF and performed 29 passive diagnostic fetches over the same connection.
+Fine-temperature magnitudes were individually fresh in 1,036 inspected snapshots
+(24.86–25.13 degC); other snapshots do not promote an aged native value to fresh.
+No ON was sent. Original settings remained unchanged; cleanup confirmed OFF and
+released the lease. Serial observation recorded no panic, stack overflow or
+allocation abort; aggregate minimum free heap was 8,342,879 bytes including PSRAM,
+worker-stack headroom 4,004 bytes and maximum observed snapshot construction
+42 ms. This bounded standalone test does not close the different 60-minute
+RD/AP/STA/BLE topology in #28. It used the same driver/stream implementation as
+the final image; subsequent changes restore a browser-local CV-notice preference
+and separate recording-gap notices from confirmed operation results, with no
+transport/driver behavior change.
+
+
+Final embedded assets and application source `e4cf39b` (StickS3 application
+SHA-256 prefix `6ab8d630a31880c9`) passed the complete real-browser repeat after
+separating gap notices from operation results. The build version has a `-dirty`
+suffix for pending acceptance documentation and the target-specific dependency
+lock. No driver/stream source differs from the bounded mode/auth/soak tests.
+
+| Target | Application bytes | App partition | Free |
+|---|---:|---:|---:|
+| StickS3 | 2,241,520 | 4 MiB | 46% |
+| USB-OTG | 2,320,144 | 4 MiB | 44% |
+| ESP32 | 2,224,960 | 3 MiB | 29% |
+
+After the final browser run the exact pre-test NVS backup was restored and
+hash-verified, preserving the original station/AP configuration and bearer and
+removing the temporary test password. A STOP submitted before BLE re-established
+reported `connection_changed`/unknown; it was not counted as successful shutdown.
+The boot guard, subsequent fresh ready/OFF readback and a separate explicit STOP
+established the final state. All 14 original settings, CC 0.100 A, fresh valid
+measurements and station LAN connectivity were rechecked. The final authenticated
+bearer WebSocket provided four native readings and passive BLE diagnostics in the
+same boot. The original password configuration was unset and remains unset;
+first UI password setup still uses the setup AP or trusted USB. No credentials,
+private logs or configuration backups are published.
