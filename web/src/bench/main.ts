@@ -33,6 +33,10 @@ function field(id:string){const f=settingsFields[id];return number(id,f.min,f.ma
 function disable(id:string,disabled:boolean){const e=$(id);if(e&&'disabled'in e)(e as HTMLButtonElement).disabled=disabled;}
 function val(id:string,value:number|undefined,decimals=3){$(id).textContent=Number.isFinite(value)?value!.toFixed(decimals):'—';}
 function temperature(m:Measurements,kind:string){const t=m.temperatureChannels.find(c=>c.kind===kind&&c.quality==='valid'&&c.ageMs<=(api.device?.limits?.maxAgeMs??0));return t?.valueC;}
+function instrumentTemperature(m:Measurements){
+ const fine=m.nativeReadings?.find(r=>r.id==='temperature_magnitude'&&r.quality==='valid'&&r.ageMs!==undefined&&r.ageMs<=(api.device?.limits?.maxAgeMs??0)&&Number.isFinite(r.value));
+ return fine?{value:fine.value,decimals:2}:{value:temperature(m,'internal'),decimals:1};
+}
 function elapsed(ms:number){const sec=Math.floor(ms/1000);return [Math.floor(sec/3600),Math.floor(sec/60)%60,sec%60].map(v=>String(v).padStart(2,'0')).join(':');}
 function render(){
  const pending=localPending||api.auth.loggingOut,ready=api.writable&&!pending,off=api.off&&!pending;
@@ -89,9 +93,9 @@ api.onSample=m=>{
  const good=api.fresh;
  val('rV',good?m.voltageV:undefined);val('rI',good?m.currentA:undefined,4);val('rW',good?m.powerW:undefined);
  val('rR',good&&m.currentA!==undefined&&m.currentA!==0&&m.voltageV!==undefined?m.voltageV/m.currentA:undefined);
- val('rT',temperature(m,'internal'),1);val('rExt',temperature(m,'cell'),1);
+ const instrument=instrumentTemperature(m);val('rT',instrument.value,instrument.decimals);val('rExt',temperature(m,'cell'),1);
  if(pollMode==='load'&&api.actor?.output!=='on'){if(session.previous)session.break();return;}
- session.add({...m,internalTemperatureC:temperature(m,'internal'),externalTemperatureC:temperature(m,'cell')});
+ session.add({...m,internalTemperatureC:instrumentTemperature(m).value,externalTemperatureC:temperature(m,'cell')});
  chart.setPoints(session.points);val('rCap',session.chargeAh*1000);val('rWh',session.energyWh);$('rTime').textContent=elapsed(session.elapsedMs);
 };
 for(const el of Array.from(document.querySelectorAll<HTMLElement>('[data-mode]')))el.id='mode-'+el.dataset.mode;
@@ -138,7 +142,7 @@ $('connect').dataset.help='Connect to this LabBridge node using the shared passw
 $('pollRate').closest('label')!.dataset.help='Push cached measurements at this interval over WebSocket; this does not change device polling.';
 $('pollRate').closest('label')!.title='WebSocket measurement push interval';$('pollMode').dataset.help='Live records fresh samples continuously. Load records only while confirmed ON; state monitoring and lease heartbeat continue.';
 $('pollMode').title=$('pollMode').dataset.help!;
-$('rT').closest('.cell')!.setAttribute('data-help','Internal instrument temperature; not a cell-temperature channel.');
+$('rT').closest('.cell')!.setAttribute('data-help','Instrument temperature magnitude: native numeric replies omit the sign. Register 36 has 0.01 °C encoding; resolution is not accuracy. Never a cell-temperature channel.');
 $('rExt').closest('.cell')!.setAttribute('data-help','Cell-temperature channel only when explicitly provided by the backend.');
 for(const id of ['rCap','rWh'])$(id).closest('.cell')!.setAttribute('data-help','Browser-session integral of fresh samples. Gaps are excluded; not the native instrument counter.');
 $('rTime').closest('.cell')!.setAttribute('data-help','Observed valid sample intervals in this browser session; gaps excluded.');

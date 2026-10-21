@@ -85,7 +85,7 @@
       <div class="cell i"><div class="lab">Current</div><div class="val"><span id="rI">—</span><span class="un">A</span></div></div>
       <div class="cell w"><div class="lab">Power</div><div class="val"><span id="rW">—</span><span class="un">W</span></div></div>
       <div class="cell r" data-help="Total resistance the load sees (voltage ÷ current). Shows — with no load."><div class="lab">Resistance</div><div class="val"><span id="rR">—</span><span class="un">Ω</span></div></div>
-      <div class="cell t" data-help="Temperature of the load's MOSFET / heatsink."><div class="lab">Internal temp</div><div class="val"><span id="rT">—</span><span class="un">°C</span></div></div>
+      <div class="cell t" data-help="Temperature of the load's MOSFET / heatsink."><div class="lab">Internal |T|</div><div class="val"><span id="rT">—</span><span class="un">°C</span></div></div>
       <div class="cell" data-help="Charge drawn since the last 'Zero all data' (accumulates while the load runs)."><div class="lab">Capacity · session</div><div class="val"><span id="rCap">—</span><span class="un">mAh</span></div></div>
       <div class="cell" data-help="Energy drawn since the last 'Zero all data'."><div class="lab">Energy · session</div><div class="val"><span id="rWh">—</span><span class="un">Wh</span></div></div>
       <div class="cell" data-help="Time since the load was last turned ON in this app."><div class="lab">Observed time</div><div class="val mono" style="font-size:18px"><span id="rTime">—</span></div></div>
@@ -134,7 +134,7 @@
         <div class="srow"><label>Standby time (raw, unit unconfirmed)</label>
           <input id="stbyTime" type="number" min="0" step="1" placeholder="–">
           <button class="btn needdev" id="stbyTimeBtn" disabled>Set</button></div>
-        <div class="srow" data-help="Set the DEVICE's display language (this app's text doesn't change). Write-only — not reflected back."><label>Device language</label>
+        <div class="srow" data-help="Set the device language using native raw values and confirmed readback. This app remains in English."><label>Device language</label>
           <select id="langSel"><option value="">—</option><option value="0">Raw 0</option><option value="1">Raw 1</option></select>
           <button class="btn needdev" id="langBtn" disabled>Set</button></div>
       </div>
@@ -162,16 +162,16 @@
           <input id="calT" type="number" step="0.0001" placeholder="gain"><button class="btn needdev calset" id="calTBtn" disabled>Set</button></div>
         <div class="actions" style="margin-top:8px"><button class="btn needdev" id="calCopy" disabled>Copy current gains (backup)</button></div>
         <div class="chkrow"><input type="checkbox" id="calEnable"><label for="calEnable" class="danger">Enable calibration writes — I understand they rescale every reading</label></div>
-        <div class="hint">Calibration read/write is unavailable in the current backend; gains are unknown.</div>
+        <div class="hint">The native protocol has no equivalent gain read/write or backup. Live temperature is not a calibration gain.</div>
       </div>
       <!-- DEVICE ACTIONS --------------------------------------------------- -->
       <div class="sgrp"><div class="glab">Device actions</div>
         <div class="actions">
           <button class="btn needdev" id="zeroNoLoad" disabled data-help="Tare the current meter's no-load offset. Run with NO load connected.">Zero no-load current</button>
           <button class="btn needdev" id="zeroData" disabled data-help="Wipe all running statistics on the device: run time, energy (Wh) and capacity (mAh).">Zero all data</button>
-          <button class="btn needdev danger" id="restoreDefaults" disabled data-help="Reset all settings to defaults EXCEPT voltage & current cal — it DOES reset the ext-temp cal.">Restore defaults</button>
+          <button class="btn needdev danger" id="restoreDefaults" disabled data-help="Unavailable: the native reset also changes calibration and has no calibration backup/restore.">Restore defaults</button>
         </div>
-        <div class="hint" style="margin-top:8px">“Zero all data” wipes run time / Wh / mAh. “Restore defaults” is not supported by this backend.</div>
+        <div class="hint" style="margin-top:8px">“Zero all data” wipes run time / Wh / mAh. The native reset also overwrites calibration and cannot preserve the original gains.</div>
       </div>
       <div class="sub" style="text-align:center;font-size:11px;padding:12px 0 2px">
         Copyright © 2026 DL24 reverse-engineering project contributors; adapted by LabBridge contributors ·

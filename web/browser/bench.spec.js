@@ -22,7 +22,7 @@ async function backend(page,opts={}){
   if(path==='/api/v1/leases')return state.conflict?reply({detail:'Already reserved'},409):reply({id:'lease-a',device_ids:body.device_ids,expires_at_ms:100000,state:'active'});
   if(path.endsWith('/heartbeat'))return state.heartbeatFail?reply({detail:'Lease expired'},423):reply({id:'lease-a',device_ids:['load-a'],expires_at_ms:100000,state:'active'});
   if(path==='/api/v1/leases/lease-a/stop')return reply({id:'lease-a',device_ids:['load-a'],expires_at_ms:0,state:'stopped'});
-  if(path.endsWith('/measurements'))return reply({device_id:path.split('/')[4],boot_id:state.boot,sequence:state.sequence++,received_ms:state.receivedMs??(state.lastReceivedMs=100000+performance.now()),age_ms:0,quality:state.stale?'stale':'valid',voltage_v:state.voltage??10,current_a:.1,power_w:1,load_mode:['cc','cv','cr','cp'][state.settings.mode],load_target:state.target??{mode:['cc','cv','cr','cp'][state.settings.mode],value:.1,unit:'A'},temperature_channels:[{id:'internal',kind:'internal',quality:'valid',age_ms:0,received_ms:1000,value_c:25}]});
+  if(path.endsWith('/measurements'))return reply({device_id:path.split('/')[4],boot_id:state.boot,sequence:state.sequence++,received_ms:state.receivedMs??(state.lastReceivedMs=100000+performance.now()),age_ms:0,quality:state.stale?'stale':'valid',voltage_v:state.voltage??10,current_a:.1,power_w:1,native_readings:state.nativeReadings??[],load_mode:['cc','cv','cr','cp'][state.settings.mode],load_target:state.target??{mode:['cc','cv','cr','cp'][state.settings.mode],value:.1,unit:'A'},temperature_channels:[{id:'internal',kind:'internal',quality:'valid',age_ms:0,received_ms:1000,value_c:25}]});
   if(path.endsWith('/dl24m/diagnostics'))return reply({entries:[{sequence:1,received_ms:1000,generation:1,direction:'tx',hex:'b1b2100000000000b6',truncated:false}],dropped:1,registers:[{name:'output',command:16,value:0,quality:'valid',received_ms:1000,age_ms:0}]});
   if(path.endsWith('/state'))return reply({device_id:path.split('/')[4],component_id:'sink',state:'ready',output:state.output,settings:{current_a:.1,regulation_mode:'cc'}});
   if(path.endsWith('/dl24m/settings')&&method==='GET')return reply(state.settings);
@@ -314,4 +314,13 @@ test('Bench password: discovery expires without reporting a connected session',a
  await expect(page.getByRole('heading',{name:'Sign in',exact:true})).toBeVisible();
  await expect(page.locator('#benchStatus')).not.toHaveText(/^Connected\./);
  await expect(page.locator('#reserve')).toBeDisabled();
+});
+
+
+test('instrument temperature uses fresh fine-resolution magnitude and never becomes a cell probe',async({page})=>{
+ const s=await backend(page,{nativeReadings:[{id:'temperature_magnitude',value:25.12,unit:'degC',origin:'dl24m.ble.36.magnitude',quality:'valid',age_ms:0,received_ms:1000}]});
+ await connect(page);await expect(page.locator('#rT')).toHaveText('25.12');await expect(page.locator('#rExt')).toHaveText('—');
+ s.nativeReadings[0].age_ms=6000;await expect(page.locator('#rT')).toHaveText('25.0');
+ await expect(page.locator('#nativeReadings')).toContainText('temperature_magnitude: —');
+ expect(s.writes).toHaveLength(0);
 });

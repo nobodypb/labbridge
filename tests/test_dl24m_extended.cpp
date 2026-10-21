@@ -6,7 +6,7 @@ struct PassiveWire : Endpoint {
   Bytes rx;
   std::map<uint8_t, uint32_t> values{
       {0x10, 0},   {0x11, 12000}, {0x12, 0},   {0x13, 0x010203}, {0x14, 123},
-      {0x15, 456}, {0x16, 251},   {0x17, 100}, {0x21, 0}};
+      {0x15, 456}, {0x16, 251},   {0x17, 100}, {0x21, 0},        {0x36, 2512}};
   bool connected() const override { return true; }
   uint64_t generation() const override { return 1; }
   bool send(const Bytes &b) override {
@@ -40,20 +40,26 @@ int main() {
          driver.Driver::actuator_state("sink", 30000).canonical_dump());
   auto m = driver.measurements(30000), readings = m.item("native_readings");
   assert(cJSON_IsArray(readings.get()));
-  bool elapsed = false, raw = false;
+  bool elapsed = false, raw = false, fine_temperature = false;
   for (auto p = readings.get()->child; p; p = p->next) {
     Json r(cJSON_Duplicate(p, true));
     if (r.text("id") == "elapsed") {
       assert(r.text("unit") == "s" && r.number("value") == 3723);
       elapsed = true;
     }
+    if (r.text("id") == "temperature_magnitude") {
+      assert(r.text("unit") == "degC" && r.number("value") == 25.12);
+      assert(r.text("origin") == "dl24m.ble.36.magnitude");
+      assert(r.text("quality") == "valid");
+      fine_temperature = true;
+    }
     if (r.text("id") == "capacity") {
       assert(r.text("unit") == "Ah" && r.number("value") == .123);
       raw = true;
     }
   }
-  assert(elapsed && raw && m.number("capacity_ah") == .123 &&
-         m.number("energy_wh") == .456);
+  assert(elapsed && raw && fine_temperature &&
+         m.number("capacity_ah") == .123 && m.number("energy_wh") == .456);
   auto charge = driver.component_reading("charge", 30000);
   assert(charge.number("value") == .123 && charge.text("unit") == "Ah" &&
          charge.text("quality") == "valid");
@@ -74,15 +80,18 @@ int main() {
   assert(!entry.text("hex").empty());
   auto features = driver.describe(30000).item("features");
   assert(cJSON_IsArray(features.get()));
-  bool calibration = false;
+  unsigned blocked_maintenance = 0;
   for (auto p = features.get()->child; p; p = p->next) {
     Json f(cJSON_Duplicate(p, true));
-    if (f.text("id") == "calibration") {
-      assert(f.text("status") == "unverified" && !f.text("reason").empty());
-      calibration = true;
+    if (f.text("id") == "calibration" || f.text("id") == "zero" ||
+        f.text("id") == "factory-reset") {
+      assert(f.text("status") == "unavailable" && !f.has("operation"));
+      assert(f.text("reason").find("native protocol") != std::string::npos);
+      assert(f.boolean("requires_off") && f.boolean("requires_lease"));
+      ++blocked_maintenance;
     }
   }
-  assert(calibration);
+  assert(blocked_maintenance == 3);
   unsigned active_modes = 0;
   for (auto p = features.get()->child; p; p = p->next) {
     Json f(cJSON_Duplicate(p, true));

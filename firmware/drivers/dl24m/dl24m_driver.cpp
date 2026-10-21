@@ -255,6 +255,12 @@ Json Dl24mDriver::describe(uint64_t now) {
   feature("elapsed", "supported",
           "Read 13: packed HH MM SS; individual freshness applies", "s",
           "getMeasurements", false, false);
+  feature(
+      "temperature-magnitude", "supported",
+      "Register 36 encodes the same instrument temperature as 16 at 0.01 "
+      "degC resolution. Numeric replies omit the sign; this is a magnitude, "
+      "not an external/cell probe or calibrated accuracy guarantee",
+      "degC", "getMeasurements", false, false);
   feature("capacity", "supported",
           "Read 14 counts mAh; Ah scale checked against a bounded CC integral. "
           "Absolute accuracy unverified",
@@ -283,17 +289,20 @@ Json Dl24mDriver::describe(uint64_t now) {
   feature("fan-rpm", "unavailable",
           "No audited RPM telemetry in this protocol revision", "rpm", "",
           false, false);
-  feature("calibration", "unverified",
-          "Commands 46/4F alter calibration; backup/restore and reference "
-          "measurement not established",
+  feature("calibration", "unavailable",
+          "This native protocol exposes no voltage/current/external-probe gain "
+          "read, write or backup equivalent. Command 46 overwrites live internal "
+          "temperature, not a persistent gain; it cannot implement calibration",
           "", "", true, true);
-  feature(
-      "zero", "unverified",
-      "No-load zero effect and reversible calibration backup not established",
-      "", "", true, true);
-  feature("factory-reset", "unverified",
-          "Command 4B resets settings; full calibration backup and restoration "
-          "not established",
+  feature("zero", "unavailable",
+          "The native protocol has no calibration-offset backup or restore. "
+          "Command 4F samples current and rewrites flash calibration; its "
+          "effect cannot be independently read back or reversed",
+          "", "", true, true);
+  feature("factory-reset", "unavailable",
+          "Command 4B in this native protocol also overwrites calibration. "
+          "There is no coefficient backup/restore query, so the original "
+          "calibration-preserving reset cannot be implemented",
           "", "", true, true);
   auto out = output(now);
   j.set("id", id_)
@@ -365,15 +374,18 @@ Json Dl24mDriver::measurements(uint64_t now) {
   auto readings = Json::array();
   for (auto entry : {std::make_pair(uint8_t(0x13), "elapsed"),
                      std::make_pair(uint8_t(0x14), "capacity"),
-                     std::make_pair(uint8_t(0x15), "energy")}) {
+                     std::make_pair(uint8_t(0x15), "energy"),
+                     std::make_pair(uint8_t(0x36), "temperature_magnitude")}) {
     Json reading;
     auto c = entry.first;
     reading.set("id", entry.second)
         .set("unit", c == 0x13   ? "s"
                      : c == 0x14 ? "Ah"
+                     : c == 0x36 ? "degC"
                                  : "Wh")
         .set("origin", c == 0x13   ? "dl24m.ble.13"
                        : c == 0x14 ? "dl24m.ble.14"
+                       : c == 0x36 ? "dl24m.ble.36.magnitude"
                                    : "dl24m.ble.15");
     auto found = values_.find(c);
     bool valid_value = found != values_.end();
@@ -385,12 +397,13 @@ Json Dl24mDriver::measurements(uint64_t now) {
                                            : "stale");
     if (valid_value) {
       auto value = found->second.first;
-      auto scaled =
-          c == 0x13 ? double(seconds(value) + (value & 255)) : value / 1000.;
+      auto scaled = c == 0x13   ? double(seconds(value) + (value & 255))
+                    : c == 0x36 ? value / 100.
+                                : value / 1000.;
       reading.set("value", scaled)
           .set("received_ms", double(found->second.second))
           .set("age_ms", double(now - found->second.second));
-      if (c != 0x13 && fresh(c, now))
+      if ((c == 0x14 || c == 0x15) && fresh(c, now))
         j.set(c == 0x14 ? "capacity_ah" : "energy_wh", scaled);
     }
     readings.append(reading);
@@ -618,13 +631,15 @@ void Dl24mDriver::tick(uint64_t now) {
   }
   // Fast safety cycle between audited settings reads; settings never starve
   // V/I.
-  static constexpr uint8_t fast[] = {0x10, 0x11, 0x12, 0x16, 0x17, 0x21,
-                                     0x18, 0x38, 0x39, 0x13, 0x14, 0x15};
-  if (poll_ % 13 < 12)
-    polling_ = fast[poll_ % 13];
+  static constexpr uint8_t fast[] = {0x10, 0x11, 0x12, 0x16, 0x17, 0x21, 0x18,
+                                     0x38, 0x39, 0x13, 0x14, 0x15, 0x36};
+  constexpr auto fast_count = sizeof(fast) / sizeof(fast[0]);
+  if (poll_ % (fast_count + 1) < fast_count)
+    polling_ = fast[poll_ % (fast_count + 1)];
   else
-    polling_ =
-        dl24m::dl24m_reads[(poll_ / 13) % dl24m::dl24m_reads.size()].command;
+    polling_ = dl24m::dl24m_reads[(poll_ / (fast_count + 1)) %
+                                  dl24m::dl24m_reads.size()]
+                   .command;
   ++poll_;
   work_ = Work::poll;
   tx_.start({{0, 0, polling_, {}, 0}}, now, false);

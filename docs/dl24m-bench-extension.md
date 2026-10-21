@@ -14,14 +14,14 @@ and commissioning prerequisites behind those statuses; real results belong in
 | CP | bank 3, target 0.1 W | OFF/readback; ON checks power and worst-case current at the fresh nonzero device cutoff. Present voltage must exceed that cutoff. |
 | Elapsed time | read 13, packed hours/minutes/seconds | Invalid minutes/seconds rejected; individual receive time, age, unit s and source are exposed. Hour byte is bounded by the wire format. |
 | Capacity / energy | reads 14 / 15 | Native integer mAh/mWh are converted to Ah/Wh. Individual source, age and quality remain available; fresh counters also use the common charge/energy sensor routes. A bounded 90 s CC run verified relative scaling; absolute accuracy remains unverified. Browser integrals are separate. |
-| Internal temperature | read 16, 0.1 degC | Existing internal channel, never cell temperature. |
+| Internal temperature magnitude | reads 16 / 36 of the same sensor state, 0.1 / 0.01 degC encoding | Both numeric replies omit the sign. Prefer fresh 36 in the instrument tile; retain 16 for compatibility. Encoding resolution is not accuracy. Neither is an external/cell-temperature channel. |
 | External probe / fan RPM | no audited scalar mapping | Kept visible with a concrete restriction; no invented numeric query, HID field or substitution. |
 | Settings / counter reset | existing audited routes | OFF and lease; journal original reversible settings before writes. Reset 05 destroys counters and requires explicit UI confirmation. Standby time remains raw. |
 | BLE diagnostics | actual GATT submissions and received notifications | At most 32 observations, 64 bytes each; overflow/truncation reported, connection generation and receive time retained. TX submission does not establish ATT or instrument success. The existing parser remains authoritative. No extra device reads. |
 | Register snapshots / compare / export | cached 22 audited registers | Read-only, no lease. Comparison and Clear affect browser snapshots only. Exports carry boot/device identity. No HID frames are fabricated. |
-| Calibration | calibration-related 46 / 4F | Unverified effects and missing complete backup/restore and reference measurement. No automatic calibration or absolute-accuracy claim. No writes exposed. |
-| No-load zero | incomplete effect/backup mapping | Retained and locked until calibration effects and reversible recovery are established. |
-| Factory reset | command 4B | Known reset family, but full calibration backup/restoration is unproven. Retained and locked; excluded from automatic bench testing. |
+| Calibration gains / backup | no native gain read/write/backup primitive | The original HID gain controls cannot be mapped on the audited native revision. 46 overwrites live temperature; it is not a persistent gain. Retained and unavailable. |
+| No-load zero | 4F samples current and rewrites flash calibration | No independent coefficient/offset readback or backup/restore primitive. The required checked, reversible operation cannot be implemented on this revision; retained and unavailable. |
+| Factory reset | 4B rewrites settings and calibration | Broader than the original HID calibration-preserving reset. No coefficient backup/restore primitive; do not substitute destructive native reset semantics. Retained and unavailable. |
 
 The mode mapping follows the native firmware control branches, rather than the
 HID application. Offline V2.2 May analysis shows mode 1 using the voltage
@@ -33,6 +33,43 @@ persist the original mode and target before mutation, verify readback, and STOP
 and restore on failure/restart. Success clears the rollback journal. Existing
 inactive-bank access still returns to CC and retains its conservative raw ranges.
 Manufacturer binaries and private captures are not distributed here.
+
+## Native protocol boundary
+
+The audited V2.2 May native command switch has 22 non-mutating reads:
+10–19, 21 and 32–3C. Read 22 consumes/clears an event and 31 enters a menu;
+neither is passive diagnostics. Other cases through 40 use the default branch,
+not additional sensor or calibration registers. The native FF55 status packet
+contains voltage, current, counters, energy, one instrument temperature and
+runtime. Its reserved bytes do not carry a fan tachometer, external probe or
+calibration coefficients. This is a limitation of this audited revision, not a
+claim about every device sold under a similar name.
+
+Reads 16 and 36 reference the same live temperature field (RAM 0x20000064),
+multiplied by 10 and 100 respectively. The sensor computation at 0x10a28 updates
+that field. The original parser, executed offline with synthetic positive and
+negative values, produces magnitudes: 25.12 becomes 251/2512; -5.2 becomes
+52/520. Command 46 overwrites this same live field. A parser-only 46/36
+round-trip therefore does **not** establish a persistent calibration setting and
+must not be offered as one. No 46 write was used for physical acceptance.
+
+The 4F branch samples the current ADC and copies the result into its offset,
+then erases/rewrites calibration flash. The 4B branch initializes defaults and
+also writes calibration words. Neither command has a matching coefficient
+backup/restore query in the native switch or status sender. Readback of an
+already-zero current cannot prove a zero-offset change. Consequently the original
+HID gain/backup controls, checked reversible zero and calibration-preserving
+factory reset have no faithful native implementation under this story's recovery
+contract. Their UI remains visible with these concrete reasons, and no raw write
+escape hatch is provided. Physical destructive experiments or a future different
+firmware/protocol could change that boundary; they are not an unperformed
+ordinary integration task.
+
+These are sanitized findings from command dispatch, sensor calculation, flash
+write paths and the status sender, checked against offline parser execution.
+Manufacturer binaries, decompiled bodies and private captures are not shipped.
+An independent reference is still required for any absolute measurement-accuracy
+claim; display precision alone supplies no such evidence.
 
 ## WebSocket contract
 
