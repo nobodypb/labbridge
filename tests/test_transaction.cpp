@@ -2,11 +2,12 @@
 #include <cassert>
 using namespace labbridge;
 struct Wire : Endpoint {
-  bool live = true;
+  bool live = true, can_write = true;
   uint64_t gen = 1;
   Bytes rx;
   std::vector<Bytes> sent;
   bool connected() const override { return live; }
+  bool writable() const override { return can_write; }
   uint64_t generation() const override { return gen; }
   bool send(const Bytes &b) override {
     sent.push_back(b);
@@ -73,4 +74,46 @@ int main() {
   cancel.cancel();
   cancel.tick(12100);
   assert(cancel.result().state == TxState::cancelled);
+  // A native reply can outlive the first read timer while BLE is still busy
+  // completing ATT. Accept it during backoff before any new query/write is
+  // sent.
+  Wire delayed;
+  Transaction late(delayed);
+  late.start({{2, 150, 0x17, 150, 0}}, 0, false);
+  late.tick(0);
+  late.tick(1);
+  delayed.can_write = false;
+  late.tick(161);
+  delayed.rx = reply(0x17, 150);
+  late.tick(185);
+  assert(late.result().state == TxState::succeeded);
+  assert(late.result().read_attempts == 1 && late.result().write_attempts == 1);
+  assert(delayed.sent.size() == 2);
+  Wire invalidated;
+  Transaction stale_reply(invalidated);
+  stale_reply.start({{0, 0, 0x11, {}, 0}}, 0, false);
+  stale_reply.tick(0);
+  stale_reply.tick(160);
+  ++invalidated.gen;
+  invalidated.rx = reply(0x11, 24000);
+  stale_reply.tick(185);
+  assert(stale_reply.result().state == TxState::failed);
+  // An uncertain activation is never repeated. Read-only verification may
+  // continue, but neither absent replies nor OFF readback permits a second ON.
+  Wire silent_on;
+  Transaction uncertain_on(silent_on);
+  uncertain_on.start({{1, 0x010000, 0x10, 1, 0}}, 0, true);
+  for (uint64_t clock = 0; clock < 4000; ++clock)
+    uncertain_on.tick(clock);
+  assert(uncertain_on.result().state == TxState::failed);
+  assert(uncertain_on.result().write_attempts == 1);
+  Wire protected_on;
+  Transaction rejected_on(protected_on);
+  rejected_on.start({{1, 0x010000, 0x10, 1, 0}}, 0, true);
+  for (uint64_t clock = 0; clock < 4000; ++clock) {
+    protected_on.rx = reply(0x10, 0);
+    rejected_on.tick(clock);
+  }
+  assert(rejected_on.result().state == TxState::failed);
+  assert(rejected_on.result().write_attempts == 1);
 }

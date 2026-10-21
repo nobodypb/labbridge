@@ -221,7 +221,7 @@
           "description": "JSON request with the fields documented by the referenced schema. Unknown properties are rejected; use {} for an empty StopRequest."
         },
         "summary": "Apply and verify DL24M settings",
-        "description": "Apply only the supplied fields; omitted settings remain unchanged. Requires a lease and confirmed output OFF for settings changes. Snapshot original values before the multi-step operation, use device timing and bounded readback retries, and restore on failure. Check restore_pending before issuing new work. mode 0 is CC; other banks may be edited OFF, but active non-CC operation is not commissioned and ON is blocked.\n\nReturns 202 with an Operation and Location, not an instrument acknowledgement. Keep the lease alive where required and poll until terminal. Bounded device retries/readback recovery run on the bridge; callers receive a terminal failure when recovery is exhausted. Do not automatically replay an uncertain mutation."
+        "description": "Apply only the supplied fields; omitted settings remain unchanged. Requires a lease and confirmed output OFF for settings changes. Snapshot original values before the multi-step operation, use device timing and bounded readback retries, and restore on failure. Check restore_pending before issuing new work. Native modes are 0 CC, 1 CV, 2 CR, 3 CP. Prefer the typed mode/target operations for changes; activation independently checks mode-specific safety prerequisites.\n\nReturns 202 with an Operation and Location, not an instrument acknowledgement. Keep the lease alive where required and poll until terminal. Bounded device retries/readback recovery run on the bridge; callers receive a terminal failure when recovery is exhausted. Do not automatically replay an uncertain mutation."
       }
     },
     "/api/v1/devices/{deviceId}/dl24m/counters/reset": {
@@ -431,7 +431,7 @@
           "description": "JSON request with the fields documented by the referenced schema. Unknown properties are rejected; use {} for an empty StopRequest."
         },
         "summary": "Inspect an inactive DL24M target bank",
-        "description": "This read uses POST because the instrument must temporarily change mode. Requires CC, confirmed OFF and a lease. Snapshot the bank/CC state, select the requested inactive bank, read its raw target, then restore CC and its original target. Poll the operation for confirmed_value (raw bank units) and restoration status. The active meaning/units of banks 1..3 are not commissioned.\n\nReturns 202 with an Operation and Location, not an instrument acknowledgement. Keep the lease alive where required and poll until terminal. Bounded device retries/readback recovery run on the bridge; callers receive a terminal failure when recovery is exhausted. Do not automatically replay an uncertain mutation."
+        "description": "This read uses POST because the instrument must temporarily change mode. Requires CC, confirmed OFF and a lease. Snapshot the bank/CC state, select the requested inactive bank, read its raw target, then restore CC and its original target. Poll the operation for confirmed_value (raw bank units) and restoration status. Native banks are 1 CV (raw/100 V), 2 CR (raw/10 Ohm), 3 CP (raw/10 W). Prefer the typed mode/target API for normal control.\n\nReturns 202 with an Operation and Location, not an instrument acknowledgement. Keep the lease alive where required and poll until terminal. Bounded device retries/readback recovery run on the bridge; callers receive a terminal failure when recovery is exhausted. Do not automatically replay an uncertain mutation."
       }
     },
     "/api/v1/devices/{deviceId}/dl24m/bank-target": {
@@ -515,6 +515,216 @@
         },
         "summary": "Write an inactive DL24M target bank",
         "description": "Requires CC, confirmed OFF and a lease. Temporarily select the inactive bank, write and read back its raw target, then return to CC and restore the original CC target. Conservative raw maxima are bank 1: 1000, bank 2: 2400, bank 3: 100. This does not enable or commission CV/CR/CP operation. Recovery must complete before further commands.\n\nReturns 202 with an Operation and Location, not an instrument acknowledgement. Keep the lease alive where required and poll until terminal. Bounded device retries/readback recovery run on the bridge; callers receive a terminal failure when recovery is exhausted. Do not automatically replay an uncertain mutation."
+      }
+    },
+    "/api/v1/devices/{deviceId}/dl24m/diagnostics": {
+      "get": {
+        "operationId": "getDl24mDiagnostics",
+        "tags": [
+          "dl24m"
+        ],
+        "responses": {
+          "200": {
+            "description": "Current Dl24mRegisters result. Cached telemetry still requires per-value quality/freshness checks; a management result confirms only the documented management action.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Dl24mDiagnostics"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Request rejected or unavailable: 400 malformed/invalid request, 401 missing LAN credentials, 403 forbidden transport, 404 unknown resource, 409 state/ownership/idempotency conflict, 412 stale configuration ETag, 422 unsupported or unsafe setting, 423 missing/expired device lease, or 503 resource/transport unavailable, as applicable. An accepted operation can later fail through Operation.error; HTTP acceptance is not hardware success.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "deviceId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9_-]{1,48}$"
+            },
+            "description": "Configured physical device ID on this node. Discover IDs with listDevices; do not use a model name unless it is the configured ID."
+          }
+        ],
+        "summary": "Read bounded passive DL24M BLE diagnostics",
+        "description": "Read the last 32 actual transmitted/received BLE byte chunks and cached register snapshot. Does not issue an additional device command. Chunks are transport observations, not HID frames; parser remains authoritative. dropped counts overwritten entries. All values are boot-local."
+      }
+    },
+    "/api/v1/devices/{deviceId}/dl24m/mode": {
+      "put": {
+        "operationId": "setDl24mMode",
+        "tags": [
+          "dl24m"
+        ],
+        "responses": {
+          "default": {
+            "description": "Request rejected or unavailable: 400 malformed/invalid request, 401 missing LAN credentials, 403 forbidden transport, 404 unknown resource, 409 state/ownership/idempotency conflict, 412 stale configuration ETag, 422 unsupported or unsafe setting, 423 missing/expired device lease, or 503 resource/transport unavailable, as applicable. An accepted operation can later fail through Operation.error; HTTP acceptance is not hardware success.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "202": {
+            "description": "Command accepted for asynchronous execution. Follow Location to getOperation until succeeded, failed or cancelled; inspect final_output and restore_pending.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Operation"
+                }
+              }
+            },
+            "headers": {
+              "Location": {
+                "description": "Relative URL /api/v1/operations/{operationId} for polling in this node boot.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "deviceId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9_-]{1,48}$"
+            },
+            "description": "Configured physical device ID on this node. Discover IDs with listDevices; do not use a model name unless it is the configured ID."
+          },
+          {
+            "name": "X-Lab-Lease",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Active lease ID covering this physical device. Components share ownership; heartbeats must continue while commands are pending."
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 96
+            },
+            "description": "Unique key per logical mutation (1..96 characters). Repeating the same method/path/semantic JSON body within this boot returns the existing operation; reusing it for different content returns 409. Retention is bounded. After an uncertain timeout or reboot, inspect state and STOP as needed instead of replaying ON."
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Dl24mModeRequest"
+              }
+            }
+          },
+          "description": "JSON request with the fields documented by the referenced schema. Unknown properties are rejected; use {} for an empty StopRequest."
+        },
+        "summary": "Select DL24M load mode with OFF readback",
+        "description": "Snapshot original mode and target before switching; journal rollback before any mutation. Does not enable output. Follow the Operation to verified completion. On failure STOP and restore original mode and target."
+      }
+    },
+    "/api/v1/devices/{deviceId}/dl24m/target": {
+      "put": {
+        "operationId": "setDl24mTarget",
+        "tags": [
+          "dl24m"
+        ],
+        "responses": {
+          "default": {
+            "description": "Request rejected or unavailable: 400 malformed/invalid request, 401 missing LAN credentials, 403 forbidden transport, 404 unknown resource, 409 state/ownership/idempotency conflict, 412 stale configuration ETag, 422 unsupported or unsafe setting, 423 missing/expired device lease, or 503 resource/transport unavailable, as applicable. An accepted operation can later fail through Operation.error; HTTP acceptance is not hardware success.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "202": {
+            "description": "Command accepted for asynchronous execution. Follow Location to getOperation until succeeded, failed or cancelled; inspect final_output and restore_pending.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Operation"
+                }
+              }
+            },
+            "headers": {
+              "Location": {
+                "description": "Relative URL /api/v1/operations/{operationId} for polling in this node boot.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "deviceId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9_-]{1,48}$"
+            },
+            "description": "Configured physical device ID on this node. Discover IDs with listDevices; do not use a model name unless it is the configured ID."
+          },
+          {
+            "name": "X-Lab-Lease",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Active lease ID covering this physical device. Components share ownership; heartbeats must continue while commands are pending."
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 96
+            },
+            "description": "Unique key per logical mutation (1..96 characters). Repeating the same method/path/semantic JSON body within this boot returns the existing operation; reusing it for different content returns 409. Retention is bounded. After an uncertain timeout or reboot, inspect state and STOP as needed instead of replaying ON."
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Dl24mTargetRequest"
+              }
+            }
+          },
+          "description": "JSON request with the fields documented by the referenced schema. Unknown properties are rejected; use {} for an empty StopRequest."
+        },
+        "summary": "Set typed DL24M target while OFF",
+        "description": "Only modifies the selected bank, with journaled original target and readback. Activation uses mode-specific predictions plus measured V/I/P guards: CR at configured maximum voltage, CP at fresh cutoff voltage, CV requires fresh device OCP/OPP no greater than local limits. CV cannot promise a current ceiling from its voltage target alone."
       }
     }
   },
@@ -612,7 +822,7 @@
           "type": "integer",
           "minimum": 0,
           "maximum": 3,
-          "description": "0 selects CC; 1..3 select inactive banks. Output ON outside CC is blocked because active CV/CR/CP behavior is not commissioned."
+          "description": "Native selected mode: 0 CC, 1 CV, 2 CR, 3 CP. Prefer setDl24mMode and setDl24mTarget for typed changes with a fresh OFF/mode/target snapshot and checked restoration. Activation independently validates fresh mode-specific current, voltage and power limits; consult Device.features for commissioning status."
         },
         "standby_time": {
           "type": "integer",
@@ -721,7 +931,7 @@
             2,
             3
           ],
-          "description": "Inactive bank 1, 2 or 3; active semantics/units are uncommissioned."
+          "description": "Inactive bank 1 CV, 2 CR or 3 CP. This legacy raw interface always returns to CC; prefer typed mode/target operations for normal control."
         },
         "target_raw": {
           "type": "integer",
@@ -731,6 +941,150 @@
         }
       },
       "description": "Inactive bank target in raw register units. This interface does not claim that the corresponding active CV/CR/CP behavior or scales are commissioned."
+    },
+    "Dl24mTraceEntry": {
+      "type": "object",
+      "description": "One actual BLE transport byte chunk. Receive chunks can contain partial or multiple frames; do not reinterpret as HID.",
+      "properties": {
+        "sequence": {
+          "type": "integer",
+          "description": "Increasing trace sequence.",
+          "minimum": 1
+        },
+        "received_ms": {
+          "type": "integer",
+          "description": "Observation timestamp.",
+          "minimum": 0
+        },
+        "generation": {
+          "type": "integer",
+          "description": "BLE connection generation.",
+          "minimum": 0
+        },
+        "direction": {
+          "type": "string",
+          "description": "Wire direction.",
+          "enum": [
+            "tx",
+            "rx"
+          ]
+        },
+        "hex": {
+          "type": "string",
+          "description": "Hexadecimal bytes, at most 64 per entry."
+        },
+        "truncated": {
+          "type": "boolean",
+          "description": "Oversized chunk truncated to preserve memory bounds."
+        },
+        "origin": {
+          "type": "string",
+          "description": "ble-stack records accepted BLE GATT submissions and actual notifications; tx does not imply ATT/application success. endpoint is a non-radio test/fallback observation.",
+          "enum": [
+            "ble-stack",
+            "endpoint"
+          ]
+        }
+      },
+      "required": [
+        "sequence",
+        "received_ms",
+        "generation",
+        "direction",
+        "hex",
+        "truncated",
+        "origin"
+      ],
+      "additionalProperties": false
+    },
+    "Dl24mDiagnostics": {
+      "type": "object",
+      "description": "Passive bounded diagnostics, independent of driver parsing.",
+      "properties": {
+        "entries": {
+          "type": "array",
+          "description": "Newest at most 32 byte chunks.",
+          "items": {
+            "$ref": "#/components/schemas/Dl24mTraceEntry"
+          }
+        },
+        "dropped": {
+          "type": "integer",
+          "description": "Overwritten/truncated entry count.",
+          "minimum": 0
+        },
+        "registers": {
+          "type": "array",
+          "description": "Cached audited registers only.",
+          "items": {
+            "$ref": "#/components/schemas/Dl24mRegister"
+          }
+        }
+      },
+      "required": [
+        "entries",
+        "dropped",
+        "registers"
+      ],
+      "additionalProperties": false
+    },
+    "Dl24mModeRequest": {
+      "type": "object",
+      "description": "Select a native mode without enabling output or modifying that bank target. Confirmed OFF, live original mode/target snapshot, persistent rollback and checked readback required.",
+      "required": [
+        "mode"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "mode": {
+          "type": "string",
+          "description": "Native DL24M BLE mapping: CC=0, CV=1, CR=2, CP=3. HID scaling is not used.",
+          "enum": [
+            "cc",
+            "cv",
+            "cr",
+            "cp"
+          ]
+        }
+      }
+    },
+    "Dl24mTargetRequest": {
+      "type": "object",
+      "description": "Set the selected mode target while OFF. Mode and unit must agree. CC 0.001 A; CV 0.01 V; CR 0.1 Ohm; CP 0.1 W. Configured local limits and activation prerequisites still apply.",
+      "required": [
+        "mode",
+        "value",
+        "unit"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "mode": {
+          "type": "string",
+          "description": "Expected selected mode; mismatches reject without writes.",
+          "enum": [
+            "cc",
+            "cv",
+            "cr",
+            "cp"
+          ]
+        },
+        "value": {
+          "type": "number",
+          "description": "Physical target at native resolution.",
+          "minimum": 0,
+          "maximum": 240
+        },
+        "unit": {
+          "type": "string",
+          "description": "A for CC, V for CV, Ohm for CR, W for CP.",
+          "enum": [
+            "A",
+            "V",
+            "Ohm",
+            "W"
+          ]
+        }
+      }
     }
   }
 }

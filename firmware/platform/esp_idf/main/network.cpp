@@ -14,6 +14,7 @@
 #include <atomic>
 #include <cstring>
 namespace labbridge::esp {
+void start_stream(httpd_handle_t);
 extern const char page_start[] asm("_binary_index_html_start");
 extern const char page_end[] asm("_binary_index_html_end");
 extern const char js_start[] asm("_binary_app_js_start");
@@ -154,7 +155,7 @@ static bool via_ap(httpd_req_t *r) {
     return false;
   return http::context(address, n, "", "").access_point;
 }
-static Headers headers(httpd_req_t *r) {
+Headers http_headers(httpd_req_t *r) {
   Headers h;
   for (auto name :
        {"Authorization", "X-Lab-Lease", "Idempotency-Key", "If-Match", "Cookie",
@@ -182,7 +183,7 @@ esp_err_t http_respond(httpd_req_t *r, Response response) {
   auto text = response.body.dump();
   return httpd_resp_send(r, text.data(), text.size());
 }
-static AuthContext auth_context(httpd_req_t *r, const Headers &h) {
+AuthContext http_auth_context(httpd_req_t *r, const Headers &h) {
   sockaddr_storage address{};
   socklen_t n = sizeof(address);
   if (getsockname(httpd_req_to_sockfd(r),
@@ -237,8 +238,8 @@ static esp_err_t route(httpd_req_t *r) {
     httpd_resp_set_hdr(r, "Location", "http://192.168.4.1/wifi");
     return httpd_resp_send(r, nullptr, 0);
   }
-  auto h = headers(r);
-  auto context = auth_context(r, h);
+  auto h = http_headers(r);
+  auto context = http_auth_context(r, h);
   std::string method = r->method == HTTP_GET    ? "GET"
                        : r->method == HTTP_POST ? "POST"
                        : r->method == HTTP_PUT  ? "PUT"
@@ -401,10 +402,13 @@ void start_network() {
   hc.stack_size = 12288;
   // Cookie sessions outlive TCP connections. Reclaim idle HTTP connections
   // before the shared socket budget is exhausted; keep active requests bounded.
+  hc.send_wait_timeout = 1;
+  hc.recv_wait_timeout = 1;
   hc.max_open_sockets = 4;
   hc.lru_purge_enable = true;
   httpd_handle_t server;
   ESP_ERROR_CHECK(httpd_start(&server, &hc));
+  start_stream(server);
   for (auto method : {HTTP_GET, HTTP_POST, HTTP_PUT, HTTP_DELETE}) {
     httpd_uri_t u = {};
     u.uri = "/*";

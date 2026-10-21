@@ -1,8 +1,11 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (c) 2026 LabBridge contributors
+import {RpcStream} from './stream.js';
 import {RequestQueue} from './request-queue.js';
+import {SampleClock} from './sample-clock.js';
 import {UiAuth} from '../auth';
 import {Configuration,CoreApi,ComponentsApi,Dl24mApi} from '../../generated/src/index';
+import {DeviceFromJSON,MeasurementsFromJSON,Dl24mSettingsFromJSON,OperationFromJSON,ActuatorStateFromJSON} from '../../generated/src/index';
 import type {Device,Measurements,Dl24mSettings,Operation,ActuatorState} from '../../generated/src/index';
 export async function message(error:unknown):Promise<string>{
  if(error&&typeof error==='object'&&'response' in error){
@@ -11,92 +14,115 @@ export async function message(error:unknown):Promise<string>{
  }
  return error instanceof Error?error.message:String(error);
 }
-const delay=(ms:number)=>new Promise(r=>setTimeout(r,ms));
+
 function key(){return Array.from(crypto.getRandomValues(new Uint8Array(16)),b=>b.toString(16).padStart(2,'0')).join('');}
 export class BenchAdapter {
  readonly auth=new UiAuth();
  devices:Device[]=[];device?:Device;boot='';lease='';connected=false;busy=false;uncertain=false;
  measurement?:Measurements;settings:Dl24mSettings={};actor?:ActuatorState;receivedAt=0;pollMs=1000;
- onChange=()=>{};onSample=(m:Measurements)=>{};onError=(m:string)=>{};
- private generation=0;private operationGeneration=0;private timer?:number;private heartbeat?:number;private heartbeatBusy=false;private settingsAt=0;
+ onChange=()=>{};onSample=(m:Measurements)=>{};onError=(m:string)=>{};onGap=()=>{};
+ readonly stream=new RpcStream(`${location.protocol==='https:'?'wss:':'ws:'}//${location.host}/api/v1/ws`);
+ private readonly sampleClock=new SampleClock();
+ private operations=new Map<string,Operation>();
+ private operationWaiters=new Map<string,{resolve:(o:Operation)=>void;reject:(e:Error)=>void;timer:ReturnType<typeof setTimeout>}>();
+ constructor(){
+  this.stream.onSnapshot=(event:any)=>this.snapshot(event);this.stream.onGap=()=>this.onGap();
+  this.auth.core=new CoreApi(new Configuration({basePath:location.origin,fetchApi:this.auth.fetch}));
+  this.stream.onLoss=(error:Error)=>{if(this.connected)this.lose(error.message);this.checkSessionAfterLoss();};
+ }
+ private generation=0;private operationGeneration=0;private heartbeat?:number;private heartbeatBusy=false;
  private readonly requests=new RequestQueue();
  readonly config=new Configuration({basePath:location.origin,fetchApi:(input,init)=>{
   const generation=this.generation,path=new URL(String(input),location.origin).pathname;
   const stop=path.endsWith('/stop'),priority=stop?0:path.endsWith('/heartbeat')?1:init?.method!=='GET'||path.includes('/operations/')?2:3;
   return this.requests.run(async()=>{
    if(generation!==this.generation&&!stop)throw Error('Connection changed before request was sent');
-   const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),4000);
-   try{
-    const response=await this.auth.fetch(input,{...init,signal:controller.signal});
-    // Keep the slot until the response body has arrived, not just its headers.
-    await response.clone().arrayBuffer();return response;
-   }catch(error){
+   try{const response=await this.stream.fetch(String(input),init);if(response.status===401)this.checkSessionAfterLoss();return response;}
+   catch(error){
     this.requests.cancelPending(Error('Connection lost before queued request was sent'));
-    this.lose('Connection lost: HTTP request failed; queued commands cancelled');
-    throw error;
-   }finally{clearTimeout(timer);}
+    this.lose('Connection lost: WebSocket request failed; queued commands cancelled');throw error;
+   }
   },priority);
  }});
  readonly core=new CoreApi(this.config);readonly components=new ComponentsApi(this.config);readonly dl=new Dl24mApi(this.config);
- constructor(){
-  // Password work uses its own request: it must not hold the instrument queue,
-  // its four-second request timeout, or priority STOP and lease heartbeats.
-  this.auth.core=new CoreApi(new Configuration({basePath:location.origin,fetchApi:this.auth.fetch}));
- }
  get sink(){return this.device?.components?.find(c=>c.kind==='sink')?.id;}
  get fresh(){return !!this.measurement&&this.measurement.quality==='valid'&&this.measurement.ageMs+performance.now()-this.receivedAt<=(this.device?.limits?.maxAgeMs??0);}
  get writable(){return this.auth.state.authenticated&&!this.auth.loggingOut&&this.connected&&!!this.lease&&!this.busy&&!this.uncertain&&this.fresh&&this.actor?.state==='ready'&&this.actor.output!=='unknown';}
  get off(){return this.writable&&this.actor?.output==='off';}
- get canOn(){return this.off&&this.settings.mode===0;}
+ get mode(){return (['cc','cv','cr','cp'] as const)[this.settings.mode??-1];}
+ get modeSupported(){return this.mode==='cc'||this.device?.features?.some(f=>f.id===this.mode&&f.status==='supported');}
+ get canOn(){return this.off&&this.modeSupported;}
  supports(action:string){return this.device?.components?.some(c=>c.id===this.sink&&c.actions.includes(action))??false;}
- private cancelPolling(){this.generation++;clearTimeout(this.timer);}
+ private invalidate(){this.generation++;}
  private stopHeartbeat(){clearInterval(this.heartbeat);this.heartbeat=undefined;}
- private lose(text:string){this.cancelPolling();this.stopHeartbeat();this.connected=false;this.lease='';this.uncertain=true;this.actor=undefined;this.onError(text);this.onChange();}
+ private lose(text:string){this.invalidate();this.stopHeartbeat();this.connected=false;this.lease='';this.uncertain=true;this.actor=undefined;this.stream.close();for(const w of this.operationWaiters.values()){clearTimeout(w.timer);w.reject(Error(text));}this.operationWaiters.clear();this.onError(text);this.onChange();}
+ private checkSessionAfterLoss(){
+  if(!this.auth.state.authenticated)return;
+  const generation=this.generation,csrf=this.auth.state.csrfToken;
+  void this.auth.core.getAuthStatus().then(state=>{
+   if(generation!==this.generation||csrf!==this.auth.state.csrfToken)return;
+   this.auth.state=state;if(!state.authenticated)this.auth.onLost();
+  }).catch(()=>{});
+ }
  endSession(){
   this.requests.cancelPending(Error('Session ended; queued commands cancelled'));
-  this.operationGeneration++;this.busy=false;
-  this.lose('Bench control disconnected. Verify outputs OFF; unconfirmed reservations expire on the bridge.');
+  this.operationGeneration++;this.busy=false;this.lose('Bench control disconnected. Verify outputs OFF; unconfirmed reservations expire on the bridge.');
  }
  async connect(){
   if(!this.auth.state.authenticated||this.auth.loggingOut)throw Error('Sign in before connecting');
   if(this.lease)await this.release();
-  this.cancelPolling();const generation=this.generation;
-  this.connected=false;this.uncertain=false;this.measurement=undefined;this.actor=undefined;this.onChange();
+  this.invalidate();const generation=this.generation;this.connected=false;this.uncertain=false;this.measurement=undefined;this.actor=undefined;this.onChange();
+  this.boot=await this.stream.open({csrf_token:this.auth.state.csrfToken!});
   const node=await this.core.getNode(),list=await this.core.listDevices();
-  if(generation!==this.generation)throw Error('Session changed during discovery');
+  if(generation!==this.generation||this.auth.loggingOut)throw Error('Session changed during discovery');
   this.devices=list.devices.filter(d=>d.driver==='dl24m');this.boot=node.bootId;
   if(!this.devices.length){this.device=undefined;this.onChange();throw Error('No DL24M device configured on this node');}
   this.device=this.devices.find(d=>d.id===this.device?.id)??this.devices[0];
   if(!this.sink)throw Error('DL24M sink component unavailable');
-  this.settingsAt=0;this.connected=true;await this.poll(generation);
-  if(generation!==this.generation||!this.connected)throw Error('Connection changed during discovery');
+  this.connected=true;this.sampleClock.start(performance.now());await this.stream.subscribe(this.device.id,this.pollMs);await this.initialSnapshot();if(generation!==this.generation||!this.connected)throw Error('Connection changed during discovery');this.onChange();
+ }
+ private snapshot(event:any){
+  if(event.boot_id!==this.boot){this.lose('ESP restarted: reservation invalidated. Reconnect to start a new session.');return;}
+  const body=event.body;
+  for(const raw of body.operations??[]){
+   const o=OperationFromJSON(raw);this.operations.set(o.id,o);
+   if(this.operations.size>16)this.operations.delete(this.operations.keys().next().value!);
+   if(o.status!=='running'&&o.status!=='pending'){
+    const waiter=this.operationWaiters.get(o.id);if(waiter){clearTimeout(waiter.timer);this.operationWaiters.delete(o.id);waiter.resolve(o);}
+   }
+  }
+  if(body.device_id!==this.device?.id)return;
+  if(body.devices){const list=body.devices.map(DeviceFromJSON);this.devices=list.filter((d:Device)=>d.driver==='dl24m');this.device=this.devices.find(d=>d.id===this.device?.id)??this.device;}
+  const actor=body.actors?.find((a:any)=>a.component_id===this.sink);if(actor)this.actor=ActuatorStateFromJSON(actor);
+  if(body.details?.settings){this.settings=Dl24mSettingsFromJSON(body.details.settings);}
+  if(body.measurements){this.receivedAt=performance.now();const m:Measurements=this.sampleClock.adjust(MeasurementsFromJSON(body.measurements),this.receivedAt);this.measurement=m;this.onSample(m);}
   this.onChange();
  }
- private async poll(generation:number){
-  try{
-   const id=this.device!.id,componentId=this.sink!;
-   // A browser's parallel reads can exhaust the node's shared socket budget
-   // (HTTP, AP DNS, mDNS and instrument TCP). Reuse connections sequentially.
-   const node=await this.core.getNode(),requestedAt=performance.now();
-   const m=await this.core.getMeasurements({deviceId:id});
-   const a=await this.components.getActuatorState({deviceId:id,componentId});
-   const settings=!this.settingsAt||performance.now()-this.settingsAt>=5000
-    ?await this.dl.getDl24mSettings({deviceId:id}):undefined;
-   if(generation!==this.generation)return;
-   if(node.bootId!==this.boot||m.bootId&&m.bootId!==this.boot){this.lose('ESP restarted: reservation invalidated. Reconnect to start a new session.');return;}
-   this.measurement={...m,bootId:this.boot,ageMs:m.ageMs+performance.now()-requestedAt};this.receivedAt=performance.now();this.actor=a;
-   if(settings){this.settings=settings;this.settingsAt=performance.now();}
-   this.onSample(this.measurement);this.onChange();
-  }catch(e){if(generation===this.generation)this.lose('Connection lost: '+await message(e));return;}
-  if(generation===this.generation&&this.connected)this.timer=window.setTimeout(()=>void this.poll(generation),this.pollMs);
+ private async initialSnapshot(){
+  const deadline=performance.now()+4000;
+  while(!this.measurement||!this.actor){
+   if(!this.connected)throw Error('Connection lost before initial snapshot');
+   if(performance.now()>deadline){this.lose('Connection lost: no initial snapshot');throw Error('Initial snapshot timed out');}
+   await new Promise(r=>setTimeout(r,25));
+  }
  }
+ private waitOperation(o:Operation):Promise<Operation>{
+  const known=this.operations.get(o.id)??o;
+  if(known.status!=='running'&&known.status!=='pending')return Promise.resolve(known);
+  return new Promise((resolve,reject)=>{
+   const timer=setTimeout(()=>{this.operationWaiters.delete(o.id);reject(Error('Operation uncertain: result event timed out; inspect before repeating'));},12000);
+   this.operationWaiters.set(o.id,{resolve,reject,timer});
+  });
+ }
+ async interval(ms:number){this.pollMs=ms;if(this.connected&&this.device)await this.stream.subscribe(this.device.id,ms);}
+
  async select(id:string){
   if(!this.auth.state.authenticated||this.auth.loggingOut)throw Error('Sign in before selecting a device');
   if(this.busy)throw Error('Wait for the pending operation before switching devices');
   if(this.lease)await this.release();
   const next=this.devices.find(d=>d.id===id);if(!next)throw Error('Unknown DL24M device');
-  this.cancelPolling();this.device=next;this.actor=undefined;this.measurement=undefined;this.settings={};this.settingsAt=0;
-  this.onChange();if(this.connected)await this.poll(this.generation);
+  this.invalidate();this.device=next;this.actor=undefined;this.measurement=undefined;this.settings={};
+  this.onChange();if(this.connected){this.sampleClock.start(performance.now());await this.stream.subscribe(id,this.pollMs);await this.initialSnapshot();}
  }
  async reserve(){
   if(!this.auth.state.authenticated||this.auth.loggingOut)throw Error('Sign in before reserving');
@@ -124,12 +150,7 @@ export class BenchAdapter {
   const operationGeneration=++this.operationGeneration,boot=this.boot;
   this.busy=true;this.onChange();
   try{
-   let o=await send();const deadline=performance.now()+12000;
-   while(o.status==='running'||o.status==='pending'){
-    if(operationGeneration!==this.operationGeneration)throw Error('Operation superseded by STOP');
-    if(performance.now()>deadline)throw Error('Operation uncertain: query its result before repeating');
-    await delay(150);o=await this.core.getOperation({operationId:o.id});
-   }
+   const o=await this.waitOperation(await send());
    if(operationGeneration!==this.operationGeneration)throw Error('Operation superseded by STOP');
    if(boot!==this.boot||!this.connected&&!stop)throw Error('Connection changed while confirming the operation');
    if(o.status!=='succeeded'||o.restorePending||o.finalOutput==='unknown')throw Error(`${o.status}: ${o.stage}; output ${o.finalOutput}; restore pending ${o.restorePending}`);
@@ -137,7 +158,7 @@ export class BenchAdapter {
    const actor=await this.components.getActuatorState({deviceId:this.device!.id,componentId:this.sink!});
    const settings=await this.dl.getDl24mSettings({deviceId:this.device!.id});
    if(operationGeneration!==this.operationGeneration)return o;
-   this.actor=actor;this.settings=settings;this.settingsAt=performance.now();
+   this.actor=actor;this.settings=settings;
    if(stop&&actor.output!=='off')throw Error('OFF readback was not confirmed');
    // Only an explicit confirmed STOP can clear an uncertain command latch.
    if(stop)this.uncertain=false;
@@ -146,8 +167,36 @@ export class BenchAdapter {
   finally{if(operationGeneration===this.operationGeneration){this.busy=false;this.onChange();}}
  }
  async current(currentA:number){const p=this.params();if(!this.supports('current')||this.settings.mode!==0)throw Error('CC current is unavailable');return this.perform(()=>this.components.setComponentCurrent({...p,currentRequest:{currentA}}));}
- async enable(){if(!this.canOn||!this.supports('output'))throw Error('ON requires fresh CC state and confirmed OFF');const p=this.params();return this.perform(()=>this.components.setComponentOutput({...p,outputRequest:{enabled:true}}));}
- async stop(){this.requests.cancelPending(Error('Cancelled by priority STOP'),job=>job.priority===2);if(!this.device)throw Error('Select a DL24M device first');const deviceId=this.device.id;return this.perform(()=>this.core.stopDevice({deviceId,idempotencyKey:key(),stopRequest:{reason:'DL24M Bench STOP'}}),true);}
+ async modeWrite(mode:'cc'|'cv'|'cr'|'cp'){if(!this.off||!this.device?.features?.some(f=>f.id===mode&&f.status==='supported'))throw Error('Mode is not supported or OFF is not confirmed');const p=this.params();return this.perform(()=>this.dl.setDl24mMode({...p,dl24mModeRequest:{mode}}));}
+ async target(value:number){if(this.mode==='cc')return this.current(value);if(!this.off||!this.modeSupported||!this.mode)throw Error('Target requires supported mode and confirmed OFF');const p=this.params(),mode=this.mode,unit=({cv:'V',cr:'Ohm',cp:'W'} as const)[mode];return this.perform(()=>this.dl.setDl24mTarget({...p,dl24mTargetRequest:{mode,value,unit}}));}
+ async enable(){if(!this.canOn||!this.supports('output'))throw Error('ON requires a supported mode, fresh state and confirmed OFF');const p=this.params();return this.perform(()=>this.components.setComponentOutput({...p,outputRequest:{enabled:true}}));}
+ async stop(){
+  this.requests.cancelPending(Error('Cancelled by priority STOP'),job=>job.priority===2);
+  if(!this.device)throw Error('Select a DL24M device first');
+  const deviceId=this.device.id;
+  if(this.stream.ready)return this.perform(()=>this.core.stopDevice({deviceId,idempotencyKey:key(),stopRequest:{reason:'DL24M Bench STOP'}}),true);
+  // Explicit emergency recovery is independent of WebSocket ownership/freshness.
+  // It never retries a write and does not re-establish control or a reservation.
+  const generation=++this.operationGeneration;this.busy=true;this.onChange();
+  const config=new Configuration({basePath:location.origin,fetchApi:async(input,init)=>{
+   const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),4000);
+   try{return await this.auth.fetch(input,{...init,signal:controller.signal});}finally{clearTimeout(timer);}
+  }}),core=new CoreApi(config),components=new ComponentsApi(config);
+  try{
+   let operation=await core.stopDevice({deviceId,idempotencyKey:key(),stopRequest:{reason:'DL24M Bench explicit HTTP STOP recovery'}});
+   const deadline=performance.now()+12000;
+   while(operation.status==='running'||operation.status==='pending'){
+    if(performance.now()>deadline)throw Error('STOP result uncertain; OFF remains unconfirmed');
+    await new Promise(r=>setTimeout(r,150));operation=await core.getOperation({operationId:operation.id});
+   }
+   if(operation.status!=='succeeded'||operation.finalOutput!=='off'||operation.restorePending)throw Error('STOP did not confirm OFF and completed recovery');
+   const actor=await components.getActuatorState({deviceId,componentId:this.sink!});
+   if(actor.output!=='off')throw Error('OFF readback was not confirmed');
+   this.actor=actor;this.uncertain=false;return operation;
+  }catch(error){this.uncertain=true;throw error;}
+  finally{if(generation===this.operationGeneration){this.busy=false;this.onChange();}}
+ }
+
  async settingsWrite(settings:Dl24mSettings){if(!this.off)throw Error('Settings require a reservation and confirmed OFF');const p=this.params();return this.perform(()=>this.dl.setDl24mSettings({...p,dl24mSettings:settings}));}
  async duration(timeLimitS:number){if(!this.off||!this.supports('duration'))throw Error('Timer requires confirmed OFF and backend support');const p=this.params();return this.perform(()=>this.components.setComponentDuration({...p,durationRequest:{timeLimitS}}));}
  async cutoff(cutoffVoltageV:number){if(!this.off||!this.supports('cutoff'))throw Error('Cutoff requires confirmed OFF and backend support');const p=this.params();return this.perform(()=>this.components.setComponentCutoff({...p,cutoffRequest:{cutoffVoltageV}}));}
@@ -159,7 +208,7 @@ export class BenchAdapter {
   this.lease='';this.stopHeartbeat();this.onChange();
  }
  unload(){
-  this.cancelPolling();this.stopHeartbeat();
+  this.invalidate();this.stopHeartbeat();
   if(this.lease&&this.device)void this.core.stopDevice({deviceId:this.device.id,idempotencyKey:key(),stopRequest:{reason:'Bench page closed'}},{keepalive:true}).catch(()=>{});
  }
 }

@@ -960,9 +960,11 @@
           "enum": [
             "cc",
             "cv",
+            "cr",
+            "cp",
             "unknown"
           ],
-          "description": "Observed/selected regulation mode where available: cc (constant current), cv (constant voltage), or unknown. Do not infer it solely from a setpoint."
+          "description": "Observed/selected regulation mode: CC (A), CV (V), CR (Ohm), CP (W), or unknown. Targets alone do not confirm active output."
         }
       },
       "required": [],

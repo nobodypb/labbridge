@@ -36,9 +36,9 @@ export class BenchSession {
   return true;
  }
  csv(){
-  const keys=['deviceId','bootId','sequence','receivedMs','ageMs','quality','voltageV','currentA','powerW','internalTemperatureC','externalTemperatureC','capacityAh','energyWh'];
-  const head='device_id,boot_id,sequence,received_ms,age_ms,quality,voltage_V,current_A,power_W,internal_temperature_C,external_temperature_C,session_capacity_Ah,session_energy_Wh';
+  const keys=['deviceId','bootId','sequence','receivedMs','ageMs','quality','voltageV','currentA','powerW','internalTemperatureC','externalTemperatureC','capacityAh','energyWh','nativeReadingsJson'];
+  const head='device_id,boot_id,sequence,received_ms,age_ms,quality,voltage_V,current_A,power_W,internal_temperature_C,external_temperature_C,session_capacity_Ah,session_energy_Wh,native_readings_json';
   const escape=v=>{if(v===undefined||v===null)return '';let s=String(v);if(typeof v==='string'&&/^[=+@\-\t\r]/.test(s))s="'"+s;return '"'+s.replaceAll('"','""')+'"';};
-  return head+'\r\n'+this.rows.map(r=>keys.map(k=>escape(r[k])).join(',')).join('\r\n')+'\r\n';
+  return head+'\r\n'+this.rows.map(r=>keys.map(k=>escape(k==='nativeReadingsJson'?JSON.stringify(r.nativeReadings??[]):r[k])).join(',')).join('\r\n')+'\r\n';
  }
 }

@@ -22,16 +22,33 @@ labbridge_api_measurements_QUALITY_e measurements_quality_FromString(char* quali
     return 0;
 }
 char* measurements_regulation_mode_ToString(labbridge_api_measurements_REGULATIONMODE_e regulation_mode) {
-    char* regulation_modeArray[] =  { "NULL", "cc", "cv", "unknown" };
+    char* regulation_modeArray[] =  { "NULL", "cc", "cv", "cr", "cp", "unknown" };
     return regulation_modeArray[regulation_mode];
 }
 
 labbridge_api_measurements_REGULATIONMODE_e measurements_regulation_mode_FromString(char* regulation_mode){
     int stringToReturn = 0;
-    char *regulation_modeArray[] =  { "NULL", "cc", "cv", "unknown" };
+    char *regulation_modeArray[] =  { "NULL", "cc", "cv", "cr", "cp", "unknown" };
     size_t sizeofArray = sizeof(regulation_modeArray) / sizeof(regulation_modeArray[0]);
     while(stringToReturn < sizeofArray) {
         if(strcmp(regulation_mode, regulation_modeArray[stringToReturn]) == 0) {
+            return stringToReturn;
+        }
+        stringToReturn++;
+    }
+    return 0;
+}
+char* measurements_load_mode_ToString(labbridge_api_measurements_LOADMODE_e load_mode) {
+    char* load_modeArray[] =  { "NULL", "cc", "cv", "cr", "cp" };
+    return load_modeArray[load_mode];
+}
+
+labbridge_api_measurements_LOADMODE_e measurements_load_mode_FromString(char* load_mode){
+    int stringToReturn = 0;
+    char *load_modeArray[] =  { "NULL", "cc", "cv", "cr", "cp" };
+    size_t sizeofArray = sizeof(load_modeArray) / sizeof(load_modeArray[0]);
+    while(stringToReturn < sizeofArray) {
+        if(strcmp(load_mode, load_modeArray[stringToReturn]) == 0) {
             return stringToReturn;
         }
         stringToReturn++;
@@ -56,6 +73,9 @@ static measurements_t *measurements_create_internal(
     labbridge_api_measurements_REGULATIONMODE_e regulation_mode,
     int protection_code,
     char *boot_id,
+    list_t *native_readings,
+    labbridge_api_measurements_LOADMODE_e load_mode,
+    dl24m_target_request_t *load_target,
     double input_voltage_v,
     double battery_voltage_v,
     int battery_detected
@@ -80,6 +100,9 @@ static measurements_t *measurements_create_internal(
     measurements_local_var->regulation_mode = regulation_mode;
     measurements_local_var->protection_code = protection_code;
     measurements_local_var->boot_id = boot_id;
+    measurements_local_var->native_readings = native_readings;
+    measurements_local_var->load_mode = load_mode;
+    measurements_local_var->load_target = load_target;
     measurements_local_var->input_voltage_v = input_voltage_v;
     measurements_local_var->battery_voltage_v = battery_voltage_v;
     measurements_local_var->battery_detected = battery_detected;
@@ -105,6 +128,9 @@ __attribute__((deprecated)) measurements_t *measurements_create(
     labbridge_api_measurements_REGULATIONMODE_e regulation_mode,
     int protection_code,
     char *boot_id,
+    list_t *native_readings,
+    labbridge_api_measurements_LOADMODE_e load_mode,
+    dl24m_target_request_t *load_target,
     double input_voltage_v,
     double battery_voltage_v,
     int battery_detected
@@ -126,6 +152,9 @@ __attribute__((deprecated)) measurements_t *measurements_create(
         regulation_mode,
         protection_code,
         boot_id,
+        native_readings,
+        load_mode,
+        load_target,
         input_voltage_v,
         battery_voltage_v,
         battery_detected
@@ -155,6 +184,17 @@ void measurements_free(measurements_t *measurements) {
     if (measurements->boot_id) {
         free(measurements->boot_id);
         measurements->boot_id = NULL;
+    }
+    if (measurements->native_readings) {
+        list_ForEach(listEntry, measurements->native_readings) {
+            native_reading_free(listEntry->data);
+        }
+        list_freeList(measurements->native_readings);
+        measurements->native_readings = NULL;
+    }
+    if (measurements->load_target) {
+        dl24m_target_request_free(measurements->load_target);
+        measurements->load_target = NULL;
     }
     free(measurements);
 }
@@ -310,6 +350,48 @@ cJSON *measurements_convertToJSON(measurements_t *measurements) {
     }
 
 
+    // measurements->native_readings
+    if(measurements->native_readings) {
+    cJSON *native_readings = cJSON_AddArrayToObject(item, "native_readings");
+    if(native_readings == NULL) {
+    goto fail; //nonprimitive container
+    }
+
+    listEntry_t *native_readingsListEntry;
+    if (measurements->native_readings) {
+    list_ForEach(native_readingsListEntry, measurements->native_readings) {
+    cJSON *itemLocal = native_reading_convertToJSON(native_readingsListEntry->data);
+    if(itemLocal == NULL) {
+    goto fail;
+    }
+    cJSON_AddItemToArray(native_readings, itemLocal);
+    }
+    }
+    }
+
+
+    // measurements->load_mode
+    if(measurements->load_mode != labbridge_api_measurements_LOADMODE_NULL) {
+    if(cJSON_AddStringToObject(item, "load_mode", measurements_load_mode_ToString(measurements->load_mode)) == NULL)
+    {
+    goto fail; //Enum
+    }
+    }
+
+
+    // measurements->load_target
+    if(measurements->load_target) {
+    cJSON *load_target_local_JSON = dl24m_target_request_convertToJSON(measurements->load_target);
+    if(load_target_local_JSON == NULL) {
+    goto fail; //model
+    }
+    cJSON_AddItemToObject(item, "load_target", load_target_local_JSON);
+    if(item->child == NULL) {
+    goto fail;
+    }
+    }
+
+
     // measurements->input_voltage_v
     if(measurements->input_voltage_v) {
     if(cJSON_AddNumberToObject(item, "input_voltage_v", measurements->input_voltage_v) == NULL) {
@@ -347,6 +429,12 @@ measurements_t *measurements_parseFromJSON(cJSON *measurementsJSON){
 
     // define the local list for measurements->temperature_channels
     list_t *temperature_channelsList = NULL;
+
+    // define the local list for measurements->native_readings
+    list_t *native_readingsList = NULL;
+
+    // define the local variable for measurements->load_target
+    dl24m_target_request_t *load_target_local_nonprim = NULL;
 
     // measurements->device_id
     cJSON *device_id = cJSON_GetObjectItemCaseSensitive(measurementsJSON, "device_id");
@@ -574,6 +662,53 @@ measurements_t *measurements_parseFromJSON(cJSON *measurementsJSON){
     }
     }
 
+    // measurements->native_readings
+    cJSON *native_readings = cJSON_GetObjectItemCaseSensitive(measurementsJSON, "native_readings");
+    if (cJSON_IsNull(native_readings)) {
+        native_readings = NULL;
+    }
+    if (native_readings) { 
+    cJSON *native_readings_local_nonprimitive = NULL;
+    if(!cJSON_IsArray(native_readings)){
+        goto end; //nonprimitive container
+    }
+
+    native_readingsList = list_createList();
+
+    cJSON_ArrayForEach(native_readings_local_nonprimitive,native_readings )
+    {
+        if(!cJSON_IsObject(native_readings_local_nonprimitive)){
+            goto end;
+        }
+        native_reading_t *native_readingsItem = native_reading_parseFromJSON(native_readings_local_nonprimitive);
+
+        list_addElement(native_readingsList, native_readingsItem);
+    }
+    }
+
+    // measurements->load_mode
+    cJSON *load_mode = cJSON_GetObjectItemCaseSensitive(measurementsJSON, "load_mode");
+    if (cJSON_IsNull(load_mode)) {
+        load_mode = NULL;
+    }
+    labbridge_api_measurements_LOADMODE_e load_modeVariable;
+    if (load_mode) { 
+    if(!cJSON_IsString(load_mode))
+    {
+    goto end; //Enum
+    }
+    load_modeVariable = measurements_load_mode_FromString(load_mode->valuestring);
+    }
+
+    // measurements->load_target
+    cJSON *load_target = cJSON_GetObjectItemCaseSensitive(measurementsJSON, "load_target");
+    if (cJSON_IsNull(load_target)) {
+        load_target = NULL;
+    }
+    if (load_target) { 
+    load_target_local_nonprim = dl24m_target_request_parseFromJSON(load_target); //nonprimitive
+    }
+
     // measurements->input_voltage_v
     cJSON *input_voltage_v = cJSON_GetObjectItemCaseSensitive(measurementsJSON, "input_voltage_v");
     if (cJSON_IsNull(input_voltage_v)) {
@@ -628,6 +763,9 @@ measurements_t *measurements_parseFromJSON(cJSON *measurementsJSON){
         regulation_mode ? regulation_modeVariable : labbridge_api_measurements_REGULATIONMODE_NULL,
         protection_code ? protection_code->valuedouble : 0,
         boot_id && !cJSON_IsNull(boot_id) ? strdup(boot_id->valuestring) : NULL,
+        native_readings ? native_readingsList : NULL,
+        load_mode ? load_modeVariable : labbridge_api_measurements_LOADMODE_NULL,
+        load_target ? load_target_local_nonprim : NULL,
         input_voltage_v ? input_voltage_v->valuedouble : 0,
         battery_voltage_v ? battery_voltage_v->valuedouble : 0,
         battery_detected ? battery_detected->valueint : 0
@@ -643,6 +781,19 @@ end:
         }
         list_freeList(temperature_channelsList);
         temperature_channelsList = NULL;
+    }
+    if (native_readingsList) {
+        listEntry_t *listEntry = NULL;
+        list_ForEach(listEntry, native_readingsList) {
+            native_reading_free(listEntry->data);
+            listEntry->data = NULL;
+        }
+        list_freeList(native_readingsList);
+        native_readingsList = NULL;
+    }
+    if (load_target_local_nonprim) {
+        dl24m_target_request_free(load_target_local_nonprim);
+        load_target_local_nonprim = NULL;
     }
     return NULL;
 

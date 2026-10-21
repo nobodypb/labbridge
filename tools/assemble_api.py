@@ -97,6 +97,32 @@ def assemble():
         + constraints
         + ')SCHEMA"; }\n'
     )
+    # Keep only the selected request's reachable rules in RAM while validating.
+    # The complete contract above remains available for annotation/drift checks.
+    header += "namespace labbridge::generated {\nstruct RequestRule { const char *operation; const char *constraints; };\ninline constexpr RequestRule request_rules[] = {\n"
+    for operation, request in requests.items():
+        reachable = set(refs(request))
+        pending = list(reachable)
+        while pending:
+            name = pending.pop()
+            for child in refs(spec["components"]["schemas"][name]):
+                if child not in reachable:
+                    reachable.add(child)
+                    pending.append(child)
+        document = json.dumps(
+            {
+                "request": validation_schema(request),
+                "schemas": {
+                    name: validation_schema(spec["components"]["schemas"][name])
+                    for name in sorted(reachable)
+                },
+            },
+            separators=(",", ":"),
+        )
+        header += (
+            "  {" + json.dumps(operation) + ', R"SCHEMA(' + document + ')SCHEMA"},\n'
+        )
+    header += "};\n}\n"
     return {
         ROOT / "api/openapi.json": json.dumps(spec, indent=2) + "\n",
         ROOT / "firmware/generated/routes.hpp": header,

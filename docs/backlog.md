@@ -28,6 +28,8 @@ checks pass and its hardware claims match the evidence.
 | LB-020 | As an operator, I sign in to the UI with a password and configure LAN Wi-Fi after login. | LB-002, LB-010, LB-011 | Implemented; <3 s UI login hardware-verified; remaining commissioning open |
 | LB-021 | As an operator or API client, I optionally authenticate with a client certificate over HTTPS. | LB-020 | Planned |
 | LB-022 | As a DL24M operator, I use the complete Bench interface on the ESP with confirmed backend control and retained future features. | LB-005, LB-011, LB-020 | Implemented; password UI hardware-verified without instruments; loaded commissioning open |
+| LB-023 | As a DL24M operator, I use all realizable Bench features over one authenticated stream, with unattended tests completed and remaining physical tests tracked. | LB-022 | Accepted; implementation and full-function audit in progress |
+
 
 ## Acceptance criteria
 
@@ -148,3 +150,68 @@ the existing physical limitations in LB-014 remain open.
   open; further hardware work uses only the dedicated test bridge without
   laboratory connections until the operator resumes them. See acceptance.md.
 - **LB-021:** HTTPS with optional mTLS as an alternative login for both browser and API clients; valid client certificates authenticate directly. Password and bearer alternatives remain available. Define trust-anchor provisioning, certificate renewal/revocation and Secure cookies; no certificate requirement is introduced by LB-020.
+
+## LB-023 — DL24M capabilities and one-connection Bench (implemented; bounded hardware acceptance)
+
+Provide a factual supported/unverified/unavailable status for every retained
+Bench feature. Extend the typed API, DL24M driver and UI for confirmed modes,
+measurements, passive frame/register diagnostics and supported maintenance.
+Reuse the same authenticated dispatch/leases/operations over a single WebSocket
+connection, including explicit lease heartbeats. HTTP/USB remain compatible.
+
+Acceptance: red tests before behavior changes; existing codec/recovery and OFF
+journal preserved; no fabricated HID mappings, gains, sensor values or counter
+scales. Mode changes snapshot and restore on failure, require OFF and verified
+readback; active operation enforces local limits and bounded deadlines. Diagnostics
+are passive and bounded. Maintenance functions without proven semantics
+remain explicitly unavailable. WebSocket authenticates before any data, validates
+messages, shares API authorization, prioritizes STOP/replies, bounds buffering,
+reports gaps and never replays writes after loss/reboot. One authenticated UI
+session per board; socket resources are board-owned. UI uses pushed snapshots and
+operation events with no steady-state HTTP polling. Portable/generated/browser
+checks and all board builds pass. Physical StickS3 tests record/restore settings;
+mode pulses use a manually limited <=25 V / <=0.15 A source, no battery. No external
+reference is available, so absolute accuracy/calibration are not commissioned.
+
+
+LB-023 capability evidence and restrictions: [protocol/stream matrix](dl24m-bench-extension.md).
+All retained areas have a native/local implementation or an explicit restriction
+for the audited protocol revision. CC/CV/CR/CP, targets, audited settings, native
+runtime/Ah/Wh, internal temperature magnitude, passive BLE/register diagnostics,
+snapshot comparison/export and browser recording are integrated. The CV notice
+and its persistent dismissal remain functional. Browser counter reset requires
+confirmation and OFF and does not clear browser integrals.
+
+The native switch/status sender supplies no fan RPM, external/cell probe or HID
+gain/backup equivalent. Read 36 exposes the same internal temperature as 16 with
+finer unsigned-magnitude encoding; write 46 is a volatile live-value overwrite,
+not a calibration parameter. Native 4F/4B rewrite calibration without coefficient
+backup/readback/restore. They cannot implement checked reversible zero or the
+original calibration-preserving reset under this story's recovery contract.
+These controls stay visible and unavailable with concrete reasons; an external
+reference alone does not supply missing protocol primitives.
+
+The current shared password session, cookie/CSRF and trusted Origin also bind the
+WebSocket upgrade and every RPC. API bearer authentication remains compatible.
+Logout, expiry, password replacement, transport loss and reboot lock control;
+reconnect never replays a write or acquires a lease automatically. ON is sent
+once; uncertain activation uses bounded read-only verification. A matching late
+reply is accepted during readback backoff without crossing a connection epoch.
+
+All automatable planned behavior, generation, Web/browser and three-board checks
+were executed. Actual StickS3 LAN tests include native modes, STOP, active lease
+expiry, restart during ON, cookie/CSRF authorization, heartbeat/hash concurrency,
+slow clients, diagnostics, recording and a bounded standalone stream run.
+Original instrument settings/targets and confirmed OFF are restored. See
+[acceptance](acceptance.md#dl24m-native-capabilities-and-websocket-lb-023) for
+successful results, failed attempts and the distinction between physical and
+simulated evidence.
+
+Intermittent native replies still go missing during successive OFF-only mode
+operations; failure invalidates ownership and invokes checked STOP/recovery.
+The reproduced reliability limitation and follow-up characterization are
+[issue #34](https://github.com/nobodypb/labbridge/issues/34). This is not a claim of
+fault-free BLE operation. Remaining operator/reference/wiring/other-board checks
+are in [issue #35](https://github.com/nobodypb/labbridge/issues/35), linked to battery
+release #14 and actual RD/AP/STA/BLE coexistence #28. No destructive calibration,
+factory-reset or current-offset experiment was performed automatically.

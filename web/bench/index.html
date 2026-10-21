@@ -14,17 +14,17 @@
   <div class="sub">LabBridge · DL24M Bench</div>
   <div class="spacer"></div>
   <div class="toggle" id="pollMode"
-       data-help="Live: poll continuously while connected. Load: poll only while the load is ON — the readout & chart freeze and hold when the load is off (intentional, not a bug)."
-       title="Live = poll continuously while connected. Load = poll only while the load is on (readout freezes when off).">
+       data-help="Live records continuously. Load records only while ON; readings, state monitoring and lease heartbeat continue while OFF."
+       title="Live records continuously. Load pauses recording while OFF; monitoring continues.">
     <button data-pm="live" class="sel">Live</button><button data-pm="load">Load</button></div>
   <label class="sub" style="display:flex;align-items:center;gap:6px"
-         data-help="How often to poll the device. Live and settings frames alternate, so each block refreshes at twice this rate."
-         title="Send interval. Live + settings blocks alternate, so each block refreshes at twice this period.">Poll
+         data-help="Measurement stream interval. State and operation confirmations continue independently."
+         title="Measurement stream interval. State and operation confirmations continue independently.">Poll
     <select id="pollRate" class="sel-input">
       <option value="500">500 ms</option><option value="1000" selected>1 s</option><option value="2000">2 s</option>
     </select></label>
   <div class="toggle" id="theme" data-help="Switch between light and dark themes."><button data-th="light">Light</button><button data-th="dark" class="sel">Dark</button></div>
-  <button id="connect" class="btn connbtn off" data-help="Connect to a DL24 over USB (WebHID, Chromium only). The LED is the connection lamp: red = off, green = connected."><span class="led"></span><span id="connLbl">Connect</span></button>
+  <button id="connect" class="btn connbtn off" data-help="Connect using the shared device password session, then select a DL24M. Green indicates an authenticated connection."><span class="led"></span><span id="connLbl">Connect</span></button>
   <button id="export" class="btn" disabled data-help="Download all logged samples (time, V/I/W, temps, Wh, mAh) as a CSV file.">Export CSV</button>
   <button id="gear" class="iconbtn" title="Settings" aria-label="Settings" data-help="Settings: brightness, standby, language, protection limits, calibration, and device resets.">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -67,7 +67,7 @@
       </div>
       <div class="hint" style="margin-top:4px">Auto-stops the load when it expires. 0:00 = no limit. LabBridge confirms the setting by readback; bridge safety deadlines still apply.</div>
     </details>
-    <div class="hint">CC is supported. CV/CR/CP remain visible for future backend support. Changes require a reservation; settings require confirmed OFF.
+    <div class="hint">Modes follow the selected device’s reported support. Unverified functions remain visible and locked. Changes require a reservation; settings require confirmed OFF.
       Brightness, limits, calibration &amp; device resets live in <b>⚙ Settings</b> (top-right).</div>
   </aside>
   <div class="main">
@@ -85,7 +85,7 @@
       <div class="cell i"><div class="lab">Current</div><div class="val"><span id="rI">—</span><span class="un">A</span></div></div>
       <div class="cell w"><div class="lab">Power</div><div class="val"><span id="rW">—</span><span class="un">W</span></div></div>
       <div class="cell r" data-help="Total resistance the load sees (voltage ÷ current). Shows — with no load."><div class="lab">Resistance</div><div class="val"><span id="rR">—</span><span class="un">Ω</span></div></div>
-      <div class="cell t" data-help="Temperature of the load's MOSFET / heatsink."><div class="lab">Internal temp</div><div class="val"><span id="rT">—</span><span class="un">°C</span></div></div>
+      <div class="cell t" data-help="Temperature of the load's MOSFET / heatsink."><div class="lab">Internal |T|</div><div class="val"><span id="rT">—</span><span class="un">°C</span></div></div>
       <div class="cell" data-help="Charge drawn since the last 'Zero all data' (accumulates while the load runs)."><div class="lab">Capacity · session</div><div class="val"><span id="rCap">—</span><span class="un">mAh</span></div></div>
       <div class="cell" data-help="Energy drawn since the last 'Zero all data'."><div class="lab">Energy · session</div><div class="val"><span id="rWh">—</span><span class="un">Wh</span></div></div>
       <div class="cell" data-help="Time since the load was last turned ON in this app."><div class="lab">Observed time</div><div class="val mono" style="font-size:18px"><span id="rTime">—</span></div></div>
@@ -97,13 +97,13 @@
     </div>
     <details style="margin-top:2px" data-help="Protocol debug: live hex frames + a snapshot/diff tool to find which byte holds a value (change one thing, capture a label, repeat).">
       <summary class="sub" style="cursor:pointer">Raw frames &amp; field finder (debug)</summary>
-      <div class="sub" style="font-size:11px;margin-top:4px">Live (0x05):</div>
+      <div class="sub" style="font-size:11px;margin-top:4px">BLE transport observations (TX submission / RX notification):</div>
       <div class="mono" id="rawLive" style="font-size:11px;color:var(--dim);word-break:break-all;padding:2px 0"></div>
-      <div class="sub" style="font-size:11px">Settings (0x03):</div>
+      <div class="sub" style="font-size:11px">Cached numeric registers:</div>
       <div class="mono" id="rawSet" style="font-size:11px;color:var(--i);word-break:break-all;padding:2px 0"></div>
       <div class="sub" style="font-size:11px;margin-top:6px"><b>Field finder:</b> change ONE thing on the device,
-        capture a labelled snapshot, repeat. Offsets that differ across snapshots are listed for each block,
-        decoded as byte / BE-float32 (settings) / LE-uint32 (live), so you can spot which offset holds a value.</div>
+        capture a labelled snapshot, repeat. Changed cached register values are compared below.
+        These are actual DL24M BLE observations, with no HID decoding or additional instrument queries.</div>
       <div style="display:flex;gap:6px;flex-wrap:wrap;margin:6px 0;align-items:center">
         <input id="snapLabel" placeholder="label, e.g. cutoff=3V" style="flex:1;min-width:140px;background:var(--panel2);border:1px solid var(--line);border-radius:8px;padding:6px 8px">
         <button class="btn" id="snapBtn" disabled style="padding:5px 10px">Capture</button>
@@ -122,7 +122,7 @@
       <span class="spacer"></span>
       <button class="iconbtn" id="settingsClose" title="Close" aria-label="Close">✕</button>
     </div>
-    <div class="body"><p id="unsupported" class="hint">Unavailable in the current backend: active CV/CR/CP, calibration, no-load zero, factory reset, HID frames/snapshots and fan RPM. These controls are retained for future support.</p>
+    <div class="body"><p id="unsupported" class="hint">Connect to discover backend feature support and commissioning restrictions. All original function areas are retained.</p>
       <!-- DISPLAY ---------------------------------------------------------- -->
       <div class="sgrp"><div class="glab">Display</div>
         <div class="srow"><label>Display brightness (0–9)</label>
@@ -134,7 +134,7 @@
         <div class="srow"><label>Standby time (raw, unit unconfirmed)</label>
           <input id="stbyTime" type="number" min="0" step="1" placeholder="–">
           <button class="btn needdev" id="stbyTimeBtn" disabled>Set</button></div>
-        <div class="srow" data-help="Set the DEVICE's display language (this app's text doesn't change). Write-only — not reflected back."><label>Device language</label>
+        <div class="srow" data-help="Set the device language using native raw values and confirmed readback. This app remains in English."><label>Device language</label>
           <select id="langSel"><option value="">—</option><option value="0">Raw 0</option><option value="1">Raw 1</option></select>
           <button class="btn needdev" id="langBtn" disabled>Set</button></div>
       </div>
@@ -162,16 +162,16 @@
           <input id="calT" type="number" step="0.0001" placeholder="gain"><button class="btn needdev calset" id="calTBtn" disabled>Set</button></div>
         <div class="actions" style="margin-top:8px"><button class="btn needdev" id="calCopy" disabled>Copy current gains (backup)</button></div>
         <div class="chkrow"><input type="checkbox" id="calEnable"><label for="calEnable" class="danger">Enable calibration writes — I understand they rescale every reading</label></div>
-        <div class="hint">Calibration read/write is unavailable in the current backend; gains are unknown.</div>
+        <div class="hint">The native protocol has no equivalent gain read/write or backup. Live temperature is not a calibration gain.</div>
       </div>
       <!-- DEVICE ACTIONS --------------------------------------------------- -->
       <div class="sgrp"><div class="glab">Device actions</div>
         <div class="actions">
           <button class="btn needdev" id="zeroNoLoad" disabled data-help="Tare the current meter's no-load offset. Run with NO load connected.">Zero no-load current</button>
           <button class="btn needdev" id="zeroData" disabled data-help="Wipe all running statistics on the device: run time, energy (Wh) and capacity (mAh).">Zero all data</button>
-          <button class="btn needdev danger" id="restoreDefaults" disabled data-help="Reset all settings to defaults EXCEPT voltage & current cal — it DOES reset the ext-temp cal.">Restore defaults</button>
+          <button class="btn needdev danger" id="restoreDefaults" disabled data-help="Unavailable: the native reset also changes calibration and has no calibration backup/restore.">Restore defaults</button>
         </div>
-        <div class="hint" style="margin-top:8px">“Zero all data” wipes run time / Wh / mAh. “Restore defaults” is not supported by this backend.</div>
+        <div class="hint" style="margin-top:8px">“Zero all data” wipes run time / Wh / mAh. The native reset also overwrites calibration and cannot preserve the original gains.</div>
       </div>
       <div class="sub" style="text-align:center;font-size:11px;padding:12px 0 2px">
         Copyright © 2026 DL24 reverse-engineering project contributors; adapted by LabBridge contributors ·
@@ -183,8 +183,9 @@
 </div>
 <div id="cvToast" class="toast">
   <h4>Constant-voltage mode</h4>
-  <p>If a battery or charged source is connected, the unit shows a safety warning
-     that must be cleared on its front panel — it can’t be bypassed over USB.</p>
+  <p>CV can draw current up to the configured protection limits. Use a
+     current-limited source and follow front-panel warnings. A voltage target
+     alone does not limit current.</p>
   <div class="acts"><button class="btn" id="cvDismiss">Got it</button><button class="btn" id="cvNever">Don’t show again</button></div>
 </div>
 <div id="helpbar" data-help="Hover any control for a short description."></div>

@@ -17,7 +17,7 @@ void console_respond(const std::string &id, Response response) {
     headers.set(p.first, p.second);
   reply.set("id", id)
       .set("status", double(response.status))
-      .set("body", response.body)
+      .set("body", std::move(response.body))
       .set("headers", headers);
   // One stdio call preserves complete LABJSON lines from console and worker.
   printf("LABJSON %s\n", reply.dump().c_str());

@@ -62,16 +62,22 @@ set(SRCS
     model/device_list.c
     model/dl24m_bank_request.c
     model/dl24m_bank_target_request.c
+    model/dl24m_diagnostics.c
+    model/dl24m_mode_request.c
     model/dl24m_register.c
     model/dl24m_registers.c
     model/dl24m_settings.c
+    model/dl24m_target_request.c
+    model/dl24m_trace_entry.c
     model/duration_request.c
+    model/feature_status.c
     model/ina228_configuration.c
     model/interlock_configuration.c
     model/lease.c
     model/lease_request.c
     model/management_token.c
     model/measurements.c
+    model/native_reading.c
     model/node_configuration.c
     model/node_info.c
     model/operation.c
@@ -88,6 +94,10 @@ set(SRCS
     model/sensor_reading.c
     model/sensor_readings.c
     model/stop_request.c
+    model/stream_auth.c
+    model/stream_rpc.c
+    model/stream_snapshot.c
+    model/stream_subscription.c
     model/switch_path_request.c
     model/temperature_channel.c
     model/temperature_channels.c
@@ -125,16 +135,22 @@ set(HDRS
     model/device_list.h
     model/dl24m_bank_request.h
     model/dl24m_bank_target_request.h
+    model/dl24m_diagnostics.h
+    model/dl24m_mode_request.h
     model/dl24m_register.h
     model/dl24m_registers.h
     model/dl24m_settings.h
+    model/dl24m_target_request.h
+    model/dl24m_trace_entry.h
     model/duration_request.h
+    model/feature_status.h
     model/ina228_configuration.h
     model/interlock_configuration.h
     model/lease.h
     model/lease_request.h
     model/management_token.h
     model/measurements.h
+    model/native_reading.h
     model/node_configuration.h
     model/node_info.h
     model/operation.h
@@ -151,6 +167,10 @@ set(HDRS
     model/sensor_reading.h
     model/sensor_readings.h
     model/stop_request.h
+    model/stream_auth.h
+    model/stream_rpc.h
+    model/stream_snapshot.h
+    model/stream_subscription.h
     model/switch_path_request.h
     model/temperature_channel.h
     model/temperature_channels.h

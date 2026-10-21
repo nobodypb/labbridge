@@ -3,7 +3,7 @@
 """
     LabBridge API
 
-    Configure and automate laboratory instruments through one ESP32 bridge. Physical devices expose discoverable source, sink and scalar sensor components; prefer their common routes for portable scripts. Driver-specific routes remain available for specialized settings and compatibility.  ## Typical automation sequence 1. Read node identity/boot_id and discover devices, components, actions and limits. 2. Reserve all actor devices on this node with createLease and heartbeat at least once per second. Ownership is per physical device, not per component. 3. Send a setting/output mutation with X-Lab-Lease and a new Idempotency-Key. A 202 response is only acceptance: poll Location until a terminal Operation, checking final_output and restore_pending. 4. Use valid, fresh sensor readings; preserve sign and units. Integrate only across consecutive samples with unchanged boot_id/epoch and bounded gaps. 5. Request independent STOP when finished or uncertain, verify OFF, then release the lease. Output OFF is not electrical isolation.  ## Failure and retry contract The bridge performs bounded device retries, write/readback verification and recovery. Never infer hardware success from an ATT acknowledgement, an HTTP 202 or a saved setpoint. A terminal failure can still have changed hardware. Device/component STOP requires no lease. Reconnect/reboot never resumes ON. Leases, operation IDs and idempotency keys are boot-local; do not replay an uncertain mutation after a reboot. Monotonic timestamps are not Unix time and cannot be compared across nodes/boots.  ## Access and provisioning LAN HTTP accepts Authorization: Bearer <token> for scripts or a UI password session on a trusted network. The UI redirects unauthenticated access to password login and resumes read-only discovery, never an uncertain mutation. UI passwords use salted version-two PBKDF2-HMAC-SHA256 verifiers with 6,000 iterations, deliberately tuned for basic protection and a login below three seconds on the ESP. Experimental 600,000-round verifiers require trusted USB password recovery; their hashes are never reinterpreted with fewer rounds. Choose the first password via the setup AP or trusted USB. HTTP is unencrypted; HTTPS with optional mTLS authentication is a separate planned feature. Obtain the API bearer secret using getManagementToken over physically trusted USB. The open LabBridge-Setup AP at 192.168.4.1 allows Wi-Fi setup/scan without bearer credentials; it does not grant laboratory control. The separate UI pages are /wifi, /devices and /dl24 (DL24M Bench). The Bench page shares the UI password session and CSRF protection and uses the same laboratory APIs; unsupported original controls remain visible but disabled. USB uses the same methods/paths with JSON-line requests {id, method, path, headers, body} and replies prefixed LABJSON; ignore other boot/log lines and correlate IDs. Target Wi-Fi PSKs are never returned.  ## Local safeguards and hardware scope Configured limits, lease expiry, measurement freshness, activation deadlines and optional external cell-temperature guards operate on the node. They supplement instrument protections and an explicit external battery test profile/wiring arrangement. Read-only sensors may omit actuator limits. Supported endpoint/pin combinations depend on the board. DL24M BLE behavior is commissioned on display Ver: 2.0; RD6018/RD6024, INA228 and Yocto physical commissioning is tracked separately. RD6018 original Wi-Fi modules connect to the ESP AP using RTU-over-TCP; use the module provisioning operations to configure them. Native Yocto USB on ESP is not implemented (use native PC USB or HTTP VirtualHub/YoctoHub).
+    Configure and automate laboratory instruments through one ESP32 bridge. Physical devices expose discoverable source, sink and scalar sensor components; prefer their common routes for portable scripts. Driver-specific routes remain available for specialized settings and compatibility.  ## Typical automation sequence 1. Read node identity/boot_id and discover devices, components, actions and limits. 2. Reserve all actor devices on this node with createLease and heartbeat at least once per second. Ownership is per physical device, not per component. 3. Send a setting/output mutation with X-Lab-Lease and a new Idempotency-Key. A 202 response is only acceptance: poll Location until a terminal Operation, checking final_output and restore_pending. 4. Use valid, fresh sensor readings; preserve sign and units. Integrate only across consecutive samples with unchanged boot_id/epoch and bounded gaps. 5. Request independent STOP when finished or uncertain, verify OFF, then release the lease. Output OFF is not electrical isolation.  ## Failure and retry contract The bridge performs bounded device retries, write/readback verification and recovery. Never infer hardware success from an ATT acknowledgement, an HTTP 202 or a saved setpoint. A terminal failure can still have changed hardware. Device/component STOP requires no lease. Reconnect/reboot never resumes ON. Leases, operation IDs and idempotency keys are boot-local; do not replay an uncertain mutation after a reboot. Monotonic timestamps are not Unix time and cannot be compared across nodes/boots.  ## Access and provisioning LAN HTTP accepts Authorization: Bearer <token> for scripts or a UI password session on a trusted network. The UI redirects unauthenticated access to password login and resumes read-only discovery, never an uncertain mutation. UI passwords use salted version-two PBKDF2-HMAC-SHA256 verifiers with 6,000 iterations, deliberately tuned for basic protection and a login below three seconds on the ESP. Experimental 600,000-round verifiers require trusted USB password recovery; their hashes are never reinterpreted with fewer rounds. Choose the first password via the setup AP or trusted USB. HTTP is unencrypted; HTTPS with optional mTLS authentication is a separate planned feature. Obtain the API bearer secret using getManagementToken over physically trusted USB. The open LabBridge-Setup AP at 192.168.4.1 allows Wi-Fi setup/scan without bearer credentials; it does not grant laboratory control. The separate UI pages are /wifi, /devices and /dl24 (DL24M Bench). The Bench page shares the UI password session and CSRF protection and uses the same laboratory APIs; unsupported original controls remain visible but disabled. USB uses the same methods/paths with JSON-line requests {id, method, path, headers, body} and replies prefixed LABJSON; ignore other boot/log lines and correlate IDs. Target Wi-Fi PSKs are never returned.  ## Local safeguards and hardware scope Configured limits, lease expiry, measurement freshness, activation deadlines and optional external cell-temperature guards operate on the node. They supplement instrument protections and an explicit external battery test profile/wiring arrangement. Read-only sensors may omit actuator limits. Supported endpoint/pin combinations depend on the board. DL24M BLE behavior is commissioned on display Ver: 2.0; RD6018/RD6024, INA228 and Yocto physical commissioning is tracked separately. RD6018 original Wi-Fi modules connect to the ESP AP using RTU-over-TCP; use the module provisioning operations to configure them. Native Yocto USB on ESP is not implemented (use native PC USB or HTTP VirtualHub/YoctoHub).  ## WebSocket Connect /api/v1/ws, authenticate with StreamAuth as the first text message, then use StreamRpc (the USB envelope) and StreamSubscription. Initial/full StreamSnapshot events include boot_id, stream sequence, measurement sequences, output, settings and tracked operations. Continue explicit lease heartbeats over RPC. See x-labbridge-websocket for message schemas and bounded resource rules. /dl24 uses this connection without HTTP polling.
 
     The version of the OpenAPI document: 0.1.0
     Generated by OpenAPI Generator (https://openapi-generator.tech)
@@ -21,8 +21,11 @@ from typing_extensions import Annotated
 from labbridge_generated.models.current_request import CurrentRequest
 from labbridge_generated.models.dl24m_bank_request import Dl24mBankRequest
 from labbridge_generated.models.dl24m_bank_target_request import Dl24mBankTargetRequest
+from labbridge_generated.models.dl24m_diagnostics import Dl24mDiagnostics
+from labbridge_generated.models.dl24m_mode_request import Dl24mModeRequest
 from labbridge_generated.models.dl24m_registers import Dl24mRegisters
 from labbridge_generated.models.dl24m_settings import Dl24mSettings
+from labbridge_generated.models.dl24m_target_request import Dl24mTargetRequest
 from labbridge_generated.models.operation import Operation
 from labbridge_generated.models.stop_request import StopRequest
 
@@ -42,6 +45,269 @@ class Dl24mApi:
         if api_client is None:
             api_client = ApiClient.get_default()
         self.api_client = api_client
+
+
+    @validate_call
+    def get_dl24m_diagnostics(
+        self,
+        device_id: Annotated[str, Field(strict=True, description="Configured physical device ID on this node. Discover IDs with listDevices; do not use a model name unless it is the configured ID.")],
+        _request_timeout: Union[
+            None,
+            Annotated[StrictFloat, Field(gt=0)],
+            Tuple[
+                Annotated[StrictFloat, Field(gt=0)],
+                Annotated[StrictFloat, Field(gt=0)]
+            ]
+        ] = None,
+        _request_auth: Optional[Dict[StrictStr, Any]] = None,
+        _content_type: Optional[StrictStr] = None,
+        _headers: Optional[Dict[StrictStr, Any]] = None,
+        _host_index: Annotated[StrictInt, Field(ge=0, le=0)] = 0,
+    ) -> Dl24mDiagnostics:
+        """Read bounded passive DL24M BLE diagnostics
+
+        Read the last 32 actual transmitted/received BLE byte chunks and cached register snapshot. Does not issue an additional device command. Chunks are transport observations, not HID frames; parser remains authoritative. dropped counts overwritten entries. All values are boot-local.
+
+        :param device_id: Configured physical device ID on this node. Discover IDs with listDevices; do not use a model name unless it is the configured ID. (required)
+        :type device_id: str
+        :param _request_timeout: timeout setting for this request. If one
+                                 number provided, it will be total request
+                                 timeout. It can also be a pair (tuple) of
+                                 (connection, read) timeouts.
+        :type _request_timeout: int, tuple(int, int), optional
+        :param _request_auth: set to override the auth_settings for an a single
+                              request; this effectively ignores the
+                              authentication in the spec for a single request.
+        :type _request_auth: dict, optional
+        :param _content_type: force content-type for the request.
+        :type _content_type: str, Optional
+        :param _headers: set to override the headers for a single
+                         request; this effectively ignores the headers
+                         in the spec for a single request.
+        :type _headers: dict, optional
+        :param _host_index: set to override the host_index for a single
+                            request; this effectively ignores the host_index
+                            in the spec for a single request.
+        :type _host_index: int, optional
+        :return: Returns the result object.
+        """ # noqa: E501
+
+        _param = self._get_dl24m_diagnostics_serialize(
+            device_id=device_id,
+            _request_auth=_request_auth,
+            _content_type=_content_type,
+            _headers=_headers,
+            _host_index=_host_index
+        )
+
+        _response_types_map: Dict[str, Optional[str]] = {
+            '200': "Dl24mDiagnostics",
+        }
+        response_data = self.api_client.call_api(
+            *_param,
+            _request_timeout=_request_timeout
+        )
+        response_data.read()
+        return self.api_client.response_deserialize(
+            response_data=response_data,
+            response_types_map=_response_types_map,
+        ).data
+
+
+    @validate_call
+    def get_dl24m_diagnostics_with_http_info(
+        self,
+        device_id: Annotated[str, Field(strict=True, description="Configured physical device ID on this node. Discover IDs with listDevices; do not use a model name unless it is the configured ID.")],
+        _request_timeout: Union[
+            None,
+            Annotated[StrictFloat, Field(gt=0)],
+            Tuple[
+                Annotated[StrictFloat, Field(gt=0)],
+                Annotated[StrictFloat, Field(gt=0)]
+            ]
+        ] = None,
+        _request_auth: Optional[Dict[StrictStr, Any]] = None,
+        _content_type: Optional[StrictStr] = None,
+        _headers: Optional[Dict[StrictStr, Any]] = None,
+        _host_index: Annotated[StrictInt, Field(ge=0, le=0)] = 0,
+    ) -> ApiResponse[Dl24mDiagnostics]:
+        """Read bounded passive DL24M BLE diagnostics
+
+        Read the last 32 actual transmitted/received BLE byte chunks and cached register snapshot. Does not issue an additional device command. Chunks are transport observations, not HID frames; parser remains authoritative. dropped counts overwritten entries. All values are boot-local.
+
+        :param device_id: Configured physical device ID on this node. Discover IDs with listDevices; do not use a model name unless it is the configured ID. (required)
+        :type device_id: str
+        :param _request_timeout: timeout setting for this request. If one
+                                 number provided, it will be total request
+                                 timeout. It can also be a pair (tuple) of
+                                 (connection, read) timeouts.
+        :type _request_timeout: int, tuple(int, int), optional
+        :param _request_auth: set to override the auth_settings for an a single
+                              request; this effectively ignores the
+                              authentication in the spec for a single request.
+        :type _request_auth: dict, optional
+        :param _content_type: force content-type for the request.
+        :type _content_type: str, Optional
+        :param _headers: set to override the headers for a single
+                         request; this effectively ignores the headers
+                         in the spec for a single request.
+        :type _headers: dict, optional
+        :param _host_index: set to override the host_index for a single
+                            request; this effectively ignores the host_index
+                            in the spec for a single request.
+        :type _host_index: int, optional
+        :return: Returns the result object.
+        """ # noqa: E501
+
+        _param = self._get_dl24m_diagnostics_serialize(
+            device_id=device_id,
+            _request_auth=_request_auth,
+            _content_type=_content_type,
+            _headers=_headers,
+            _host_index=_host_index
+        )
+
+        _response_types_map: Dict[str, Optional[str]] = {
+            '200': "Dl24mDiagnostics",
+        }
+        response_data = self.api_client.call_api(
+            *_param,
+            _request_timeout=_request_timeout
+        )
+        response_data.read()
+        return self.api_client.response_deserialize(
+            response_data=response_data,
+            response_types_map=_response_types_map,
+        )
+
+
+    @validate_call
+    def get_dl24m_diagnostics_without_preload_content(
+        self,
+        device_id: Annotated[str, Field(strict=True, description="Configured physical device ID on this node. Discover IDs with listDevices; do not use a model name unless it is the configured ID.")],
+        _request_timeout: Union[
+            None,
+            Annotated[StrictFloat, Field(gt=0)],
+            Tuple[
+                Annotated[StrictFloat, Field(gt=0)],
+                Annotated[StrictFloat, Field(gt=0)]
+            ]
+        ] = None,
+        _request_auth: Optional[Dict[StrictStr, Any]] = None,
+        _content_type: Optional[StrictStr] = None,
+        _headers: Optional[Dict[StrictStr, Any]] = None,
+        _host_index: Annotated[StrictInt, Field(ge=0, le=0)] = 0,
+    ) -> RESTResponseType:
+        """Read bounded passive DL24M BLE diagnostics
+
+        Read the last 32 actual transmitted/received BLE byte chunks and cached register snapshot. Does not issue an additional device command. Chunks are transport observations, not HID frames; parser remains authoritative. dropped counts overwritten entries. All values are boot-local.
+
+        :param device_id: Configured physical device ID on this node. Discover IDs with listDevices; do not use a model name unless it is the configured ID. (required)
+        :type device_id: str
+        :param _request_timeout: timeout setting for this request. If one
+                                 number provided, it will be total request
+                                 timeout. It can also be a pair (tuple) of
+                                 (connection, read) timeouts.
+        :type _request_timeout: int, tuple(int, int), optional
+        :param _request_auth: set to override the auth_settings for an a single
+                              request; this effectively ignores the
+                              authentication in the spec for a single request.
+        :type _request_auth: dict, optional
+        :param _content_type: force content-type for the request.
+        :type _content_type: str, Optional
+        :param _headers: set to override the headers for a single
+                         request; this effectively ignores the headers
+                         in the spec for a single request.
+        :type _headers: dict, optional
+        :param _host_index: set to override the host_index for a single
+                            request; this effectively ignores the host_index
+                            in the spec for a single request.
+        :type _host_index: int, optional
+        :return: Returns the result object.
+        """ # noqa: E501
+
+        _param = self._get_dl24m_diagnostics_serialize(
+            device_id=device_id,
+            _request_auth=_request_auth,
+            _content_type=_content_type,
+            _headers=_headers,
+            _host_index=_host_index
+        )
+
+        _response_types_map: Dict[str, Optional[str]] = {
+            '200': "Dl24mDiagnostics",
+        }
+        response_data = self.api_client.call_api(
+            *_param,
+            _request_timeout=_request_timeout
+        )
+        return response_data.response
+
+
+    def _get_dl24m_diagnostics_serialize(
+        self,
+        device_id,
+        _request_auth,
+        _content_type,
+        _headers,
+        _host_index,
+    ) -> RequestSerialized:
+
+        _host = None
+
+        _collection_formats: Dict[str, str] = {
+        }
+
+        _path_params: Dict[str, str] = {}
+        _query_params: List[Tuple[str, str]] = []
+        _header_params: Dict[str, Optional[str]] = _headers or {}
+        _form_params: List[Tuple[str, str]] = []
+        _files: Dict[
+            str, Union[str, bytes, List[str], List[bytes], List[Tuple[str, bytes]]]
+        ] = {}
+        _body_params: Optional[bytes] = None
+
+        # process the path parameters
+        if device_id is not None:
+            _path_params['deviceId'] = device_id
+        # process the query parameters
+        # process the header parameters
+        # process the form parameters
+        # process the body parameter
+
+
+        # set the HTTP header `Accept`
+        if 'Accept' not in _header_params:
+            _header_params['Accept'] = self.api_client.select_header_accept(
+                [
+                    'application/json', 
+                    'application/problem+json'
+                ]
+            )
+
+
+        # authentication setting
+        _auth_settings: List[str] = [
+            'browserSession', 
+            'bearerAuth'
+        ]
+
+        return self.api_client.param_serialize(
+            method='GET',
+            resource_path='/api/v1/devices/{deviceId}/dl24m/diagnostics',
+            path_params=_path_params,
+            query_params=_query_params,
+            header_params=_header_params,
+            body=_body_params,
+            post_params=_form_params,
+            files=_files,
+            auth_settings=_auth_settings,
+            collection_formats=_collection_formats,
+            _host=_host,
+            _request_auth=_request_auth
+        )
+
+
 
 
     @validate_call
@@ -592,7 +858,7 @@ class Dl24mApi:
     ) -> Operation:
         """Inspect an inactive DL24M target bank
 
-        This read uses POST because the instrument must temporarily change mode. Requires CC, confirmed OFF and a lease. Snapshot the bank/CC state, select the requested inactive bank, read its raw target, then restore CC and its original target. Poll the operation for confirmed_value (raw bank units) and restoration status. The active meaning/units of banks 1..3 are not commissioned.  Returns 202 with an Operation and Location, not an instrument acknowledgement. Keep the lease alive where required and poll until terminal. Bounded device retries/readback recovery run on the bridge; callers receive a terminal failure when recovery is exhausted. Do not automatically replay an uncertain mutation.
+        This read uses POST because the instrument must temporarily change mode. Requires CC, confirmed OFF and a lease. Snapshot the bank/CC state, select the requested inactive bank, read its raw target, then restore CC and its original target. Poll the operation for confirmed_value (raw bank units) and restoration status. Native banks are 1 CV (raw/100 V), 2 CR (raw/10 Ohm), 3 CP (raw/10 W). Prefer the typed mode/target API for normal control.  Returns 202 with an Operation and Location, not an instrument acknowledgement. Keep the lease alive where required and poll until terminal. Bounded device retries/readback recovery run on the bridge; callers receive a terminal failure when recovery is exhausted. Do not automatically replay an uncertain mutation.
 
         :param device_id: Configured physical device ID on this node. Discover IDs with listDevices; do not use a model name unless it is the configured ID. (required)
         :type device_id: str
@@ -671,7 +937,7 @@ class Dl24mApi:
     ) -> ApiResponse[Operation]:
         """Inspect an inactive DL24M target bank
 
-        This read uses POST because the instrument must temporarily change mode. Requires CC, confirmed OFF and a lease. Snapshot the bank/CC state, select the requested inactive bank, read its raw target, then restore CC and its original target. Poll the operation for confirmed_value (raw bank units) and restoration status. The active meaning/units of banks 1..3 are not commissioned.  Returns 202 with an Operation and Location, not an instrument acknowledgement. Keep the lease alive where required and poll until terminal. Bounded device retries/readback recovery run on the bridge; callers receive a terminal failure when recovery is exhausted. Do not automatically replay an uncertain mutation.
+        This read uses POST because the instrument must temporarily change mode. Requires CC, confirmed OFF and a lease. Snapshot the bank/CC state, select the requested inactive bank, read its raw target, then restore CC and its original target. Poll the operation for confirmed_value (raw bank units) and restoration status. Native banks are 1 CV (raw/100 V), 2 CR (raw/10 Ohm), 3 CP (raw/10 W). Prefer the typed mode/target API for normal control.  Returns 202 with an Operation and Location, not an instrument acknowledgement. Keep the lease alive where required and poll until terminal. Bounded device retries/readback recovery run on the bridge; callers receive a terminal failure when recovery is exhausted. Do not automatically replay an uncertain mutation.
 
         :param device_id: Configured physical device ID on this node. Discover IDs with listDevices; do not use a model name unless it is the configured ID. (required)
         :type device_id: str
@@ -750,7 +1016,7 @@ class Dl24mApi:
     ) -> RESTResponseType:
         """Inspect an inactive DL24M target bank
 
-        This read uses POST because the instrument must temporarily change mode. Requires CC, confirmed OFF and a lease. Snapshot the bank/CC state, select the requested inactive bank, read its raw target, then restore CC and its original target. Poll the operation for confirmed_value (raw bank units) and restoration status. The active meaning/units of banks 1..3 are not commissioned.  Returns 202 with an Operation and Location, not an instrument acknowledgement. Keep the lease alive where required and poll until terminal. Bounded device retries/readback recovery run on the bridge; callers receive a terminal failure when recovery is exhausted. Do not automatically replay an uncertain mutation.
+        This read uses POST because the instrument must temporarily change mode. Requires CC, confirmed OFF and a lease. Snapshot the bank/CC state, select the requested inactive bank, read its raw target, then restore CC and its original target. Poll the operation for confirmed_value (raw bank units) and restoration status. Native banks are 1 CV (raw/100 V), 2 CR (raw/10 Ohm), 3 CP (raw/10 W). Prefer the typed mode/target API for normal control.  Returns 202 with an Operation and Location, not an instrument acknowledgement. Keep the lease alive where required and poll until terminal. Bounded device retries/readback recovery run on the bridge; callers receive a terminal failure when recovery is exhausted. Do not automatically replay an uncertain mutation.
 
         :param device_id: Configured physical device ID on this node. Discover IDs with listDevices; do not use a model name unless it is the configured ID. (required)
         :type device_id: str
@@ -1534,6 +1800,327 @@ class Dl24mApi:
 
 
     @validate_call
+    def set_dl24m_mode(
+        self,
+        device_id: Annotated[str, Field(strict=True, description="Configured physical device ID on this node. Discover IDs with listDevices; do not use a model name unless it is the configured ID.")],
+        x_lab_lease: Annotated[StrictStr, Field(description="Active lease ID covering this physical device. Components share ownership; heartbeats must continue while commands are pending.")],
+        idempotency_key: Annotated[str, Field(min_length=1, strict=True, max_length=96, description="Unique key per logical mutation (1..96 characters). Repeating the same method/path/semantic JSON body within this boot returns the existing operation; reusing it for different content returns 409. Retention is bounded. After an uncertain timeout or reboot, inspect state and STOP as needed instead of replaying ON.")],
+        dl24m_mode_request: Annotated[Dl24mModeRequest, Field(description="JSON request with the fields documented by the referenced schema. Unknown properties are rejected; use {} for an empty StopRequest.")],
+        _request_timeout: Union[
+            None,
+            Annotated[StrictFloat, Field(gt=0)],
+            Tuple[
+                Annotated[StrictFloat, Field(gt=0)],
+                Annotated[StrictFloat, Field(gt=0)]
+            ]
+        ] = None,
+        _request_auth: Optional[Dict[StrictStr, Any]] = None,
+        _content_type: Optional[StrictStr] = None,
+        _headers: Optional[Dict[StrictStr, Any]] = None,
+        _host_index: Annotated[StrictInt, Field(ge=0, le=0)] = 0,
+    ) -> Operation:
+        """Select DL24M load mode with OFF readback
+
+        Snapshot original mode and target before switching; journal rollback before any mutation. Does not enable output. Follow the Operation to verified completion. On failure STOP and restore original mode and target.
+
+        :param device_id: Configured physical device ID on this node. Discover IDs with listDevices; do not use a model name unless it is the configured ID. (required)
+        :type device_id: str
+        :param x_lab_lease: Active lease ID covering this physical device. Components share ownership; heartbeats must continue while commands are pending. (required)
+        :type x_lab_lease: str
+        :param idempotency_key: Unique key per logical mutation (1..96 characters). Repeating the same method/path/semantic JSON body within this boot returns the existing operation; reusing it for different content returns 409. Retention is bounded. After an uncertain timeout or reboot, inspect state and STOP as needed instead of replaying ON. (required)
+        :type idempotency_key: str
+        :param dl24m_mode_request: JSON request with the fields documented by the referenced schema. Unknown properties are rejected; use {} for an empty StopRequest. (required)
+        :type dl24m_mode_request: Dl24mModeRequest
+        :param _request_timeout: timeout setting for this request. If one
+                                 number provided, it will be total request
+                                 timeout. It can also be a pair (tuple) of
+                                 (connection, read) timeouts.
+        :type _request_timeout: int, tuple(int, int), optional
+        :param _request_auth: set to override the auth_settings for an a single
+                              request; this effectively ignores the
+                              authentication in the spec for a single request.
+        :type _request_auth: dict, optional
+        :param _content_type: force content-type for the request.
+        :type _content_type: str, Optional
+        :param _headers: set to override the headers for a single
+                         request; this effectively ignores the headers
+                         in the spec for a single request.
+        :type _headers: dict, optional
+        :param _host_index: set to override the host_index for a single
+                            request; this effectively ignores the host_index
+                            in the spec for a single request.
+        :type _host_index: int, optional
+        :return: Returns the result object.
+        """ # noqa: E501
+
+        _param = self._set_dl24m_mode_serialize(
+            device_id=device_id,
+            x_lab_lease=x_lab_lease,
+            idempotency_key=idempotency_key,
+            dl24m_mode_request=dl24m_mode_request,
+            _request_auth=_request_auth,
+            _content_type=_content_type,
+            _headers=_headers,
+            _host_index=_host_index
+        )
+
+        _response_types_map: Dict[str, Optional[str]] = {
+            '202': "Operation",
+        }
+        response_data = self.api_client.call_api(
+            *_param,
+            _request_timeout=_request_timeout
+        )
+        response_data.read()
+        return self.api_client.response_deserialize(
+            response_data=response_data,
+            response_types_map=_response_types_map,
+        ).data
+
+
+    @validate_call
+    def set_dl24m_mode_with_http_info(
+        self,
+        device_id: Annotated[str, Field(strict=True, description="Configured physical device ID on this node. Discover IDs with listDevices; do not use a model name unless it is the configured ID.")],
+        x_lab_lease: Annotated[StrictStr, Field(description="Active lease ID covering this physical device. Components share ownership; heartbeats must continue while commands are pending.")],
+        idempotency_key: Annotated[str, Field(min_length=1, strict=True, max_length=96, description="Unique key per logical mutation (1..96 characters). Repeating the same method/path/semantic JSON body within this boot returns the existing operation; reusing it for different content returns 409. Retention is bounded. After an uncertain timeout or reboot, inspect state and STOP as needed instead of replaying ON.")],
+        dl24m_mode_request: Annotated[Dl24mModeRequest, Field(description="JSON request with the fields documented by the referenced schema. Unknown properties are rejected; use {} for an empty StopRequest.")],
+        _request_timeout: Union[
+            None,
+            Annotated[StrictFloat, Field(gt=0)],
+            Tuple[
+                Annotated[StrictFloat, Field(gt=0)],
+                Annotated[StrictFloat, Field(gt=0)]
+            ]
+        ] = None,
+        _request_auth: Optional[Dict[StrictStr, Any]] = None,
+        _content_type: Optional[StrictStr] = None,
+        _headers: Optional[Dict[StrictStr, Any]] = None,
+        _host_index: Annotated[StrictInt, Field(ge=0, le=0)] = 0,
+    ) -> ApiResponse[Operation]:
+        """Select DL24M load mode with OFF readback
+
+        Snapshot original mode and target before switching; journal rollback before any mutation. Does not enable output. Follow the Operation to verified completion. On failure STOP and restore original mode and target.
+
+        :param device_id: Configured physical device ID on this node. Discover IDs with listDevices; do not use a model name unless it is the configured ID. (required)
+        :type device_id: str
+        :param x_lab_lease: Active lease ID covering this physical device. Components share ownership; heartbeats must continue while commands are pending. (required)
+        :type x_lab_lease: str
+        :param idempotency_key: Unique key per logical mutation (1..96 characters). Repeating the same method/path/semantic JSON body within this boot returns the existing operation; reusing it for different content returns 409. Retention is bounded. After an uncertain timeout or reboot, inspect state and STOP as needed instead of replaying ON. (required)
+        :type idempotency_key: str
+        :param dl24m_mode_request: JSON request with the fields documented by the referenced schema. Unknown properties are rejected; use {} for an empty StopRequest. (required)
+        :type dl24m_mode_request: Dl24mModeRequest
+        :param _request_timeout: timeout setting for this request. If one
+                                 number provided, it will be total request
+                                 timeout. It can also be a pair (tuple) of
+                                 (connection, read) timeouts.
+        :type _request_timeout: int, tuple(int, int), optional
+        :param _request_auth: set to override the auth_settings for an a single
+                              request; this effectively ignores the
+                              authentication in the spec for a single request.
+        :type _request_auth: dict, optional
+        :param _content_type: force content-type for the request.
+        :type _content_type: str, Optional
+        :param _headers: set to override the headers for a single
+                         request; this effectively ignores the headers
+                         in the spec for a single request.
+        :type _headers: dict, optional
+        :param _host_index: set to override the host_index for a single
+                            request; this effectively ignores the host_index
+                            in the spec for a single request.
+        :type _host_index: int, optional
+        :return: Returns the result object.
+        """ # noqa: E501
+
+        _param = self._set_dl24m_mode_serialize(
+            device_id=device_id,
+            x_lab_lease=x_lab_lease,
+            idempotency_key=idempotency_key,
+            dl24m_mode_request=dl24m_mode_request,
+            _request_auth=_request_auth,
+            _content_type=_content_type,
+            _headers=_headers,
+            _host_index=_host_index
+        )
+
+        _response_types_map: Dict[str, Optional[str]] = {
+            '202': "Operation",
+        }
+        response_data = self.api_client.call_api(
+            *_param,
+            _request_timeout=_request_timeout
+        )
+        response_data.read()
+        return self.api_client.response_deserialize(
+            response_data=response_data,
+            response_types_map=_response_types_map,
+        )
+
+
+    @validate_call
+    def set_dl24m_mode_without_preload_content(
+        self,
+        device_id: Annotated[str, Field(strict=True, description="Configured physical device ID on this node. Discover IDs with listDevices; do not use a model name unless it is the configured ID.")],
+        x_lab_lease: Annotated[StrictStr, Field(description="Active lease ID covering this physical device. Components share ownership; heartbeats must continue while commands are pending.")],
+        idempotency_key: Annotated[str, Field(min_length=1, strict=True, max_length=96, description="Unique key per logical mutation (1..96 characters). Repeating the same method/path/semantic JSON body within this boot returns the existing operation; reusing it for different content returns 409. Retention is bounded. After an uncertain timeout or reboot, inspect state and STOP as needed instead of replaying ON.")],
+        dl24m_mode_request: Annotated[Dl24mModeRequest, Field(description="JSON request with the fields documented by the referenced schema. Unknown properties are rejected; use {} for an empty StopRequest.")],
+        _request_timeout: Union[
+            None,
+            Annotated[StrictFloat, Field(gt=0)],
+            Tuple[
+                Annotated[StrictFloat, Field(gt=0)],
+                Annotated[StrictFloat, Field(gt=0)]
+            ]
+        ] = None,
+        _request_auth: Optional[Dict[StrictStr, Any]] = None,
+        _content_type: Optional[StrictStr] = None,
+        _headers: Optional[Dict[StrictStr, Any]] = None,
+        _host_index: Annotated[StrictInt, Field(ge=0, le=0)] = 0,
+    ) -> RESTResponseType:
+        """Select DL24M load mode with OFF readback
+
+        Snapshot original mode and target before switching; journal rollback before any mutation. Does not enable output. Follow the Operation to verified completion. On failure STOP and restore original mode and target.
+
+        :param device_id: Configured physical device ID on this node. Discover IDs with listDevices; do not use a model name unless it is the configured ID. (required)
+        :type device_id: str
+        :param x_lab_lease: Active lease ID covering this physical device. Components share ownership; heartbeats must continue while commands are pending. (required)
+        :type x_lab_lease: str
+        :param idempotency_key: Unique key per logical mutation (1..96 characters). Repeating the same method/path/semantic JSON body within this boot returns the existing operation; reusing it for different content returns 409. Retention is bounded. After an uncertain timeout or reboot, inspect state and STOP as needed instead of replaying ON. (required)
+        :type idempotency_key: str
+        :param dl24m_mode_request: JSON request with the fields documented by the referenced schema. Unknown properties are rejected; use {} for an empty StopRequest. (required)
+        :type dl24m_mode_request: Dl24mModeRequest
+        :param _request_timeout: timeout setting for this request. If one
+                                 number provided, it will be total request
+                                 timeout. It can also be a pair (tuple) of
+                                 (connection, read) timeouts.
+        :type _request_timeout: int, tuple(int, int), optional
+        :param _request_auth: set to override the auth_settings for an a single
+                              request; this effectively ignores the
+                              authentication in the spec for a single request.
+        :type _request_auth: dict, optional
+        :param _content_type: force content-type for the request.
+        :type _content_type: str, Optional
+        :param _headers: set to override the headers for a single
+                         request; this effectively ignores the headers
+                         in the spec for a single request.
+        :type _headers: dict, optional
+        :param _host_index: set to override the host_index for a single
+                            request; this effectively ignores the host_index
+                            in the spec for a single request.
+        :type _host_index: int, optional
+        :return: Returns the result object.
+        """ # noqa: E501
+
+        _param = self._set_dl24m_mode_serialize(
+            device_id=device_id,
+            x_lab_lease=x_lab_lease,
+            idempotency_key=idempotency_key,
+            dl24m_mode_request=dl24m_mode_request,
+            _request_auth=_request_auth,
+            _content_type=_content_type,
+            _headers=_headers,
+            _host_index=_host_index
+        )
+
+        _response_types_map: Dict[str, Optional[str]] = {
+            '202': "Operation",
+        }
+        response_data = self.api_client.call_api(
+            *_param,
+            _request_timeout=_request_timeout
+        )
+        return response_data.response
+
+
+    def _set_dl24m_mode_serialize(
+        self,
+        device_id,
+        x_lab_lease,
+        idempotency_key,
+        dl24m_mode_request,
+        _request_auth,
+        _content_type,
+        _headers,
+        _host_index,
+    ) -> RequestSerialized:
+
+        _host = None
+
+        _collection_formats: Dict[str, str] = {
+        }
+
+        _path_params: Dict[str, str] = {}
+        _query_params: List[Tuple[str, str]] = []
+        _header_params: Dict[str, Optional[str]] = _headers or {}
+        _form_params: List[Tuple[str, str]] = []
+        _files: Dict[
+            str, Union[str, bytes, List[str], List[bytes], List[Tuple[str, bytes]]]
+        ] = {}
+        _body_params: Optional[bytes] = None
+
+        # process the path parameters
+        if device_id is not None:
+            _path_params['deviceId'] = device_id
+        # process the query parameters
+        # process the header parameters
+        if x_lab_lease is not None:
+            _header_params['X-Lab-Lease'] = x_lab_lease
+        if idempotency_key is not None:
+            _header_params['Idempotency-Key'] = idempotency_key
+        # process the form parameters
+        # process the body parameter
+        if dl24m_mode_request is not None:
+            _body_params = dl24m_mode_request
+
+
+        # set the HTTP header `Accept`
+        if 'Accept' not in _header_params:
+            _header_params['Accept'] = self.api_client.select_header_accept(
+                [
+                    'application/problem+json', 
+                    'application/json'
+                ]
+            )
+
+        # set the HTTP header `Content-Type`
+        if _content_type:
+            _header_params['Content-Type'] = _content_type
+        else:
+            _default_content_type = (
+                self.api_client.select_header_content_type(
+                    [
+                        'application/json'
+                    ]
+                )
+            )
+            if _default_content_type is not None:
+                _header_params['Content-Type'] = _default_content_type
+
+        # authentication setting
+        _auth_settings: List[str] = [
+            'browserSession', 
+            'bearerAuth'
+        ]
+
+        return self.api_client.param_serialize(
+            method='PUT',
+            resource_path='/api/v1/devices/{deviceId}/dl24m/mode',
+            path_params=_path_params,
+            query_params=_query_params,
+            header_params=_header_params,
+            body=_body_params,
+            post_params=_form_params,
+            files=_files,
+            auth_settings=_auth_settings,
+            collection_formats=_collection_formats,
+            _host=_host,
+            _request_auth=_request_auth
+        )
+
+
+
+
+    @validate_call
     def set_dl24m_settings(
         self,
         device_id: Annotated[str, Field(strict=True, description="Configured physical device ID on this node. Discover IDs with listDevices; do not use a model name unless it is the configured ID.")],
@@ -1555,7 +2142,7 @@ class Dl24mApi:
     ) -> Operation:
         """Apply and verify DL24M settings
 
-        Apply only the supplied fields; omitted settings remain unchanged. Requires a lease and confirmed output OFF for settings changes. Snapshot original values before the multi-step operation, use device timing and bounded readback retries, and restore on failure. Check restore_pending before issuing new work. mode 0 is CC; other banks may be edited OFF, but active non-CC operation is not commissioned and ON is blocked.  Returns 202 with an Operation and Location, not an instrument acknowledgement. Keep the lease alive where required and poll until terminal. Bounded device retries/readback recovery run on the bridge; callers receive a terminal failure when recovery is exhausted. Do not automatically replay an uncertain mutation.
+        Apply only the supplied fields; omitted settings remain unchanged. Requires a lease and confirmed output OFF for settings changes. Snapshot original values before the multi-step operation, use device timing and bounded readback retries, and restore on failure. Check restore_pending before issuing new work. Native modes are 0 CC, 1 CV, 2 CR, 3 CP. Prefer the typed mode/target operations for changes; activation independently checks mode-specific safety prerequisites.  Returns 202 with an Operation and Location, not an instrument acknowledgement. Keep the lease alive where required and poll until terminal. Bounded device retries/readback recovery run on the bridge; callers receive a terminal failure when recovery is exhausted. Do not automatically replay an uncertain mutation.
 
         :param device_id: Configured physical device ID on this node. Discover IDs with listDevices; do not use a model name unless it is the configured ID. (required)
         :type device_id: str
@@ -1634,7 +2221,7 @@ class Dl24mApi:
     ) -> ApiResponse[Operation]:
         """Apply and verify DL24M settings
 
-        Apply only the supplied fields; omitted settings remain unchanged. Requires a lease and confirmed output OFF for settings changes. Snapshot original values before the multi-step operation, use device timing and bounded readback retries, and restore on failure. Check restore_pending before issuing new work. mode 0 is CC; other banks may be edited OFF, but active non-CC operation is not commissioned and ON is blocked.  Returns 202 with an Operation and Location, not an instrument acknowledgement. Keep the lease alive where required and poll until terminal. Bounded device retries/readback recovery run on the bridge; callers receive a terminal failure when recovery is exhausted. Do not automatically replay an uncertain mutation.
+        Apply only the supplied fields; omitted settings remain unchanged. Requires a lease and confirmed output OFF for settings changes. Snapshot original values before the multi-step operation, use device timing and bounded readback retries, and restore on failure. Check restore_pending before issuing new work. Native modes are 0 CC, 1 CV, 2 CR, 3 CP. Prefer the typed mode/target operations for changes; activation independently checks mode-specific safety prerequisites.  Returns 202 with an Operation and Location, not an instrument acknowledgement. Keep the lease alive where required and poll until terminal. Bounded device retries/readback recovery run on the bridge; callers receive a terminal failure when recovery is exhausted. Do not automatically replay an uncertain mutation.
 
         :param device_id: Configured physical device ID on this node. Discover IDs with listDevices; do not use a model name unless it is the configured ID. (required)
         :type device_id: str
@@ -1713,7 +2300,7 @@ class Dl24mApi:
     ) -> RESTResponseType:
         """Apply and verify DL24M settings
 
-        Apply only the supplied fields; omitted settings remain unchanged. Requires a lease and confirmed output OFF for settings changes. Snapshot original values before the multi-step operation, use device timing and bounded readback retries, and restore on failure. Check restore_pending before issuing new work. mode 0 is CC; other banks may be edited OFF, but active non-CC operation is not commissioned and ON is blocked.  Returns 202 with an Operation and Location, not an instrument acknowledgement. Keep the lease alive where required and poll until terminal. Bounded device retries/readback recovery run on the bridge; callers receive a terminal failure when recovery is exhausted. Do not automatically replay an uncertain mutation.
+        Apply only the supplied fields; omitted settings remain unchanged. Requires a lease and confirmed output OFF for settings changes. Snapshot original values before the multi-step operation, use device timing and bounded readback retries, and restore on failure. Check restore_pending before issuing new work. Native modes are 0 CC, 1 CV, 2 CR, 3 CP. Prefer the typed mode/target operations for changes; activation independently checks mode-specific safety prerequisites.  Returns 202 with an Operation and Location, not an instrument acknowledgement. Keep the lease alive where required and poll until terminal. Bounded device retries/readback recovery run on the bridge; callers receive a terminal failure when recovery is exhausted. Do not automatically replay an uncertain mutation.
 
         :param device_id: Configured physical device ID on this node. Discover IDs with listDevices; do not use a model name unless it is the configured ID. (required)
         :type device_id: str
@@ -1839,6 +2426,327 @@ class Dl24mApi:
         return self.api_client.param_serialize(
             method='PUT',
             resource_path='/api/v1/devices/{deviceId}/dl24m/settings',
+            path_params=_path_params,
+            query_params=_query_params,
+            header_params=_header_params,
+            body=_body_params,
+            post_params=_form_params,
+            files=_files,
+            auth_settings=_auth_settings,
+            collection_formats=_collection_formats,
+            _host=_host,
+            _request_auth=_request_auth
+        )
+
+
+
+
+    @validate_call
+    def set_dl24m_target(
+        self,
+        device_id: Annotated[str, Field(strict=True, description="Configured physical device ID on this node. Discover IDs with listDevices; do not use a model name unless it is the configured ID.")],
+        x_lab_lease: Annotated[StrictStr, Field(description="Active lease ID covering this physical device. Components share ownership; heartbeats must continue while commands are pending.")],
+        idempotency_key: Annotated[str, Field(min_length=1, strict=True, max_length=96, description="Unique key per logical mutation (1..96 characters). Repeating the same method/path/semantic JSON body within this boot returns the existing operation; reusing it for different content returns 409. Retention is bounded. After an uncertain timeout or reboot, inspect state and STOP as needed instead of replaying ON.")],
+        dl24m_target_request: Annotated[Dl24mTargetRequest, Field(description="JSON request with the fields documented by the referenced schema. Unknown properties are rejected; use {} for an empty StopRequest.")],
+        _request_timeout: Union[
+            None,
+            Annotated[StrictFloat, Field(gt=0)],
+            Tuple[
+                Annotated[StrictFloat, Field(gt=0)],
+                Annotated[StrictFloat, Field(gt=0)]
+            ]
+        ] = None,
+        _request_auth: Optional[Dict[StrictStr, Any]] = None,
+        _content_type: Optional[StrictStr] = None,
+        _headers: Optional[Dict[StrictStr, Any]] = None,
+        _host_index: Annotated[StrictInt, Field(ge=0, le=0)] = 0,
+    ) -> Operation:
+        """Set typed DL24M target while OFF
+
+        Only modifies the selected bank, with journaled original target and readback. Activation uses mode-specific predictions plus measured V/I/P guards: CR at configured maximum voltage, CP at fresh cutoff voltage, CV requires fresh device OCP/OPP no greater than local limits. CV cannot promise a current ceiling from its voltage target alone.
+
+        :param device_id: Configured physical device ID on this node. Discover IDs with listDevices; do not use a model name unless it is the configured ID. (required)
+        :type device_id: str
+        :param x_lab_lease: Active lease ID covering this physical device. Components share ownership; heartbeats must continue while commands are pending. (required)
+        :type x_lab_lease: str
+        :param idempotency_key: Unique key per logical mutation (1..96 characters). Repeating the same method/path/semantic JSON body within this boot returns the existing operation; reusing it for different content returns 409. Retention is bounded. After an uncertain timeout or reboot, inspect state and STOP as needed instead of replaying ON. (required)
+        :type idempotency_key: str
+        :param dl24m_target_request: JSON request with the fields documented by the referenced schema. Unknown properties are rejected; use {} for an empty StopRequest. (required)
+        :type dl24m_target_request: Dl24mTargetRequest
+        :param _request_timeout: timeout setting for this request. If one
+                                 number provided, it will be total request
+                                 timeout. It can also be a pair (tuple) of
+                                 (connection, read) timeouts.
+        :type _request_timeout: int, tuple(int, int), optional
+        :param _request_auth: set to override the auth_settings for an a single
+                              request; this effectively ignores the
+                              authentication in the spec for a single request.
+        :type _request_auth: dict, optional
+        :param _content_type: force content-type for the request.
+        :type _content_type: str, Optional
+        :param _headers: set to override the headers for a single
+                         request; this effectively ignores the headers
+                         in the spec for a single request.
+        :type _headers: dict, optional
+        :param _host_index: set to override the host_index for a single
+                            request; this effectively ignores the host_index
+                            in the spec for a single request.
+        :type _host_index: int, optional
+        :return: Returns the result object.
+        """ # noqa: E501
+
+        _param = self._set_dl24m_target_serialize(
+            device_id=device_id,
+            x_lab_lease=x_lab_lease,
+            idempotency_key=idempotency_key,
+            dl24m_target_request=dl24m_target_request,
+            _request_auth=_request_auth,
+            _content_type=_content_type,
+            _headers=_headers,
+            _host_index=_host_index
+        )
+
+        _response_types_map: Dict[str, Optional[str]] = {
+            '202': "Operation",
+        }
+        response_data = self.api_client.call_api(
+            *_param,
+            _request_timeout=_request_timeout
+        )
+        response_data.read()
+        return self.api_client.response_deserialize(
+            response_data=response_data,
+            response_types_map=_response_types_map,
+        ).data
+
+
+    @validate_call
+    def set_dl24m_target_with_http_info(
+        self,
+        device_id: Annotated[str, Field(strict=True, description="Configured physical device ID on this node. Discover IDs with listDevices; do not use a model name unless it is the configured ID.")],
+        x_lab_lease: Annotated[StrictStr, Field(description="Active lease ID covering this physical device. Components share ownership; heartbeats must continue while commands are pending.")],
+        idempotency_key: Annotated[str, Field(min_length=1, strict=True, max_length=96, description="Unique key per logical mutation (1..96 characters). Repeating the same method/path/semantic JSON body within this boot returns the existing operation; reusing it for different content returns 409. Retention is bounded. After an uncertain timeout or reboot, inspect state and STOP as needed instead of replaying ON.")],
+        dl24m_target_request: Annotated[Dl24mTargetRequest, Field(description="JSON request with the fields documented by the referenced schema. Unknown properties are rejected; use {} for an empty StopRequest.")],
+        _request_timeout: Union[
+            None,
+            Annotated[StrictFloat, Field(gt=0)],
+            Tuple[
+                Annotated[StrictFloat, Field(gt=0)],
+                Annotated[StrictFloat, Field(gt=0)]
+            ]
+        ] = None,
+        _request_auth: Optional[Dict[StrictStr, Any]] = None,
+        _content_type: Optional[StrictStr] = None,
+        _headers: Optional[Dict[StrictStr, Any]] = None,
+        _host_index: Annotated[StrictInt, Field(ge=0, le=0)] = 0,
+    ) -> ApiResponse[Operation]:
+        """Set typed DL24M target while OFF
+
+        Only modifies the selected bank, with journaled original target and readback. Activation uses mode-specific predictions plus measured V/I/P guards: CR at configured maximum voltage, CP at fresh cutoff voltage, CV requires fresh device OCP/OPP no greater than local limits. CV cannot promise a current ceiling from its voltage target alone.
+
+        :param device_id: Configured physical device ID on this node. Discover IDs with listDevices; do not use a model name unless it is the configured ID. (required)
+        :type device_id: str
+        :param x_lab_lease: Active lease ID covering this physical device. Components share ownership; heartbeats must continue while commands are pending. (required)
+        :type x_lab_lease: str
+        :param idempotency_key: Unique key per logical mutation (1..96 characters). Repeating the same method/path/semantic JSON body within this boot returns the existing operation; reusing it for different content returns 409. Retention is bounded. After an uncertain timeout or reboot, inspect state and STOP as needed instead of replaying ON. (required)
+        :type idempotency_key: str
+        :param dl24m_target_request: JSON request with the fields documented by the referenced schema. Unknown properties are rejected; use {} for an empty StopRequest. (required)
+        :type dl24m_target_request: Dl24mTargetRequest
+        :param _request_timeout: timeout setting for this request. If one
+                                 number provided, it will be total request
+                                 timeout. It can also be a pair (tuple) of
+                                 (connection, read) timeouts.
+        :type _request_timeout: int, tuple(int, int), optional
+        :param _request_auth: set to override the auth_settings for an a single
+                              request; this effectively ignores the
+                              authentication in the spec for a single request.
+        :type _request_auth: dict, optional
+        :param _content_type: force content-type for the request.
+        :type _content_type: str, Optional
+        :param _headers: set to override the headers for a single
+                         request; this effectively ignores the headers
+                         in the spec for a single request.
+        :type _headers: dict, optional
+        :param _host_index: set to override the host_index for a single
+                            request; this effectively ignores the host_index
+                            in the spec for a single request.
+        :type _host_index: int, optional
+        :return: Returns the result object.
+        """ # noqa: E501
+
+        _param = self._set_dl24m_target_serialize(
+            device_id=device_id,
+            x_lab_lease=x_lab_lease,
+            idempotency_key=idempotency_key,
+            dl24m_target_request=dl24m_target_request,
+            _request_auth=_request_auth,
+            _content_type=_content_type,
+            _headers=_headers,
+            _host_index=_host_index
+        )
+
+        _response_types_map: Dict[str, Optional[str]] = {
+            '202': "Operation",
+        }
+        response_data = self.api_client.call_api(
+            *_param,
+            _request_timeout=_request_timeout
+        )
+        response_data.read()
+        return self.api_client.response_deserialize(
+            response_data=response_data,
+            response_types_map=_response_types_map,
+        )
+
+
+    @validate_call
+    def set_dl24m_target_without_preload_content(
+        self,
+        device_id: Annotated[str, Field(strict=True, description="Configured physical device ID on this node. Discover IDs with listDevices; do not use a model name unless it is the configured ID.")],
+        x_lab_lease: Annotated[StrictStr, Field(description="Active lease ID covering this physical device. Components share ownership; heartbeats must continue while commands are pending.")],
+        idempotency_key: Annotated[str, Field(min_length=1, strict=True, max_length=96, description="Unique key per logical mutation (1..96 characters). Repeating the same method/path/semantic JSON body within this boot returns the existing operation; reusing it for different content returns 409. Retention is bounded. After an uncertain timeout or reboot, inspect state and STOP as needed instead of replaying ON.")],
+        dl24m_target_request: Annotated[Dl24mTargetRequest, Field(description="JSON request with the fields documented by the referenced schema. Unknown properties are rejected; use {} for an empty StopRequest.")],
+        _request_timeout: Union[
+            None,
+            Annotated[StrictFloat, Field(gt=0)],
+            Tuple[
+                Annotated[StrictFloat, Field(gt=0)],
+                Annotated[StrictFloat, Field(gt=0)]
+            ]
+        ] = None,
+        _request_auth: Optional[Dict[StrictStr, Any]] = None,
+        _content_type: Optional[StrictStr] = None,
+        _headers: Optional[Dict[StrictStr, Any]] = None,
+        _host_index: Annotated[StrictInt, Field(ge=0, le=0)] = 0,
+    ) -> RESTResponseType:
+        """Set typed DL24M target while OFF
+
+        Only modifies the selected bank, with journaled original target and readback. Activation uses mode-specific predictions plus measured V/I/P guards: CR at configured maximum voltage, CP at fresh cutoff voltage, CV requires fresh device OCP/OPP no greater than local limits. CV cannot promise a current ceiling from its voltage target alone.
+
+        :param device_id: Configured physical device ID on this node. Discover IDs with listDevices; do not use a model name unless it is the configured ID. (required)
+        :type device_id: str
+        :param x_lab_lease: Active lease ID covering this physical device. Components share ownership; heartbeats must continue while commands are pending. (required)
+        :type x_lab_lease: str
+        :param idempotency_key: Unique key per logical mutation (1..96 characters). Repeating the same method/path/semantic JSON body within this boot returns the existing operation; reusing it for different content returns 409. Retention is bounded. After an uncertain timeout or reboot, inspect state and STOP as needed instead of replaying ON. (required)
+        :type idempotency_key: str
+        :param dl24m_target_request: JSON request with the fields documented by the referenced schema. Unknown properties are rejected; use {} for an empty StopRequest. (required)
+        :type dl24m_target_request: Dl24mTargetRequest
+        :param _request_timeout: timeout setting for this request. If one
+                                 number provided, it will be total request
+                                 timeout. It can also be a pair (tuple) of
+                                 (connection, read) timeouts.
+        :type _request_timeout: int, tuple(int, int), optional
+        :param _request_auth: set to override the auth_settings for an a single
+                              request; this effectively ignores the
+                              authentication in the spec for a single request.
+        :type _request_auth: dict, optional
+        :param _content_type: force content-type for the request.
+        :type _content_type: str, Optional
+        :param _headers: set to override the headers for a single
+                         request; this effectively ignores the headers
+                         in the spec for a single request.
+        :type _headers: dict, optional
+        :param _host_index: set to override the host_index for a single
+                            request; this effectively ignores the host_index
+                            in the spec for a single request.
+        :type _host_index: int, optional
+        :return: Returns the result object.
+        """ # noqa: E501
+
+        _param = self._set_dl24m_target_serialize(
+            device_id=device_id,
+            x_lab_lease=x_lab_lease,
+            idempotency_key=idempotency_key,
+            dl24m_target_request=dl24m_target_request,
+            _request_auth=_request_auth,
+            _content_type=_content_type,
+            _headers=_headers,
+            _host_index=_host_index
+        )
+
+        _response_types_map: Dict[str, Optional[str]] = {
+            '202': "Operation",
+        }
+        response_data = self.api_client.call_api(
+            *_param,
+            _request_timeout=_request_timeout
+        )
+        return response_data.response
+
+
+    def _set_dl24m_target_serialize(
+        self,
+        device_id,
+        x_lab_lease,
+        idempotency_key,
+        dl24m_target_request,
+        _request_auth,
+        _content_type,
+        _headers,
+        _host_index,
+    ) -> RequestSerialized:
+
+        _host = None
+
+        _collection_formats: Dict[str, str] = {
+        }
+
+        _path_params: Dict[str, str] = {}
+        _query_params: List[Tuple[str, str]] = []
+        _header_params: Dict[str, Optional[str]] = _headers or {}
+        _form_params: List[Tuple[str, str]] = []
+        _files: Dict[
+            str, Union[str, bytes, List[str], List[bytes], List[Tuple[str, bytes]]]
+        ] = {}
+        _body_params: Optional[bytes] = None
+
+        # process the path parameters
+        if device_id is not None:
+            _path_params['deviceId'] = device_id
+        # process the query parameters
+        # process the header parameters
+        if x_lab_lease is not None:
+            _header_params['X-Lab-Lease'] = x_lab_lease
+        if idempotency_key is not None:
+            _header_params['Idempotency-Key'] = idempotency_key
+        # process the form parameters
+        # process the body parameter
+        if dl24m_target_request is not None:
+            _body_params = dl24m_target_request
+
+
+        # set the HTTP header `Accept`
+        if 'Accept' not in _header_params:
+            _header_params['Accept'] = self.api_client.select_header_accept(
+                [
+                    'application/problem+json', 
+                    'application/json'
+                ]
+            )
+
+        # set the HTTP header `Content-Type`
+        if _content_type:
+            _header_params['Content-Type'] = _content_type
+        else:
+            _default_content_type = (
+                self.api_client.select_header_content_type(
+                    [
+                        'application/json'
+                    ]
+                )
+            )
+            if _default_content_type is not None:
+                _header_params['Content-Type'] = _default_content_type
+
+        # authentication setting
+        _auth_settings: List[str] = [
+            'browserSession', 
+            'bearerAuth'
+        ]
+
+        return self.api_client.param_serialize(
+            method='PUT',
+            resource_path='/api/v1/devices/{deviceId}/dl24m/target',
             path_params=_path_params,
             query_params=_query_params,
             header_params=_header_params,
