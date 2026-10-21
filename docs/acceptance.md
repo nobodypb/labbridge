@@ -879,3 +879,46 @@ browser fixture exercises the same sanitized API handlers through both stream
 RPC and HTTP recovery, retaining per-device cancellation, slow/failed STOP,
 lease loss, switching and recording tests rather than dropping one baseline.
 Physical acceptance is recorded separately below after actual operation.
+
+### Shared-ESP bench acceptance and immediate device drafts (LB-024)
+
+On 2026-10-21 the merged integration was flashed to one StickS3 with a BLE DL24M
+and an RD6018 on its TCP/AP service, while station WLAN remained connected.
+The operator confirmed an unconnected RD output and a separately supplied DL24M;
+this was a bounded bench test, not a battery or source-to-load circuit test.
+Original configurations, setpoints and all 14 DL24M settings were captured
+privately. Fresh configured RD TCP identity was required after deployment.
+
+The real password-session Bench UI confirmed independent reservations, a DL24M
+CC target of 0.05 A, RD targets of 2.00 V / 0.10 A, dropdown changes retaining
+ownership, simultaneous readings, measurement/curve toggles and mixed-device CSV.
+Both instruments returned successful ON confirmations with bridge-enforced
+two-second activation ceilings. STOP-all confirmed both OFF; logout confirmed
+shutdown/release. The bounded deadline can revoke a reservation during a longer
+multi-device procedure: subsequent edits require explicit confirmed OFF and a
+new reservation. Startup/reconfiguration recovery must also finish before edits;
+rejected commands are not replayed. The complete UI procedure passed with those
+safeguards, and independent USB readback verified restored settings/setpoints,
+restored original per-device profiles and both outputs ready/OFF. Both devices
+remain configured on the shared bridge; the previous load-only bridge is idle.
+
+A separate 180-second read-only AP/STA/BLE check passed 180 cycles / 360 instrument
+measurements with the same boot, fresh data and no RD disconnect/rejection
+increase. A concurrent browser ran for 181.949 s with one authenticated socket,
+233 snapshots, 89 device changes, zero mutations and no page errors. Its 38
+explicit gap markers were retained rather than treated as continuous integration;
+this is not a lossless-stream or 60-minute soak claim. Loaded RD operation, a
+connected source/load circuit, two-source operation and battery commissioning
+remain outside this evidence. Raw logs, credentials and deployment identities
+remain in ignored local records.
+
+The physical run also exposed old-device input fields remaining editable until
+a subscription acknowledgement. The new acceptance held that acknowledgement
+and observed `.15` instead of the selected device's `.12` draft. Fields now
+restore synchronously with selection, and an acknowledgement cannot overwrite
+newly typed input. The regression checks both immediate restoration and retained
+input while making zero instrument writes. Validation passes all 93 browser
+scenarios, 28 Web unit tests, portable/reference/host checks, TypeScript/web build,
+deterministic generation/drift, Black and public-tree checks. The integration's
+three board builds and required CI jobs pass; the deployed images fit their
+partitions with 45%, 43% and 28% free on StickS3, USB-OTG and ESP32 respectively.

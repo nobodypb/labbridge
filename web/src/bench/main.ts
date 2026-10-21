@@ -122,7 +122,13 @@ $('deviceSelect').title='Select controls only. Other outputs, reservations and r
 $('clearBtn').dataset.help='Clear chart, CSV buffer and browser-session integrals only. Device counters remain unchanged.';
 bind('connect',async()=>{await api.auth.refresh();renderAuth();if(api.auth.state.authenticated){await api.connect();restoreDraft();if(api.connected)report('Connected. Select and reserve devices independently. Export before closing this page.');}});
 bind('reserve',async()=>{if(api.lease){await api.release();report('Device stopped and released');}else{await api.reserve();report('Selected device reserved');}});
-$<HTMLSelectElement>('deviceSelect').onchange=()=>{const id=input('deviceSelect').value;saveDraft();void api.select(id).then(()=>{restoreDraft();render();report('Controls selected; other devices and recording continue.');}).catch(e=>void message(e).then(t=>report(t,true)));};
+$<HTMLSelectElement>('deviceSelect').onchange=()=>{
+ const id=input('deviceSelect').value;saveDraft();const selection=api.select(id);
+ // Selection changes synchronously; transport acknowledgement must not leave
+ // old-device fields editable or overwrite input entered during that wait.
+ restoreDraft();render();
+ void selection.then(()=>{if(api.device?.id===id)report('Controls selected; other devices and recording continue.');}).catch(e=>void message(e).then(t=>report(t,true)));
+};
  $<HTMLSelectElement>('componentSelect').onchange=()=>{saveDraft();api.selectComponent(input('componentSelect').value);restoreDraft();render();};
 bind('setBtn',()=>api.target(number('setVal',Number(input('setVal').min),Number(input('setVal').max),Number(input('setVal').step)||0)));
 bind('loadBtn',()=>api.actor?.output==='on'?api.stop():api.enable(),true);

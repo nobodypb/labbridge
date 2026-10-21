@@ -155,3 +155,15 @@ for(const expired of [false,true])test(`LB-024: lost heartbeat cancels that devi
  expect(s.writes.filter(w=>w.path==='/api/v1/devices/load/components/sink/output')).toHaveLength(0);
  await page.locator('#deviceSelect').selectOption('supply');await expect(page.locator('#loadBtn')).toBeEnabled();
 });
+
+test('LB-024 hardware regression: selected-device drafts restore before a slow subscription acknowledgement',async({page})=>{
+ const s=await mixedBackend(page);await openBench(page);
+ await page.locator('#setVal').fill('.15');await page.locator('#deviceSelect').selectOption('supply');await expect(page.locator('#benchStatus')).toContainText('Controls selected');
+ await page.locator('#setVal').fill('.12');await page.locator('#deviceSelect').selectOption('load');await expect(page.locator('#setVal')).toHaveValue('.15');
+ let held=false,release;s.beforeSubscribe=async r=>{if(r.device_id==='supply'){held=true;await new Promise(resolve=>{release=resolve;});}};
+ await page.locator('#deviceSelect').selectOption('supply');await expect.poll(()=>held).toBe(true);
+ try{await expect(page.locator('#setVal')).toHaveValue('.12',{timeout:1000});await page.locator('#setVal').fill('.18');}
+ finally{release();}
+ await expect(page.locator('#benchStatus')).toContainText('Controls selected');await expect(page.locator('#setVal')).toHaveValue('.18');
+ expect(s.writes).toHaveLength(0);
+});
