@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (c) 2026 LabBridge contributors
-import type {Dl24mSettings} from '../../generated/src/index';
+import type {Dl24mSettings} from '../../../generated/src/index';
 export const settingsFields:Record<string,{key:keyof Dl24mSettings;min:number;max:number;step:number;button?:string}>={
  dispBri:{key:'workingBrightness',min:0,max:9,step:1,button:'dispBriBtn'},
  stbyBri:{key:'standbyBrightness',min:0,max:9,step:1,button:'stbyBriBtn'},

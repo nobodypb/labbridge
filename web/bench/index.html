@@ -5,61 +5,56 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>LabBridge · DL24M Bench</title>
+<title>LabBridge · Bench</title>
 <link rel="stylesheet" href="/dl24.css">
 </head>
 <body>
-<div class="top">
-  <div class="mark">DL<b>24</b></div>
-  <div class="sub">LabBridge · DL24M Bench</div>
+<header id="benchHeader" class="top">
+  <div class="mark">DL<b>24</b></div><span class="app-title sub">LabBridge · Bench</span>
+  <button id="devicePanelToggle" class="btn mobile-only" aria-label="Device controls" aria-controls="devicePanel" aria-expanded="false">Device</button>
   <div class="spacer"></div>
-  <div class="toggle" id="pollMode"
-       data-help="Live: poll continuously while connected. Load: poll only while the load is ON — the readout & chart freeze and hold when the load is off (intentional, not a bug)."
-       title="Live = poll continuously while connected. Load = poll only while the load is on (readout freezes when off).">
-    <button data-pm="live" class="sel">Live</button><button data-pm="load">Load</button></div>
-  <label class="sub" style="display:flex;align-items:center;gap:6px"
-         data-help="How often to poll the device. Live and settings frames alternate, so each block refreshes at twice this rate."
-         title="Send interval. Live + settings blocks alternate, so each block refreshes at twice this period.">Poll
-    <select id="pollRate" class="sel-input">
-      <option value="500">500 ms</option><option value="1000" selected>1 s</option><option value="2000">2 s</option>
-    </select></label>
-  <div class="toggle" id="theme" data-help="Switch between light and dark themes."><button data-th="light">Light</button><button data-th="dark" class="sel">Dark</button></div>
-  <button id="connect" class="btn connbtn off" data-help="Connect to a DL24 over USB (WebHID, Chromium only). The LED is the connection lamp: red = off, green = connected."><span class="led"></span><span id="connLbl">Connect</span></button>
-  <button id="export" class="btn" disabled data-help="Download all logged samples (time, V/I/W, temps, Wh, mAh) as a CSV file.">Export CSV</button>
-  <button id="gear" class="iconbtn" title="Settings" aria-label="Settings" data-help="Settings: brightness, standby, language, protection limits, calibration, and device resets.">
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-      <circle cx="12" cy="12" r="3"></circle>
-      <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09a1.65 1.65 0 0 0 1.51-1 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
-    </svg>
-  </button>
-</div>
-<div class="connection">
- <nav><a href="/devices">Instruments</a> · <a href="/wifi">Wi-Fi setup</a></nav>
- <div id="benchAuth" aria-label="Device sign-in"></div>
- <label>DL24M device <select id="deviceSelect" aria-label="DL24M device"></select></label>
- <button id="reserve" class="btn" disabled>Reserve device</button>
- <button id="stop" class="btn danger" disabled>STOP</button>
- <span id="benchStatus" role="status" aria-live="polite">Sign in with the device password. Recording lasts for this browser session.</span>
-</div>
+  <button id="connect" class="btn connbtn off" aria-label="Connect node"><span class="led"></span><span id="connLbl">Connect</span></button>
+  <button id="stopAll" class="btn danger" disabled title="Stop every device reserved by this page">STOP all</button>
+  <div id="globalActions" class="global-actions">
+    <button id="export" class="btn" disabled>Export CSV</button>
+    <button id="recordingMenu" class="btn" data-open-dialog="recordingDialog">Recording</button>
+    <button id="displayMenu" class="btn" data-open-dialog="displayDialog">Display</button>
+    <button id="statusMenu" class="btn" data-open-dialog="statusDialog">Status</button>
+    <button id="accountMenu" class="btn" data-open-dialog="accountDialog">Account</button>
+  </div>
+  <button id="moreMenu" class="btn mobile-only" aria-label="Global actions" aria-controls="globalActions" aria-expanded="false">•••</button>
+</header>
+<div id="globalNotice" class="sr-only" role="status" aria-live="polite"></div>
+<button id="devicePanelBackdrop" aria-label="Close device controls" hidden></button>
 <div class="app">
-  <aside class="rail">
-    <div class="grp"><div class="glab">Mode</div>
+  <aside id="devicePanel" class="rail" aria-label="Device controls">
+    <div class="device-heading"><span class="glab">Device</span><button id="devicePanelClose" class="iconbtn mobile-only" aria-label="Close device panel">×</button></div>
+    <label class="device-choice">Instrument<select id="deviceSelect" aria-label="Device"></select></label>
+    <label id="componentChoice" class="device-choice" hidden>Actor<select id="componentSelect" aria-label="Actor component"></select></label>
+    <div id="deviceState" class="hint"></div>
+    <div id="deviceQuality"></div>
+    <div class="device-actions"><button id="reserve" class="btn" disabled>Reserve device</button><button id="stop" class="btn danger" disabled>STOP selected</button></div>
+    <div id="deviceFeedback" class="hint" role="status" aria-live="polite"></div>
+    <button id="gear" class="btn" aria-label="Settings">Device settings</button>
+    <div class="grp" data-module="dl24m"><div class="glab">Mode</div>
       <div class="modes">
         <button type="button" class="mode" data-mode="cc" data-help="Constant Current — the load draws a fixed current (A) you set.">CC</button><button type="button" class="mode" data-mode="cv" data-help="Constant Voltage — the load holds a fixed terminal voltage (V).">CV</button>
         <button type="button" class="mode" data-mode="cr" data-help="Constant Resistance — the load acts like a fixed resistor (Ω).">CR</button><button type="button" class="mode" data-mode="cp" data-help="Constant Power — the load draws a fixed wattage (W).">CP</button>
       </div>
     </div>
-    <div class="grp"><div class="glab">Setpoint</div>
+    <div class="grp"><div class="glab">Current target / limit (A)</div>
       <div class="setrow">
         <div data-help="Target value for the active mode (units follow it: CC=A, CV=V, CR=Ω, CP=W). Greyed value = the device's current setpoint."><label class="fld">Value <span id="setUnit" class="sub">(A)</span></label>
           <input id="setVal" type="number" step="0.001" min="0" placeholder="1.000"></div>
         <button id="setBtn" class="btn" disabled data-help="Send the setpoint above to the device.">Set</button>
       </div>
+      <div id="voltageControl" class="setrow" hidden><label>Voltage target (V)<input id="voltageVal" aria-label="Voltage target (V)" type="number" min="0" step="0.01"></label><button id="voltageBtn" class="btn" disabled>Set voltage</button></div>
+      <div id="moduleStatus" class="hint"></div>
       <button id="loadBtn" class="loadbtn stopped" type="button" disabled
         data-help="Turn the electronic load ON/OFF. Green stripe = on (drawing), red = off.">
         <span class="ind"></span><span class="lbl">LOAD OFF</span></button>
     </div>
-    <details class="grp" open data-help="Auto-stop the load after this run time (hh:mm). 0:00 = no limit. Set pushes both fields to the device."><summary>Discharge time limit</summary>
+    <details class="grp" id="durationControl" open data-help="Auto-stop the load after this run time (hh:mm). 0:00 = no limit. Set pushes both fields to the device."><summary>Discharge time limit</summary>
       <div class="setrow" style="grid-template-columns:1fr 1fr auto">
         <div><label class="fld">Hours</label><input id="thr" type="number" min="0" max="99" step="1" placeholder="0"></div>
         <div><label class="fld">Min</label><input id="tmin" type="number" min="0" max="59" step="1" placeholder="0"></div>
@@ -67,35 +62,73 @@
       </div>
       <div class="hint" style="margin-top:4px">Auto-stops the load when it expires. 0:00 = no limit. LabBridge confirms the setting by readback; bridge safety deadlines still apply.</div>
     </details>
-    <div class="hint">CC is supported. CV/CR/CP remain visible for future backend support. Changes require a reservation; settings require confirmed OFF.
-      Brightness, limits, calibration &amp; device resets live in <b>⚙ Settings</b> (top-right).</div>
+    <details class="rail-help" data-module="dl24m"><summary>About these controls</summary><div class="hint">CC is supported. CV/CR/CP remain visible for future backend support. Changes require a reservation; settings require confirmed OFF.
+      Brightness, limits, calibration &amp; device resets are in <b>Device settings</b> above.</div></details>
   </aside>
   <div class="main">
     <div class="screen">
-      <div class="legend">
-        <span data-s="1" style="color:var(--v)" data-help="Click to show/hide the Voltage trace on the chart.">● Voltage</span>
-        <span data-s="2" style="color:var(--i)" data-help="Click to show/hide the Current trace on the chart.">● Current</span>
-        <span data-s="3" style="color:var(--w)" data-help="Click to show/hide the Power trace on the chart.">● Power</span>
-      </div>
-      <button id="clearBtn" class="chartbtn" data-help="Clear the chart trace and the in-app CSV log buffer. Does NOT touch the device's stored Wh/mAh — use Settings → Zero all data for that.">Clear</button>
-      <canvas id="chart" style="position:absolute;inset:8px 10px 6px;width:calc(100% - 20px);height:calc(100% - 14px)"></canvas>
+      <div class="plot-viewport"><canvas id="chart" aria-label="Selected measurement curves"></canvas></div>
     </div>
+    <div id="measurementDock" aria-label="Device measurement strips">
+    <div id="measurementResize" role="separator" tabindex="0" aria-label="Resize measurement area" aria-orientation="horizontal" aria-controls="measurementDock" title="Drag to resize · Arrow Up/Down to adjust"></div>
+    <div id="measurementContent">
+    <div id="measurements" aria-label="All device measurements"></div>
+    <details id="selectedReadings"><summary>Selected device · additional readings</summary>
     <div class="meas">
-      <div class="cell v"><div class="lab">Voltage</div><div class="val"><span id="rV">—</span><span class="un">V</span></div></div>
-      <div class="cell i"><div class="lab">Current</div><div class="val"><span id="rI">—</span><span class="un">A</span></div></div>
-      <div class="cell w"><div class="lab">Power</div><div class="val"><span id="rW">—</span><span class="un">W</span></div></div>
+      <div class="cell v" hidden><div class="lab">Voltage</div><div class="val"><span id="rV">—</span><span class="un">V</span></div></div>
+      <div class="cell i" hidden><div class="lab">Current</div><div class="val"><span id="rI">—</span><span class="un">A</span></div></div>
+      <div class="cell w" hidden><div class="lab">Power</div><div class="val"><span id="rW">—</span><span class="un">W</span></div></div>
       <div class="cell r" data-help="Total resistance the load sees (voltage ÷ current). Shows — with no load."><div class="lab">Resistance</div><div class="val"><span id="rR">—</span><span class="un">Ω</span></div></div>
-      <div class="cell t" data-help="Temperature of the load's MOSFET / heatsink."><div class="lab">Internal temp</div><div class="val"><span id="rT">—</span><span class="un">°C</span></div></div>
+      <div class="cell t" hidden data-help="Temperature of the load's MOSFET / heatsink."><div class="lab">Internal temp</div><div class="val"><span id="rT">—</span><span class="un">°C</span></div></div>
       <div class="cell" data-help="Charge drawn since the last 'Zero all data' (accumulates while the load runs)."><div class="lab">Capacity · session</div><div class="val"><span id="rCap">—</span><span class="un">mAh</span></div></div>
       <div class="cell" data-help="Energy drawn since the last 'Zero all data'."><div class="lab">Energy · session</div><div class="val"><span id="rWh">—</span><span class="un">Wh</span></div></div>
       <div class="cell" data-help="Time since the load was last turned ON in this app."><div class="lab">Observed time</div><div class="val mono" style="font-size:18px"><span id="rTime">—</span></div></div>
     </div>
     <div class="meas" style="grid-template-columns:repeat(3,1fr)">
-      <div class="cell" data-help="External temperature probe (ETS). 'Wait..' means no probe is detected."><div class="lab">ETS probe</div><div class="val" style="font-size:18px"><span id="rExt">—</span></div></div>
-      <div class="cell" data-help="Discharge cutoff voltage currently set on the device (menu 09); the load stops below it."><div class="lab">Cutoff voltage (applied)</div><div class="val" style="font-size:18px"><span id="rCut">—</span><span class="un">V</span></div></div>
-      <div class="cell" data-help="Cooling-fan speed (0 when idle, ramps under load)."><div class="lab">Fan</div><div class="val" style="font-size:18px"><span id="rRPM">—</span><span class="un">rpm</span></div></div>
+      <div class="cell" hidden data-help="External temperature probe (ETS). 'Wait..' means no probe is detected."><div class="lab">ETS probe</div><div class="val" style="font-size:18px"><span id="rExt">—</span></div></div>
+      <div class="cell" data-module="dl24m" data-help="Discharge cutoff voltage currently set on the device (menu 09); the load stops below it."><div class="lab">Cutoff voltage (applied)</div><div class="val" style="font-size:18px"><span id="rCut">—</span><span class="un">V</span></div></div>
+      <div class="cell" data-module="dl24m" data-help="Cooling-fan speed (0 when idle, ramps under load)."><div class="lab">Fan</div><div class="val" style="font-size:18px"><span id="rRPM">—</span><span class="un">rpm</span></div></div>
     </div>
-    <details style="margin-top:2px" data-help="Protocol debug: live hex frames + a snapshot/diff tool to find which byte holds a value (change one thing, capture a label, repeat).">
+    </details>
+    </div>
+    </div>
+
+  </div>
+</div>
+<dialog id="recordingDialog" class="global-dialog" aria-labelledby="recordingTitle">
+ <div class="dialog-head"><h2 id="recordingTitle">Recording</h2><button class="iconbtn" data-close-dialog="recordingDialog" aria-label="Close recording">×</button></div>
+ <div id="recordingOptions" class="dialog-body">
+  <div class="toggle" id="pollMode"><button data-pm="live" class="sel">Live</button><button data-pm="load">While output ON</button></div>
+  <label>Refresh <select id="pollRate" class="sel-input"><option value="500">500 ms</option><option value="1000" selected>1 s</option><option value="2000">2 s</option></select></label>
+  <button id="clearBtn" class="btn">Clear browser recording</button>
+ </div>
+</dialog>
+<dialog id="displayDialog" class="global-dialog" aria-labelledby="displayTitle">
+ <div class="dialog-head"><h2 id="displayTitle">Display</h2><button class="iconbtn" data-close-dialog="displayDialog" aria-label="Close display">×</button></div>
+ <div class="dialog-body"><div class="toggle" id="theme"><button data-th="light">Light</button><button data-th="dark" class="sel">Dark</button></div>
+  <p class="hint">Choose values for the measurement area under Channels. Click a value below to show or hide its curve; highlighted values are plotted. Values and curves can be selected independently.</p>
+  <details id="channelChoices" open><summary>Channels · values and curves</summary></details>
+ </div>
+</dialog>
+<dialog id="statusDialog" class="global-dialog" aria-labelledby="statusTitle">
+ <div class="dialog-head"><h2 id="statusTitle">Node status</h2><button class="iconbtn" data-close-dialog="statusDialog" aria-label="Close status">×</button></div>
+ <div class="dialog-body"><div id="deviceOverview" aria-label="Device states"></div>
+ <p id="benchStatus" role="status">Sign in with the device password. Recording lasts for this browser session.</p></div>
+</dialog>
+<dialog id="accountDialog" class="global-dialog" aria-labelledby="accountTitle">
+ <div class="dialog-head"><h2 id="accountTitle">Account &amp; navigation</h2><button class="iconbtn" data-close-dialog="accountDialog" aria-label="Close account">×</button></div>
+ <div class="dialog-body"><nav><a href="/devices">Instruments</a> · <a href="/wifi">Wi-Fi setup</a></nav>
+ <div id="benchAuth" aria-label="Device sign-in"></div><p id="authFeedback" class="hint" role="status" aria-live="polite"></p></div>
+</dialog>
+<div id="settingsModal" class="modal" role="dialog" aria-label="Settings" hidden>
+  <div class="backdrop" id="settingsBackdrop"></div>
+  <div class="card">
+    <div class="head">
+      <h3>Settings</h3><span class="sub" id="setConn">device not connected</span>
+      <span class="spacer"></span>
+      <button class="iconbtn" id="settingsClose" title="Close" aria-label="Close">✕</button>
+    </div>
+    <div class="body"><div id="moduleSettings" data-module="dl24m">    <details data-module="dl24m" style="margin-top:2px" data-help="Protocol debug: live hex frames + a snapshot/diff tool to find which byte holds a value (change one thing, capture a label, repeat).">
       <summary class="sub" style="cursor:pointer">Raw frames &amp; field finder (debug)</summary>
       <div class="sub" style="font-size:11px;margin-top:4px">Live (0x05):</div>
       <div class="mono" id="rawLive" style="font-size:11px;color:var(--dim);word-break:break-all;padding:2px 0"></div>
@@ -111,18 +144,7 @@
       </div>
       <div class="sub" id="snapState" style="font-size:11px">No snapshots yet.</div>
       <div class="mono" id="snapDiff" style="font-size:11px;color:var(--v);word-break:break-all;padding:4px 0;white-space:pre-wrap"></div>
-    </details>
-  </div>
-</div>
-<div id="settingsModal" class="modal" role="dialog" aria-modal="true" aria-label="Settings" hidden>
-  <div class="backdrop" id="settingsBackdrop"></div>
-  <div class="card">
-    <div class="head">
-      <h3>Settings</h3><span class="sub" id="setConn">device not connected</span>
-      <span class="spacer"></span>
-      <button class="iconbtn" id="settingsClose" title="Close" aria-label="Close">✕</button>
-    </div>
-    <div class="body"><p id="unsupported" class="hint">Unavailable in the current backend: active CV/CR/CP, calibration, no-load zero, factory reset, HID frames/snapshots and fan RPM. These controls are retained for future support.</p>
+    </details><p id="unsupported" class="hint">Unavailable in the current backend: active CV/CR/CP, calibration, no-load zero, factory reset, HID frames/snapshots and fan RPM. These controls are retained for future support.</p>
       <!-- DISPLAY ---------------------------------------------------------- -->
       <div class="sgrp"><div class="glab">Display</div>
         <div class="srow"><label>Display brightness (0–9)</label>
@@ -173,6 +195,7 @@
         </div>
         <div class="hint" style="margin-top:8px">“Zero all data” wipes run time / Wh / mAh. “Restore defaults” is not supported by this backend.</div>
       </div>
+      </div><p id="noModuleSettings" hidden>No additional settings are available for this device. Use the supported controls in the main panel.</p>
       <div class="sub" style="text-align:center;font-size:11px;padding:12px 0 2px">
         Copyright © 2026 DL24 reverse-engineering project contributors; adapted by LabBridge contributors ·
         <a href="/dl24-license.txt" target="_blank" rel="noopener"

@@ -5,4 +5,4 @@ createServer(async(req,res)=>{
  const file=assets[path]??(['/','/wifi','/devices'].includes(path)?'index.html':null);
  if(!file){res.writeHead(404);res.end();return;}
  try{const content=await readFile(new URL('../dist/'+file,import.meta.url));res.writeHead(200,{'Content-Type':file.endsWith('.js')?'text/javascript':file.endsWith('.css')?'text/css':file.endsWith('.gz')?'application/gzip':file.endsWith('.txt')?'text/plain':'text/html','Content-Security-Policy':"default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self'; frame-ancestors 'none'"});res.end(content);}catch{res.writeHead(500);res.end();}
-}).listen(4173,'127.0.0.1');
+}).listen(Number(process.env.LABBRIDGE_WEB_PORT??4173),'127.0.0.1');

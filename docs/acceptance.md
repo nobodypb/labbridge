@@ -453,3 +453,156 @@ browser scenarios. Generation drift, Black and public-tree checks pass, and
 ESP-IDF 5.5.2 builds fit StickS3, USB-OTG and ESP32 with the final frontend and
 socket policy. Remaining AP-first-setup and laboratory commissioning limits are
 still explicit; the three-second user-login requirement is now satisfied.
+
+
+## Modular multi-device Bench (LB-024)
+
+The accepted extension uses the supplied HTTP Bench baseline. LB-023 is already
+assigned to the separate DL24M capability/stream work on main, so this extension
+uses LB-024. This acceptance does not claim integration of that newer stream
+transport or its additional device functions.
+
+The initial recorder tests failed because multi-channel recording did not exist.
+The unchanged baseline also fails the new selection-preservation scenario: it
+sends device STOP and lease release when switching the dropdown. Additional
+observed red tests cover waiting for a slow first device during STOP-all,
+exposing controls before discovery finishes, and sending a queued ON after a
+failed heartbeat. The corrected implementation submits all STOPs before awaiting
+individual confirmations, gates initial control, retains control errors across
+successful telemetry, and invalidates ownership inside the request queue slot
+before any queued mutation can escape. Both HTTP-error and inactive-lease
+heartbeat responses are covered.
+
+Software validation on 2026-10-21:
+
+- 17 Web unit scenarios pass, covering independent integrals, native/session
+  counter separation, missing/stale/negative values, duplicate/out-of-order
+  samples, epochs, gaps, recording bounds, CSV metadata/escaping, common-unit
+  graph scales and actual sample-time alignment, plus preserved baseline tests.
+- All 62 browser scenarios pass. The 17 new scenarios cover DL24M plus two RD
+  instances, independent reservations/heartbeats/drafts, captured pending-command
+  targets across device/actor changes, selected/all STOP cancellation, slow and
+  failed shutdown, logout/navigation, isolated lease loss, discovery gating,
+  sensor-only nodes and unknown component-based actors. Hidden channels still
+  export. RD controls use the correct source/lease, step validation and status;
+  no DL24M settings route is sent for RD. Existing authentication and DL24M
+  regression scenarios remain green.
+- Desktop and 390-pixel mobile layouts were inspected with synthetic devices.
+  All assets, source/licence downloads and graph rendering remain local.
+- `tools/check.sh` passes: 23 portable C/C++ cases, three contract-generation
+  tests, 37 host tests and the frozen reference/protocol/controller checks.
+  OpenAPI/client regeneration has no tracked drift. TypeScript/web build and
+  public-tree checks pass.
+- StickS3, USB-OTG and ESP32 firmware builds pass with the expanded frontend and
+  corresponding-source archive fitting their configured application partitions.
+
+There was no flashing, instrument control, battery operation or new hardware
+commissioning in this change. Mixed-device polling cadence/socket performance,
+loaded RD/DL24 operation and the existing source/coexistence limits still require
+physical acceptance. Browser fixtures are sanitized synthetic protocol data.
+
+### Graph-first layout correction (LB-024)
+
+The operator rejected the initial card layout and fixed 300 px graph. The
+accepted correction has a single global header capped at 56 px, selected-device
+controls entirely in the left rail, a viewport-sized graph and original-style
+measurement strips in a dock capped at 144 px. Recording, channel visibility,
+theme, account/navigation and node status are global header actions. Mobile
+starts with the device drawer closed. The legend is informative; it does not
+introduce another control toolbar. Duplicate V/I/W readouts are not displayed.
+
+The new workspace acceptance was observed red before implementation. A separate
+red test demonstrated that the settings backdrop intercepted global STOP; the
+header now remains above device-settings overlays. Another red test showed an
+old success remaining visible during a new pending STOP; pending feedback now
+replaces that message until the new operation is confirmed. Neither correction
+changes command routing or device recovery semantics.
+
+Measured with five synthetic devices, including the two-source fixture:
+
+| Viewport | Header height | Canvas height | Measurement dock height |
+|---|---:|---:|---:|
+| 1280 × 720 | 56 px | 438 px | 144 px |
+| 1440 × 900 | 56 px | 618 px | 144 px |
+
+The 390 × 844 mobile layout starts with the graph immediately below the header,
+keeps STOP-all visible and opens device controls in the left drawer. Long device
+names, expanded global panels and login/error states do not grow the header or
+push down the graph. Desktop/mobile screenshots with sanitized synthetic data
+were inspected. Display preferences and hidden-channel CSV recording are
+preserved. Resizing tests also verify Canvas pixel-ratio buffers and common-unit
+scales. Hardware commissioning limits above remain unchanged.
+
+Final layout validation passes 18 Web unit tests and all 70 browser scenarios,
+including the original authentication/ownership/STOP regressions and eight
+layout/feedback scenarios. `tools/check.sh`, deterministic regeneration/drift,
+TypeScript/web build, Black and public-tree checks pass. Final StickS3, USB-OTG
+and ESP32 builds fit their application partitions (48%, 46% and 31% free,
+respectively). No device was flashed or operated for this layout correction.
+
+### Content-sized measurement groups and adjustable dock (LB-024)
+
+The subsequent accepted refinement replaces full-width device strips with
+content-sized groups in a wrapping flex grid. Multiple devices share a row;
+hiding a channel releases its width. Larger channel sets wrap within their
+device group, including on a 390 px viewport, without horizontal page or dock
+scrolling. Existing quantity colours, units and unavailable values are retained.
+
+Acceptance was observed red before implementation: a device group occupied
+1170 px at the desktop viewport instead of fitting its contents, and mouse and
+keyboard resize scenarios could not find a separator. The dock now defaults
+to the previous 144 px limit, with a fixed grip above its scrollable content.
+Pointer capture supports mouse/touch dragging; Arrow Up/Down change height by
+20 px and Home/End select its bounds. The browser stores the preferred height;
+viewport changes clamp its displayed height while retaining a usable graph.
+The separator reports its current size and bounds to assistive technologies.
+
+Five new browser scenarios cover side-by-side groups and visibility reflow,
+mouse drag in both directions and persistence across reload, keyboard/viewport
+bounds, expanded mobile channel sets, and actual emulated touch gestures with
+capture cleanup. Desktop and mobile screenshots were inspected using synthetic
+fixtures. No hardware was operated or flashed.
+
+Validation passes all 75 browser scenarios and 18 Web unit tests, including the
+existing authentication, ownership, recording and STOP regression scenarios.
+`tools/check.sh`, TypeScript/web compilation, deterministic API regeneration
+with no tracked drift, Black and public-tree checks pass.
+Final firmware builds with the updated frontend and corresponding-source archive
+pass for StickS3, USB-OTG and ESP32, retaining 48%, 46% and 31% partition space,
+respectively. No flashing or hardware acceptance was performed.
+
+### Measurement values as curve toggles (LB-024)
+
+The accepted refinement gives measurement tiles their channel's graph colour
+and replaces the separate legend with direct, highlighted curve toggles. Newly
+seen channels default to showing every measured value below, with only output
+voltage/current curves enabled. Saved value/curve selections remain independent
+and take precedence; Display → Channels explains and configures both selections.
+
+Five new browser scenarios were observed red against the previous UI: values
+were hidden by default, the value and Canvas colours differed, tiles had no
+pressed state or activation, and the separate legend remained. Native buttons
+now support click, touch, Space and Enter; selected curves have a filled marker,
+background tint, underline and accessible pressed state. They update Display's
+checkbox and saved preference without changing device selection, recording or
+instrument settings. Channel identity determines colour independently of discovery
+order; each theme supplies a shared lightness for both tiles and Canvas strokes.
+The graph uses the reclaimed legend space, including its resize bounds.
+
+Acceptance observes actual Canvas stroke calls as well as displayed colours in
+both themes, verifies colour identity after reordered discovery, independent
+value/curve preferences across reload, mouse/keyboard/touch activation and zero
+instrument writes. Existing layout coverage retains content-sized groups,
+wrapping, viewport bounds and resizing; channel identity is now asserted on the
+measurement button rather than the removed legend.
+
+Validation on 2026-10-21 passes all 80 browser scenarios and 18 Web unit tests,
+including the existing authentication, ownership, STOP and recording regressions.
+`tools/check.sh`, TypeScript/web build, deterministic API generation with no
+tracked drift, Black and public-tree checks (534 files) pass. With five synthetic
+devices and the default 144 px dock, removing the legend increases Canvas height
+to 466 px at 1280 × 720 and 646 px at 1440 × 900; the header remains 56 px.
+Desktop and mobile screenshots with synthetic measurements were inspected.
+Final StickS3, USB-OTG and ESP32 builds pass with the updated local frontend and
+corresponding-source download, retaining 48%, 46% and 31% free partition space.
+No instrument was operated or flashed for this refinement.

@@ -2,8 +2,10 @@
 // Copyright (c) 2026 LabBridge contributors
 import {RequestQueue} from './request-queue.js';
 import {UiAuth} from '../auth';
-import {Configuration,CoreApi,ComponentsApi,Dl24mApi} from '../../generated/src/index';
-import type {Device,Measurements,Dl24mSettings,Operation,ActuatorState} from '../../generated/src/index';
+import {Configuration,CoreApi,ComponentsApi} from '../../generated/src/index';
+import type {Device,Measurements,Operation,ActuatorState,SensorReading} from '../../generated/src/index';
+import {moduleFor} from './modules';
+import type {BenchSettings} from './modules/types';
 export async function message(error:unknown):Promise<string>{
  if(error&&typeof error==='object'&&'response' in error){
   const response=(error as {response:Response}).response;
@@ -13,153 +15,229 @@ export async function message(error:unknown):Promise<string>{
 }
 const delay=(ms:number)=>new Promise(r=>setTimeout(r,ms));
 function key(){return Array.from(crypto.getRandomValues(new Uint8Array(16)),b=>b.toString(16).padStart(2,'0')).join('');}
+export interface BenchDevice {
+ device:Device;componentId:string;lease:string;owned:boolean;busy:boolean;uncertain:boolean;error:string;controlError:string;
+ measurement?:Measurements;readings:SensorReading[];actors:Map<string,ActuatorState>;settings:BenchSettings;
+ receivedAt:number;settingsAt:number;operationGeneration:number;draft:Record<string,string>;
+}
 export class BenchAdapter {
  readonly auth=new UiAuth();
- devices:Device[]=[];device?:Device;boot='';lease='';connected=false;busy=false;uncertain=false;
- measurement?:Measurements;settings:Dl24mSettings={};actor?:ActuatorState;receivedAt=0;pollMs=1000;
- onChange=()=>{};onSample=(m:Measurements)=>{};onError=(m:string)=>{};
- private generation=0;private operationGeneration=0;private timer?:number;private heartbeat?:number;private heartbeatBusy=false;private settingsAt=0;
+ devices:Device[]=[];states=new Map<string,BenchDevice>();device?:Device;boot='';connected=false;connecting=false;pollMs=1000;shuttingDown=false;
+ onChange=()=>{};onSample=(state:BenchDevice)=>{};onError=(m:string,deviceId?:string)=>{};
+ private generation=0;private timer?:number;private heartbeat?:number;private heartbeatBusy=false;
+ private operationOwners=new Map<string,string>();
  private readonly requests=new RequestQueue();
  readonly config=new Configuration({basePath:location.origin,fetchApi:(input,init)=>{
   const generation=this.generation,path=new URL(String(input),location.origin).pathname;
-  const stop=path.endsWith('/stop'),priority=stop?0:path.endsWith('/heartbeat')?1:init?.method!=='GET'||path.includes('/operations/')?2:3;
+  const stop=path.endsWith('/stop'),heartbeat=path.endsWith('/heartbeat');
+  const deviceId=path.startsWith('/api/v1/devices/')?decodeURIComponent(path.split('/')[4]):this.operationOwners.get(path.split('/')[4]);
+  const priority=stop?0:heartbeat?1:init?.method!=='GET'||path.includes('/operations/')?2:3;
   return this.requests.run(async()=>{
    if(generation!==this.generation&&!stop)throw Error('Connection changed before request was sent');
    const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),4000);
    try{
     const response=await this.auth.fetch(input,{...init,signal:controller.signal});
-    // Keep the slot until the response body has arrived, not just its headers.
-    await response.clone().arrayBuffer();return response;
+    await response.clone().arrayBuffer();
+    if(heartbeat){
+     const lease=path.split('/')[4],owner=[...this.states.values()].find(s=>s.lease===lease);
+     let active=false;
+     try{const result=await response.clone().json();active=response.ok&&result.state==='active'&&result.id===lease;}catch{}
+     // Invalidate inside the queue slot: consumers see HTTP errors only after
+     // the slot has drained, which would otherwise let a queued ON escape.
+     if(owner&&!active)this.invalidateLease(owner,`Lease lost: heartbeat inactive (HTTP ${response.status})`);
+    }
+    return response;
    }catch(error){
     this.requests.cancelPending(Error('Connection lost before queued request was sent'));
-    this.lose('Connection lost: HTTP request failed; queued commands cancelled');
-    throw error;
+    this.lose('Connection lost: HTTP request failed; queued commands cancelled');throw error;
    }finally{clearTimeout(timer);}
-  },priority);
+  },priority,deviceId);
  }});
- readonly core=new CoreApi(this.config);readonly components=new ComponentsApi(this.config);readonly dl=new Dl24mApi(this.config);
- constructor(){
-  // Password work uses its own request: it must not hold the instrument queue,
-  // its four-second request timeout, or priority STOP and lease heartbeats.
-  this.auth.core=new CoreApi(new Configuration({basePath:location.origin,fetchApi:this.auth.fetch}));
- }
- get sink(){return this.device?.components?.find(c=>c.kind==='sink')?.id;}
- get fresh(){return !!this.measurement&&this.measurement.quality==='valid'&&this.measurement.ageMs+performance.now()-this.receivedAt<=(this.device?.limits?.maxAgeMs??0);}
- get writable(){return this.auth.state.authenticated&&!this.auth.loggingOut&&this.connected&&!!this.lease&&!this.busy&&!this.uncertain&&this.fresh&&this.actor?.state==='ready'&&this.actor.output!=='unknown';}
+ readonly core=new CoreApi(this.config);readonly components=new ComponentsApi(this.config);
+ constructor(){this.auth.core=new CoreApi(new Configuration({basePath:location.origin,fetchApi:this.auth.fetch}));}
+ get selected(){return this.device?this.states.get(this.device.id):undefined;}
+ get actors(){return this.device?.components?.filter(c=>c.kind!=='sensor')??[];}
+ get module(){return this.device?moduleFor(this.device):undefined;}
+ get componentId(){return this.selected?.componentId;}
+ get lease(){return this.selected?.lease??'';}
+ get busy(){return this.selected?.busy??false;}
+ get uncertain(){return this.selected?.uncertain??false;}
+ get actor(){return this.selected?.actors.get(this.componentId??'');}
+ get measurement(){return this.selected?.measurement;}
+ get settings(){return this.selected?.settings??{};}
+ get reserved(){return [...this.states.values()].filter(s=>s.owned);}
+ freshState(s:BenchDevice){const m=s.measurement;return this.connected&&!this.connecting&&!!m&&m.quality==='valid'&&m.ageMs+performance.now()-s.receivedAt<=(s.device.limits?.maxAgeMs??3000);}
+ get fresh(){return !!this.selected&&this.freshState(this.selected);}
+ get writable(){return this.auth.state.authenticated&&!this.auth.loggingOut&&!this.shuttingDown&&this.connected&&!!this.lease&&!this.busy&&!this.uncertain&&this.fresh&&this.actor?.state==='ready'&&this.actor.output!=='unknown';}
  get off(){return this.writable&&this.actor?.output==='off';}
- get canOn(){return this.off&&this.settings.mode===0;}
- supports(action:string){return this.device?.components?.some(c=>c.id===this.sink&&c.actions.includes(action))??false;}
+ get canOn(){return this.off&&!!this.module?.canControl(this.settings);}
+ supports(action:string){return this.device?.components?.some(c=>c.id===this.componentId&&c.actions.includes(action))??false;}
  private cancelPolling(){this.generation++;clearTimeout(this.timer);}
  private stopHeartbeat(){clearInterval(this.heartbeat);this.heartbeat=undefined;}
- private lose(text:string){this.cancelPolling();this.stopHeartbeat();this.connected=false;this.lease='';this.uncertain=true;this.actor=undefined;this.onError(text);this.onChange();}
- endSession(){
-  this.requests.cancelPending(Error('Session ended; queued commands cancelled'));
-  this.operationGeneration++;this.busy=false;
-  this.lose('Bench control disconnected. Verify outputs OFF; unconfirmed reservations expire on the bridge.');
+ private lose(text:string){
+  this.cancelPolling();this.stopHeartbeat();this.connected=false;this.connecting=false;
+  for(const s of this.states.values()){s.lease='';s.uncertain=true;s.actors.clear();s.operationGeneration++;s.busy=false;}
+  this.onError(text);this.onChange();
  }
+ endSession(){this.requests.cancelPending(Error('Session ended; queued commands cancelled'));this.lose('Bench control disconnected. Verify outputs OFF; unconfirmed reservations expire on the bridge.');}
  async connect(){
   if(!this.auth.state.authenticated||this.auth.loggingOut)throw Error('Sign in before connecting');
-  if(this.lease)await this.release();
-  this.cancelPolling();const generation=this.generation;
-  this.connected=false;this.uncertain=false;this.measurement=undefined;this.actor=undefined;this.onChange();
+  // Explicit rediscovery never abandons known ownership silently.
+  if(this.reserved.length&&this.connected)await this.releaseAll();
+  this.cancelPolling();const generation=this.generation;this.connected=false;this.connecting=true;this.onChange();
+  try{
   const node=await this.core.getNode(),list=await this.core.listDevices();
   if(generation!==this.generation)throw Error('Session changed during discovery');
-  this.devices=list.devices.filter(d=>d.driver==='dl24m');this.boot=node.bootId;
-  if(!this.devices.length){this.device=undefined;this.onChange();throw Error('No DL24M device configured on this node');}
-  this.device=this.devices.find(d=>d.id===this.device?.id)??this.devices[0];
-  if(!this.sink)throw Error('DL24M sink component unavailable');
-  this.settingsAt=0;this.connected=true;await this.poll(generation);
+  this.devices=list.devices;this.boot=node.bootId;this.states.clear();
+  if(!this.devices.length){this.device=undefined;this.connecting=false;this.onChange();throw Error('No devices configured on this node');}
+  for(const d of this.devices)this.states.set(d.id,{device:d,componentId:d.components?.find(c=>c.kind!=='sensor')?.id??'',lease:'',owned:false,busy:false,uncertain:false,error:'',controlError:'',readings:[],actors:new Map(),settings:{},receivedAt:0,settingsAt:0,operationGeneration:0,draft:{}});
+  this.device=this.devices.find(d=>d.id===this.device?.id)??this.devices[0];this.connected=true;
+  this.heartbeat=window.setInterval(()=>void this.beat(),1000);
+  await this.poll(generation);
   if(generation!==this.generation||!this.connected)throw Error('Connection changed during discovery');
-  this.onChange();
+  }finally{if(generation===this.generation){this.connecting=false;this.onChange();}}
  }
  private async poll(generation:number){
   try{
-   const id=this.device!.id,componentId=this.sink!;
-   // A browser's parallel reads can exhaust the node's shared socket budget
-   // (HTTP, AP DNS, mDNS and instrument TCP). Reuse connections sequentially.
-   const node=await this.core.getNode(),requestedAt=performance.now();
-   const m=await this.core.getMeasurements({deviceId:id});
-   const a=await this.components.getActuatorState({deviceId:id,componentId});
-   const settings=!this.settingsAt||performance.now()-this.settingsAt>=5000
-    ?await this.dl.getDl24mSettings({deviceId:id}):undefined;
+   const node=await this.core.getNode();
    if(generation!==this.generation)return;
-   if(node.bootId!==this.boot||m.bootId&&m.bootId!==this.boot){this.lose('ESP restarted: reservation invalidated. Reconnect to start a new session.');return;}
-   this.measurement={...m,bootId:this.boot,ageMs:m.ageMs+performance.now()-requestedAt};this.receivedAt=performance.now();this.actor=a;
-   if(settings){this.settings=settings;this.settingsAt=performance.now();}
-   this.onSample(this.measurement);this.onChange();
+   if(node.bootId!==this.boot){this.lose('ESP restarted: reservations invalidated. Reconnect to start a new session.');return;}
+   for(const s of this.states.values()){
+    if(generation!==this.generation||!this.connected)return;
+    try{
+     const deviceId=s.device.id,hasActors=s.device.components?.some(c=>c.kind!=='sensor'),requestedAt=performance.now();
+     // Read the aggregate snapshot only for actors: generic meters need only readings.
+     const m=hasActors?await this.core.getMeasurements({deviceId}):undefined;
+     if(generation!==this.generation)return;
+     if(m?.bootId&&m.bootId!==this.boot){this.lose('ESP restarted: reservations invalidated. Reconnect to start a new session.');return;}
+     if(m){s.measurement={...m,bootId:this.boot,ageMs:m.ageMs+performance.now()-requestedAt};s.receivedAt=performance.now();}
+     const actors=s.device.components?.filter(c=>c.kind!=='sensor')??[];
+     for(const c of actors){
+      const a=await this.components.getActuatorState({deviceId,componentId:c.id});
+      if(generation!==this.generation)return;s.actors.set(c.id,a);
+     }
+     const at=performance.now(),samples=await this.components.getSensorReadings({deviceId});
+     if(generation!==this.generation)return;
+     if(samples.bootId!==this.boot||samples.readings.some(r=>r.bootId!==this.boot)){this.lose('ESP restarted: reservations invalidated. Reconnect to start a new session.');return;}
+     s.readings=samples.readings.map(r=>({...r,ageMs:r.ageMs+performance.now()-at}));
+     // Discover late-appearing sensor descriptors without requiring a new session.
+     for(const r of s.readings)if(!s.device.components?.some(c=>c.id===r.componentId)){
+      (s.device.components??=[]).push({id:r.componentId,kind:'sensor',actions:[],quantity:r.quantity,unit:r.unit});
+     }
+     const module=moduleFor(s.device);
+     if(module.readSettings&&(!s.settingsAt||performance.now()-s.settingsAt>=5000)){
+      const settings=await module.readSettings(this.config,deviceId);
+      if(generation!==this.generation)return;s.settings=settings;s.settingsAt=performance.now();
+     }
+     s.error='';this.onSample(s);this.onChange();
+    }catch(e){
+     if(generation!==this.generation)return;
+     s.error=await message(e);s.measurement=undefined;s.readings=[];s.actors.clear();
+     this.onSample(s);this.onError(`${s.device.id}: ${s.error}`,s.device.id);this.onChange();
+    }
+   }
   }catch(e){if(generation===this.generation)this.lose('Connection lost: '+await message(e));return;}
   if(generation===this.generation&&this.connected)this.timer=window.setTimeout(()=>void this.poll(generation),this.pollMs);
  }
  async select(id:string){
   if(!this.auth.state.authenticated||this.auth.loggingOut)throw Error('Sign in before selecting a device');
-  if(this.busy)throw Error('Wait for the pending operation before switching devices');
-  if(this.lease)await this.release();
-  const next=this.devices.find(d=>d.id===id);if(!next)throw Error('Unknown DL24M device');
-  this.cancelPolling();this.device=next;this.actor=undefined;this.measurement=undefined;this.settings={};this.settingsAt=0;
-  this.onChange();if(this.connected)await this.poll(this.generation);
+  const next=this.devices.find(d=>d.id===id);if(!next)throw Error('Unknown device');
+  this.device=next;this.onChange();
+ }
+ selectComponent(componentId:string){
+  if(!this.selected||!this.actors.some(c=>c.id===componentId))throw Error('Unknown actor component');
+  this.selected.componentId=componentId;this.onChange();
  }
  async reserve(){
+  const s=this.selected;
   if(!this.auth.state.authenticated||this.auth.loggingOut)throw Error('Sign in before reserving');
-  if(!this.connected||!this.device||!this.fresh||this.uncertain)throw Error('Reconnect and wait for fresh measurements before reserving');
-  if(this.lease)throw Error('Device already reserved by this page');
-  const generation=this.generation;
-  const l=await this.core.createLease({leaseRequest:{deviceIds:[this.device.id],ttlMs:10000}});
+  if(this.shuttingDown||!s?.componentId||!this.connected||!this.freshState(s)||s.uncertain)throw Error('Reconnect and wait for fresh measurements before reserving');
+  if(s.lease)throw Error('Device already reserved by this page');
+  const generation=this.generation,l=await this.core.createLease({leaseRequest:{deviceIds:[s.device.id],ttlMs:10000}});
   if(generation!==this.generation||this.auth.loggingOut)throw Error('Session changed while reserving; verify outputs OFF and allow lease expiry');
   if(l.state!=='active')throw Error('Reservation is not active');
-  this.lease=l.id;this.heartbeat=window.setInterval(()=>void this.beat(),1000);this.onChange();
+  s.lease=l.id;s.owned=true;this.onChange();
+ }
+ private invalidateLease(s:BenchDevice,text:string){
+  s.lease='';s.uncertain=true;s.controlError=text;s.operationGeneration++;s.busy=false;
+  this.requests.cancelPending(Error('Lease lost before queued command was sent'),job=>job.priority===2&&job.deviceId===s.device.id);
+  this.onError(`${s.device.id}: ${text}`,s.device.id);this.onChange();
  }
  private async beat(){
-  if(this.heartbeatBusy||!this.lease)return;
-  const lease=this.lease;this.heartbeatBusy=true;
-  try{const l=await this.core.heartbeatLease({leaseId:lease,stopRequest:{}});if(l.state!=='active')throw Error('Lease is not active');}
-  catch(e){if(this.lease===lease)this.lose('Lease lost: '+await message(e));}
-  finally{this.heartbeatBusy=false;}
+  if(this.heartbeatBusy||!this.connected)return;this.heartbeatBusy=true;
+  try{for(const s of this.states.values()){
+   const lease=s.lease;if(!lease)continue;
+   try{const l=await this.core.heartbeatLease({leaseId:lease,stopRequest:{}});if(l.state!=='active')throw Error('Lease is not active');}
+   catch(e){if(s.lease===lease)this.invalidateLease(s,'Lease lost: '+await message(e));}
+  }}finally{this.heartbeatBusy=false;}
  }
  private params(){
-  if(!this.writable||!this.device)throw Error('A reservation, fresh measurements and confirmed device state are required');
-  return {deviceId:this.device.id,componentId:this.sink!,xLabLease:this.lease,idempotencyKey:key()};
+  const s=this.selected;if(!this.writable||!s)throw Error('A reservation, fresh measurements and confirmed device state are required');
+  return {s,params:{deviceId:s.device.id,componentId:s.componentId,xLabLease:s.lease,idempotencyKey:key()}};
  }
- private async perform(send:()=>Promise<Operation>,stop=false){
-  if(this.busy&&!stop)throw Error('Wait for the pending operation');
-  const operationGeneration=++this.operationGeneration,boot=this.boot;
-  this.busy=true;this.onChange();
+ private async perform(s:BenchDevice,componentId:string,send:()=>Promise<Operation>,stop=false){
+  if(s.busy&&!stop)throw Error('Wait for the pending operation');
+  const operationGeneration=++s.operationGeneration,boot=this.boot,generation=this.generation;
+  s.busy=true;this.onChange();let operationId='';
   try{
-   let o=await send();const deadline=performance.now()+12000;
+   let o=await send();operationId=o.id;this.operationOwners.set(o.id,s.device.id);const deadline=performance.now()+12000;
+   const check=()=>{if(operationGeneration!==s.operationGeneration)throw Error('Operation superseded by STOP');if(boot!==this.boot||generation!==this.generation)throw Error('Connection changed while confirming the operation');};
    while(o.status==='running'||o.status==='pending'){
-    if(operationGeneration!==this.operationGeneration)throw Error('Operation superseded by STOP');
-    if(performance.now()>deadline)throw Error('Operation uncertain: query its result before repeating');
-    await delay(150);o=await this.core.getOperation({operationId:o.id});
+    check();if(performance.now()>deadline)throw Error('Operation uncertain: query its result before repeating');
+    await delay(150);check();o=await this.core.getOperation({operationId:o.id});
    }
-   if(operationGeneration!==this.operationGeneration)throw Error('Operation superseded by STOP');
-   if(boot!==this.boot||!this.connected&&!stop)throw Error('Connection changed while confirming the operation');
+   check();if(o.deviceId!==s.device.id)throw Error('Operation device identity mismatch');
    if(o.status!=='succeeded'||o.restorePending||o.finalOutput==='unknown')throw Error(`${o.status}: ${o.stage}; output ${o.finalOutput}; restore pending ${o.restorePending}`);
    if(stop&&o.finalOutput!=='off')throw Error('STOP did not confirm OFF');
-   const actor=await this.components.getActuatorState({deviceId:this.device!.id,componentId:this.sink!});
-   const settings=await this.dl.getDl24mSettings({deviceId:this.device!.id});
-   if(operationGeneration!==this.operationGeneration)return o;
-   this.actor=actor;this.settings=settings;this.settingsAt=performance.now();
-   if(stop&&actor.output!=='off')throw Error('OFF readback was not confirmed');
-   // Only an explicit confirmed STOP can clear an uncertain command latch.
-   if(stop)this.uncertain=false;
-   return o;
-  }catch(e){if(operationGeneration===this.operationGeneration)this.uncertain=true;throw e;}
-  finally{if(operationGeneration===this.operationGeneration){this.busy=false;this.onChange();}}
+   // Device STOP covers all actors; refresh all of them before claiming OFF.
+   const ids=stop?(s.device.components?.filter(c=>c.kind!=='sensor').map(c=>c.id)??[]):[componentId];
+   for(const id of ids){const actor=await this.components.getActuatorState({deviceId:s.device.id,componentId:id});check();s.actors.set(id,actor);if(stop&&actor.output!=='off')throw Error('OFF readback was not confirmed');}
+   const module=moduleFor(s.device);
+   if(module.readSettings){const settings=await module.readSettings(this.config,s.device.id);check();s.settings=settings;s.settingsAt=performance.now();}
+   if(stop){s.uncertain=false;s.controlError='';}return o;
+  }catch(e){if(operationGeneration===s.operationGeneration){s.uncertain=true;s.controlError=await message(e);}throw e;}
+  finally{this.operationOwners.delete(operationId);if(operationGeneration===s.operationGeneration){s.busy=false;this.onChange();}}
  }
- async current(currentA:number){const p=this.params();if(!this.supports('current')||this.settings.mode!==0)throw Error('CC current is unavailable');return this.perform(()=>this.components.setComponentCurrent({...p,currentRequest:{currentA}}));}
- async enable(){if(!this.canOn||!this.supports('output'))throw Error('ON requires fresh CC state and confirmed OFF');const p=this.params();return this.perform(()=>this.components.setComponentOutput({...p,outputRequest:{enabled:true}}));}
- async stop(){this.requests.cancelPending(Error('Cancelled by priority STOP'),job=>job.priority===2);if(!this.device)throw Error('Select a DL24M device first');const deviceId=this.device.id;return this.perform(()=>this.core.stopDevice({deviceId,idempotencyKey:key(),stopRequest:{reason:'DL24M Bench STOP'}}),true);}
- async settingsWrite(settings:Dl24mSettings){if(!this.off)throw Error('Settings require a reservation and confirmed OFF');const p=this.params();return this.perform(()=>this.dl.setDl24mSettings({...p,dl24mSettings:settings}));}
- async duration(timeLimitS:number){if(!this.off||!this.supports('duration'))throw Error('Timer requires confirmed OFF and backend support');const p=this.params();return this.perform(()=>this.components.setComponentDuration({...p,durationRequest:{timeLimitS}}));}
- async cutoff(cutoffVoltageV:number){if(!this.off||!this.supports('cutoff'))throw Error('Cutoff requires confirmed OFF and backend support');const p=this.params();return this.perform(()=>this.components.setComponentCutoff({...p,cutoffRequest:{cutoffVoltageV}}));}
- async resetCounters(){if(!this.off)throw Error('Counter reset requires confirmed OFF');const p=this.params();return this.perform(()=>this.dl.resetDl24mCounters({...p,stopRequest:{reason:'DL24M Bench explicit counter reset'}}));}
- async release(){
-  if(!this.lease)return;
-  const lease=this.lease;await this.stop();
-  await this.core.stopLease({leaseId:lease,stopRequest:{reason:'DL24M Bench release after confirmed OFF'}});
-  this.lease='';this.stopHeartbeat();this.onChange();
+ async current(currentA:number){const {s,params:p}=this.params();if(!this.supports('current')||!moduleFor(s.device).canControl(s.settings))throw Error('Current control is unavailable');return this.perform(s,p.componentId,()=>this.components.setComponentCurrent({...p,currentRequest:{currentA}}));}
+ async voltage(voltageV:number){const {s,params:p}=this.params();if(!this.supports('voltage'))throw Error('Voltage control is unavailable');return this.perform(s,p.componentId,()=>this.components.setComponentVoltage({...p,voltageRequest:{voltageV}}));}
+ async enable(){if(!this.canOn||!this.supports('output'))throw Error('ON requires fresh state and confirmed OFF');const {s,params:p}=this.params();return this.perform(s,p.componentId,()=>this.components.setComponentOutput({...p,outputRequest:{enabled:true}}));}
+ async stop(deviceId=this.device?.id){
+  const s=deviceId?this.states.get(deviceId):undefined;if(!s?.componentId)throw Error('Select an actor device first');
+  this.requests.cancelPending(Error('Cancelled by priority STOP'),job=>job.priority===2&&job.deviceId===deviceId);
+  return this.perform(s,s.componentId,()=>this.core.stopDevice({deviceId:s.device.id,idempotencyKey:key(),stopRequest:{reason:'Bench STOP'}}),true);
  }
+ private async eachOwned(action:(s:BenchDevice)=>Promise<unknown>){
+  if(this.shuttingDown)throw Error('Shutdown already in progress');
+  this.shuttingDown=true;this.onChange();
+  const owned=[...this.reserved],errors:string[]=[];
+  try{
+   const ids=new Set(owned.map(s=>s.device.id));
+   this.requests.cancelPending(Error('Cancelled by shutdown'),job=>job.priority===2&&ids.has(job.deviceId??''));
+   // Submit every priority STOP before awaiting confirmations. The shared
+   // queue still allows only one HTTP request at a time.
+   const results=await Promise.allSettled(owned.map(action));
+   for(let i=0;i<results.length;i++){const result=results[i];if(result.status==='rejected')errors.push(`${owned[i].device.id}: ${await message(result.reason)}`);}
+   if(errors.length)throw Error(errors.join('; '));
+  }finally{this.shuttingDown=false;this.onChange();}
+ }
+ async stopAll(){await this.eachOwned(s=>this.stop(s.device.id));}
+ async settingsWrite(settings:BenchSettings){
+  if(!this.off)throw Error('Settings require a reservation and confirmed OFF');const {s,params:p}=this.params(),module=moduleFor(s.device);
+  if(!module.writeSettings)throw Error('Device settings unavailable');return this.perform(s,p.componentId,()=>module.writeSettings!(this.config,p,settings));
+ }
+ async duration(timeLimitS:number){if(!this.off||!this.supports('duration'))throw Error('Timer requires confirmed OFF and backend support');const {s,params:p}=this.params();return this.perform(s,p.componentId,()=>this.components.setComponentDuration({...p,durationRequest:{timeLimitS}}));}
+ async cutoff(cutoffVoltageV:number){if(!this.off||!this.supports('cutoff'))throw Error('Cutoff requires confirmed OFF and backend support');const {s,params:p}=this.params();return this.perform(s,p.componentId,()=>this.components.setComponentCutoff({...p,cutoffRequest:{cutoffVoltageV}}));}
+ async resetCounters(){if(!this.off)throw Error('Counter reset requires confirmed OFF');const {s,params:p}=this.params(),module=moduleFor(s.device);if(!module.resetCounters)throw Error('Counter reset unavailable');return this.perform(s,p.componentId,()=>module.resetCounters!(this.config,p));}
+ async release(deviceId=this.device?.id){
+  const s=deviceId?this.states.get(deviceId):undefined;if(!s?.owned)return;
+  const lease=s.lease;await this.stop(s.device.id);
+  if(lease)await this.core.stopLease({leaseId:lease,stopRequest:{reason:'Bench release after confirmed OFF'}});
+  s.lease='';s.owned=false;this.onChange();
+ }
+ async releaseAll(){await this.eachOwned(s=>this.release(s.device.id));}
  unload(){
-  this.cancelPolling();this.stopHeartbeat();
-  if(this.lease&&this.device)void this.core.stopDevice({deviceId:this.device.id,idempotencyKey:key(),stopRequest:{reason:'Bench page closed'}},{keepalive:true}).catch(()=>{});
+  const owned=[...this.reserved];this.cancelPolling();this.stopHeartbeat();
+  this.requests.cancelPending(Error('Page closed'));
+  for(const s of owned)void this.core.stopDevice({deviceId:s.device.id,idempotencyKey:key(),stopRequest:{reason:'Bench page closed'}},{keepalive:true}).catch(()=>{});
  }
 }
