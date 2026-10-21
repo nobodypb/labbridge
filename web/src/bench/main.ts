@@ -14,7 +14,7 @@ let session=new BenchSession(3000),sessionIdentity='',pollMode='live',localPendi
 const chart=new CanvasChart($<HTMLCanvasElement>('chart'),{maxpts:900,css:(v:string)=>getComputedStyle(document.documentElement).getPropertyValue(v).trim(),series:[{key:'v',cssVar:'--v'},{key:'i',cssVar:'--i'},{key:'w',cssVar:'--w'}]});
 function report(text:string,error=false){$('benchStatus').textContent=text;$('benchStatus').classList.toggle('error',error);}
 async function run(fn:()=>Promise<unknown>,priority=false){
- if(localPending&&!priority)return;
+ if((localPending||api.auth.loggingOut)&&!priority)return;
  const n=++request;localPending=true;render();
  try{const result=await fn();if(n===request&&result&&typeof result==='object'&&'status'in result)report(`Operation ${result.status}`);}
  catch(e){if(n===request)report(await message(e),true);}
@@ -35,18 +35,18 @@ function val(id:string,value:number|undefined,decimals=3){$(id).textContent=Numb
 function temperature(m:Measurements,kind:string){const t=m.temperatureChannels.find(c=>c.kind===kind&&c.quality==='valid'&&c.ageMs<=(api.device?.limits?.maxAgeMs??0));return t?.valueC;}
 function elapsed(ms:number){const sec=Math.floor(ms/1000);return [Math.floor(sec/3600),Math.floor(sec/60)%60,sec%60].map(v=>String(v).padStart(2,'0')).join(':');}
 function render(){
- const ready=api.writable&&!localPending,off=api.off&&!localPending;
+ const pending=localPending||api.auth.loggingOut,ready=api.writable&&!pending,off=api.off&&!pending;
  $('connLbl').textContent=api.connected?'Connected':'Connect';$('connect').classList.toggle('on',api.connected);$('connect').classList.toggle('off',!api.connected);
- disable('connect',localPending||api.busy);disable('apiToken',!!api.lease||localPending);
+ disable('connect',pending||api.busy||!api.auth.state.authenticated);
  const select=$<HTMLSelectElement>('deviceSelect');
  if(Array.from(select.options).map(o=>o.value).join(',')!==api.devices.map(d=>d.id).join(',')){
   select.replaceChildren(...api.devices.map(d=>{const o=document.createElement('option');o.value=d.id;o.textContent=`${d.id} · ${d.identity}`;return o;}));
  }
- select.value=api.device?.id??'';select.disabled=localPending||api.busy||!api.connected;
- $('reserve').textContent=api.lease?'Release and stop':'Reserve device';disable('reserve',localPending||api.busy||!api.connected||!api.fresh||api.uncertain&&!api.lease);
- disable('stop',!api.device||!api.token);disable('setBtn',!ready||!api.supports('current')||!api.modeSupported||api.settings.mode!==0&&!off);
+ select.value=api.device?.id??'';select.disabled=pending||api.busy||!api.connected;
+ $('reserve').textContent=api.lease?'Release and stop':'Reserve device';disable('reserve',pending||api.busy||!api.connected||!api.fresh||api.uncertain&&!api.lease);
+ disable('stop',!api.device||!api.auth.state.authenticated);disable('setBtn',!ready||!api.supports('current')||!api.modeSupported||api.settings.mode!==0&&!off);
  const range=targetRange();input('setVal').max=String(range.max);input('setVal').min=String(range.min);input('setVal').step=String(range.step);$('setUnit').textContent=`(${range.unit})`;
- disable('loadBtn',api.actor?.output==='on'?false:!api.canOn||localPending||!api.supports('output'));
+ disable('loadBtn',api.actor?.output==='on'?!api.auth.state.authenticated:!api.canOn||pending||!api.supports('output'));
  $('loadBtn').classList.toggle('running',api.actor?.output==='on');$('loadBtn').classList.toggle('stopped',api.actor?.output==='off');
  $('loadBtn').querySelector('.lbl')!.textContent=api.busy?'LOAD · confirming…':`LOAD ${api.actor?.output?.toUpperCase()??'UNKNOWN'}`;
  disable('timeBtn',!off||!api.supports('duration'));disable('limBtn',!off);disable('zeroData',!off);
@@ -134,7 +134,7 @@ const native=document.createElement('div');native.id='nativeReadings';native.cla
 const quality=document.createElement('div');quality.id='dataQuality';quality.className='hint';$('benchStatus').after(quality);
 const recording=document.createElement('div');recording.id='recordingStatus';recording.className='hint';quality.after(recording);
 input('thr').max='24';
-$('connect').dataset.help='Connect to this LabBridge node using the API token. No USB browser access is required.';
+$('connect').dataset.help='Connect to this LabBridge node using the shared password session. No USB browser access is required.';
 $('pollRate').closest('label')!.dataset.help='Push cached measurements at this interval over WebSocket; this does not change device polling.';
 $('pollRate').closest('label')!.title='WebSocket measurement push interval';$('pollMode').dataset.help='Live records fresh samples continuously. Load records only while confirmed ON; state monitoring and lease heartbeat continue.';
 $('pollMode').title=$('pollMode').dataset.help!;
@@ -148,7 +148,7 @@ $('langSel').closest('.srow')!.setAttribute('data-help','Backend language enum 0
 $('deviceSelect').title='Changing devices starts a new browser recording. Export CSV before switching.';
 $('clearBtn').dataset.help='Clear chart, CSV buffer and browser-session integrals only. Device counters remain unchanged.';
 $('zeroData').dataset.help='Reset device counters with confirmed OFF. Previous device counters cannot be restored; browser recording is unchanged.';
-bind('connect',async()=>{await api.connect(input('apiToken').value);if(api.connected)report('Connected. Export before changing device or closing this page.');});
+bind('connect',async()=>{await api.connect();if(api.connected)report('Connected. Export before changing device or closing this page.');});
 bind('reserve',async()=>{if(api.lease){await api.release();report('Device stopped and released');}else{await api.reserve();report('Selected device reserved');}});
 $<HTMLSelectElement>('deviceSelect').onchange=()=>{const id=input('deviceSelect').value;void run(async()=>{await api.select(id);report('Device selected; new browser recording started.');});};
 bind('setBtn',()=>{const range=targetRange();return api.target(number('setVal',range.min,range.max,range.step));});
@@ -194,3 +194,25 @@ window.setInterval(render,250);
 setTheme(store('theme')==='light'?'light':'dark');
 const savedRate=Number(store('pollMs'));if([500,1000,2000].includes(savedRate)){api.pollMs=savedRate;input('pollRate').value=String(savedRate);}
 render();chart.fit();
+
+function renderAuth(){
+ $('benchAuth').replaceChildren();
+ api.auth.render($('benchAuth'),async()=>{
+  renderAuth();
+  // Authentication may resume discovery, never reservation or device commands.
+  if(api.auth.state.authenticated){await api.connect();report('Connected. Reserve the selected device before making changes.');}
+ });
+ render();
+}
+api.auth.report=error=>{void message(error).then(text=>report(text,true));};
+api.auth.notify=text=>report(text);
+api.auth.onLost=()=>{
+ ++request;localPending=false;api.endSession();renderAuth();
+};
+api.auth.beforeLogout=async()=>{
+ try{await api.release();}finally{api.endSession();}
+};
+void (async()=>{
+ await api.auth.refresh();renderAuth();
+ if(api.auth.state.authenticated)await api.connect();
+})().catch(api.auth.report);

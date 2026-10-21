@@ -3,6 +3,7 @@
 import {RpcStream} from './stream.js';
 import {RequestQueue} from './request-queue.js';
 import {SampleClock} from './sample-clock.js';
+import {UiAuth} from '../auth';
 import {Configuration,CoreApi,ComponentsApi,Dl24mApi} from '../../generated/src/index';
 import {DeviceFromJSON,MeasurementsFromJSON,Dl24mSettingsFromJSON,OperationFromJSON,ActuatorStateFromJSON} from '../../generated/src/index';
 import type {Device,Measurements,Dl24mSettings,Operation,ActuatorState} from '../../generated/src/index';
@@ -16,7 +17,8 @@ export async function message(error:unknown):Promise<string>{
 
 function key(){return Array.from(crypto.getRandomValues(new Uint8Array(16)),b=>b.toString(16).padStart(2,'0')).join('');}
 export class BenchAdapter {
- token='';devices:Device[]=[];device?:Device;boot='';lease='';connected=false;busy=false;uncertain=false;
+ readonly auth=new UiAuth();
+ devices:Device[]=[];device?:Device;boot='';lease='';connected=false;busy=false;uncertain=false;
  measurement?:Measurements;settings:Dl24mSettings={};actor?:ActuatorState;receivedAt=0;pollMs=1000;
  onChange=()=>{};onSample=(m:Measurements)=>{};onError=(m:string)=>{};onGap=()=>{};
  readonly stream=new RpcStream(`${location.protocol==='https:'?'wss:':'ws:'}//${location.host}/api/v1/ws`);
@@ -25,16 +27,17 @@ export class BenchAdapter {
  private operationWaiters=new Map<string,{resolve:(o:Operation)=>void;reject:(e:Error)=>void;timer:ReturnType<typeof setTimeout>}>();
  constructor(){
   this.stream.onSnapshot=(event:any)=>this.snapshot(event);this.stream.onGap=()=>this.onGap();
-  this.stream.onLoss=(error:Error)=>{if(this.connected)this.lose(error.message);};
+  this.auth.core=new CoreApi(new Configuration({basePath:location.origin,fetchApi:this.auth.fetch}));
+  this.stream.onLoss=(error:Error)=>{if(this.connected)this.lose(error.message);this.checkSessionAfterLoss();};
  }
  private generation=0;private operationGeneration=0;private heartbeat?:number;private heartbeatBusy=false;
  private readonly requests=new RequestQueue();
- readonly config=new Configuration({basePath:location.origin,accessToken:()=>this.token,fetchApi:(input,init)=>{
+ readonly config=new Configuration({basePath:location.origin,fetchApi:(input,init)=>{
   const generation=this.generation,path=new URL(String(input),location.origin).pathname;
   const stop=path.endsWith('/stop'),priority=stop?0:path.endsWith('/heartbeat')?1:init?.method!=='GET'||path.includes('/operations/')?2:3;
   return this.requests.run(async()=>{
    if(generation!==this.generation&&!stop)throw Error('Connection changed before request was sent');
-   try{return await this.stream.fetch(String(input),init);}
+   try{const response=await this.stream.fetch(String(input),init);if(response.status===401)this.checkSessionAfterLoss();return response;}
    catch(error){
     this.requests.cancelPending(Error('Connection lost before queued request was sent'));
     this.lose('Connection lost: WebSocket request failed; queued commands cancelled');throw error;
@@ -44,7 +47,7 @@ export class BenchAdapter {
  readonly core=new CoreApi(this.config);readonly components=new ComponentsApi(this.config);readonly dl=new Dl24mApi(this.config);
  get sink(){return this.device?.components?.find(c=>c.kind==='sink')?.id;}
  get fresh(){return !!this.measurement&&this.measurement.quality==='valid'&&this.measurement.ageMs+performance.now()-this.receivedAt<=(this.device?.limits?.maxAgeMs??0);}
- get writable(){return this.connected&&!!this.lease&&!this.busy&&!this.uncertain&&this.fresh&&this.actor?.state==='ready'&&this.actor.output!=='unknown';}
+ get writable(){return this.auth.state.authenticated&&!this.auth.loggingOut&&this.connected&&!!this.lease&&!this.busy&&!this.uncertain&&this.fresh&&this.actor?.state==='ready'&&this.actor.output!=='unknown';}
  get off(){return this.writable&&this.actor?.output==='off';}
  get mode(){return (['cc','cv','cr','cp'] as const)[this.settings.mode??-1];}
  get modeSupported(){return this.mode==='cc'||this.device?.features?.some(f=>f.id===this.mode&&f.status==='supported');}
@@ -53,16 +56,30 @@ export class BenchAdapter {
  private invalidate(){this.generation++;}
  private stopHeartbeat(){clearInterval(this.heartbeat);this.heartbeat=undefined;}
  private lose(text:string){this.invalidate();this.stopHeartbeat();this.connected=false;this.lease='';this.uncertain=true;this.actor=undefined;this.stream.close();for(const w of this.operationWaiters.values()){clearTimeout(w.timer);w.reject(Error(text));}this.operationWaiters.clear();this.onError(text);this.onChange();}
- async connect(token:string){
+ private checkSessionAfterLoss(){
+  if(!this.auth.state.authenticated)return;
+  const generation=this.generation,csrf=this.auth.state.csrfToken;
+  void this.auth.core.getAuthStatus().then(state=>{
+   if(generation!==this.generation||csrf!==this.auth.state.csrfToken)return;
+   this.auth.state=state;if(!state.authenticated)this.auth.onLost();
+  }).catch(()=>{});
+ }
+ endSession(){
+  this.requests.cancelPending(Error('Session ended; queued commands cancelled'));
+  this.operationGeneration++;this.busy=false;this.lose('Bench control disconnected. Verify outputs OFF; unconfirmed reservations expire on the bridge.');
+ }
+ async connect(){
+  if(!this.auth.state.authenticated||this.auth.loggingOut)throw Error('Sign in before connecting');
   if(this.lease)await this.release();
-  this.invalidate();this.token=token;this.connected=false;this.uncertain=false;this.measurement=undefined;this.actor=undefined;this.onChange();
-  this.boot=await this.stream.open(token);
+  this.invalidate();const generation=this.generation;this.connected=false;this.uncertain=false;this.measurement=undefined;this.actor=undefined;this.onChange();
+  this.boot=await this.stream.open({csrf_token:this.auth.state.csrfToken!});
   const node=await this.core.getNode(),list=await this.core.listDevices();
+  if(generation!==this.generation||this.auth.loggingOut)throw Error('Session changed during discovery');
   this.devices=list.devices.filter(d=>d.driver==='dl24m');this.boot=node.bootId;
   if(!this.devices.length){this.device=undefined;this.onChange();throw Error('No DL24M device configured on this node');}
   this.device=this.devices.find(d=>d.id===this.device?.id)??this.devices[0];
   if(!this.sink)throw Error('DL24M sink component unavailable');
-  this.connected=true;this.sampleClock.start(performance.now());await this.stream.subscribe(this.device.id,this.pollMs);await this.initialSnapshot();this.onChange();
+  this.connected=true;this.sampleClock.start(performance.now());await this.stream.subscribe(this.device.id,this.pollMs);await this.initialSnapshot();if(generation!==this.generation||!this.connected)throw Error('Connection changed during discovery');this.onChange();
  }
  private snapshot(event:any){
   if(event.boot_id!==this.boot){this.lose('ESP restarted: reservation invalidated. Reconnect to start a new session.');return;}
@@ -100,6 +117,7 @@ export class BenchAdapter {
  async interval(ms:number){this.pollMs=ms;if(this.connected&&this.device)await this.stream.subscribe(this.device.id,ms);}
 
  async select(id:string){
+  if(!this.auth.state.authenticated||this.auth.loggingOut)throw Error('Sign in before selecting a device');
   if(this.busy)throw Error('Wait for the pending operation before switching devices');
   if(this.lease)await this.release();
   const next=this.devices.find(d=>d.id===id);if(!next)throw Error('Unknown DL24M device');
@@ -107,9 +125,12 @@ export class BenchAdapter {
   this.onChange();if(this.connected){this.sampleClock.start(performance.now());await this.stream.subscribe(id,this.pollMs);await this.initialSnapshot();}
  }
  async reserve(){
+  if(!this.auth.state.authenticated||this.auth.loggingOut)throw Error('Sign in before reserving');
   if(!this.connected||!this.device||!this.fresh||this.uncertain)throw Error('Reconnect and wait for fresh measurements before reserving');
   if(this.lease)throw Error('Device already reserved by this page');
+  const generation=this.generation;
   const l=await this.core.createLease({leaseRequest:{deviceIds:[this.device.id],ttlMs:10000}});
+  if(generation!==this.generation||this.auth.loggingOut)throw Error('Session changed while reserving; verify outputs OFF and allow lease expiry');
   if(l.state!=='active')throw Error('Reservation is not active');
   this.lease=l.id;this.heartbeat=window.setInterval(()=>void this.beat(),1000);this.onChange();
  }
@@ -157,9 +178,9 @@ export class BenchAdapter {
   // Explicit emergency recovery is independent of WebSocket ownership/freshness.
   // It never retries a write and does not re-establish control or a reservation.
   const generation=++this.operationGeneration;this.busy=true;this.onChange();
-  const config=new Configuration({basePath:location.origin,accessToken:()=>this.token,fetchApi:async(input,init)=>{
+  const config=new Configuration({basePath:location.origin,fetchApi:async(input,init)=>{
    const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),4000);
-   try{return await fetch(input,{...init,signal:controller.signal});}finally{clearTimeout(timer);}
+   try{return await this.auth.fetch(input,{...init,signal:controller.signal});}finally{clearTimeout(timer);}
   }}),core=new CoreApi(config),components=new ComponentsApi(config);
   try{
    let operation=await core.stopDevice({deviceId,idempotencyKey:key(),stopRequest:{reason:'DL24M Bench explicit HTTP STOP recovery'}});

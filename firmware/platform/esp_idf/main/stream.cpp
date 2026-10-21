@@ -1,6 +1,7 @@
-#include "labbridge/stream.hpp"
+#include "auth_platform.hpp"
 #include "esp_heap_caps.h"
 #include "esp_http_server.h"
+#include "labbridge/stream_credentials.hpp"
 #include "lwip/sockets.h"
 #include "platform.hpp"
 #include <cerrno>
@@ -15,18 +16,20 @@ struct Peer {
   uint64_t opened, next_sample = 0, next_status = 0, next_catalogue = 0;
   bool queued = false, closing = false, replying = false;
   uint64_t last_status = 0, max_build_ms = 0;
+  StreamCredentials access;
   StreamSession session;
-  Peer(int socket, std::string boot)
+  Peer(int socket, std::string boot, Headers headers, AuthContext context)
       : fd(socket), opened(now_ms()),
+        access(authentication(), std::move(headers), std::move(context)),
         session(
             std::move(boot),
-            [](const std::string &token) {
-              std::lock_guard<std::recursive_mutex> lock(mutex);
-              return !token.empty() && token == read_nvs("auth").text("token");
-            },
-            [](const std::string &method, const std::string &path,
-               const Json &body, const Headers &headers) {
-              return dispatch(method, path, body, headers, false);
+            [this](const std::string &token) { return access.verify(token); },
+            [this](const std::string &method, const std::string &path,
+                   const Json &body, const Headers &headers) {
+              return access.dispatch(
+                  method, path, body, headers,
+                  [](const std::string &m, const std::string &p, const Json &b,
+                     const Headers &h) { return dispatch(m, p, b, h, false); });
             }) {}
 };
 std::mutex stream_mutex;
@@ -163,7 +166,10 @@ esp_err_t websocket(httpd_req_t *request) try {
       boot = node->request("GET", "/api/v1/node", Json(), {}, now_ms())
                  .body.text("boot_id");
     }
-    peer = std::make_shared<Peer>(fd, boot);
+    auto headers = http_headers(request);
+    auto context = http_auth_context(request, headers);
+    peer = std::make_shared<Peer>(fd, boot, std::move(headers),
+                                  std::move(context));
     request->sess_ctx = peer.get();
     request->free_ctx = freed;
     return ESP_OK;

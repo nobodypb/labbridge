@@ -51,3 +51,9 @@ test('restart rejects the session and reordered or duplicate events are ignored'
  assert.equal(events,1);socket.receive({type:'snapshot',boot_id:'b',sequence:2,body:{}});
  assert.match(loss,/restarted/);assert.equal(stream.ready,false);stream.close();
 });
+test('cookie-session authentication sends only the CSRF proof as its first frame',async()=>{
+ const stream=new RpcStream('ws://node/api/v1/ws',Socket);
+ const opening=stream.open({csrf_token:'synthetic-csrf'});await tick();const socket=Socket.sockets.at(-1);
+ const first=socket.sent[0];socket.receive({type:'authenticated',boot_id:'a'});await opening;stream.close();
+ assert.deepEqual(first,{type:'auth',csrf_token:'synthetic-csrf'});
+});

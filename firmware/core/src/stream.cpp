@@ -87,9 +87,11 @@ Json StreamSession::receive(const Json &r, uint64_t now) {
                                  "accepted operations over HTTP"));
   if (!authenticated()) {
     token_.clear();
+    auto credential = r.text("token", r.text("csrf_token"));
     if (!auth_failed_ && now <= 3000 && r.text("type") == "auth" &&
-        verify_(r.text("token")) && !r.text("token").empty()) {
-      token_ = r.text("token");
+        r.has("token") != r.has("csrf_token") && verify_(credential) &&
+        !credential.empty()) {
+      token_ = credential;
       return Json().set("type", "authenticated").set("boot_id", boot_);
     }
     auth_failed_ = true;

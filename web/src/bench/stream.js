@@ -8,7 +8,7 @@ export class RpcStream {
    const socket=new this.Socket(this.url);this.socket=socket;let done=false;
    const timer=setTimeout(()=>fail(Error('Connection lost: authentication timed out')),3000);
    const fail=error=>{if(!done){done=true;clearTimeout(timer);reject(error);}if(this.socket===socket)this.lost(error);socket.onclose=socket.onerror=socket.onmessage=null;socket.close();};
-   socket.onopen=()=>socket.send(JSON.stringify({type:'auth',token}));
+   socket.onopen=()=>socket.send(JSON.stringify({type:'auth',...(typeof token==='string'?{token}:token)}));
    socket.onerror=()=>fail(Error('Connection lost: WebSocket unavailable'));
    socket.onclose=()=>fail(Error('Connection lost: reconnect and inspect state before repeating commands'));
    socket.onmessage=event=>{

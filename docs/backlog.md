@@ -151,7 +151,7 @@ the existing physical limitations in LB-014 remain open.
   laboratory connections until the operator resumes them. See acceptance.md.
 - **LB-021:** HTTPS with optional mTLS as an alternative login for both browser and API clients; valid client certificates authenticate directly. Password and bearer alternatives remain available. Define trust-anchor provisioning, certificate renewal/revocation and Secure cookies; no certificate requirement is introduced by LB-020.
 
-## LB-023 — DL24M capabilities and one-connection Bench (implemented)
+## LB-023 — DL24M capabilities and one-connection Bench (accepted; completion in progress)
 
 Provide a factual supported/unverified/unavailable status for every retained
 Bench feature. Extend the typed API, DL24M driver and UI for confirmed modes,
@@ -190,3 +190,13 @@ LB-023 evidence: [bounded hardware and automated acceptance](acceptance.md#dl24m
 Calibration/zero/reset commissioning needs an external reference and proven full
 backup/restore; external-temperature and fan-RPM work needs an audited native
 register mapping. Those controls remain visible and locked.
+
+
+LB-023 completion scope accepted by the operator: integrate every retained Bench
+function that is realizable through the native device/backend contract; distinguish
+an uninvestigated function from a demonstrated protocol limitation. Execute all
+checks possible without operator attendance, including bounded recovery/stream
+checks on the authorized exclusive device, before merging. Retain confirmed OFF,
+original-setting restoration, credential protection and the unchanged frame
+codec. Track only genuinely remaining operator/reference/wiring-dependent tests
+in an appropriate hardware ticket; do not substitute simulation for those results.

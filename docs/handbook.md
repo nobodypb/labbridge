@@ -874,8 +874,9 @@ restrictions. Passive diagnostics capture actual BLE traffic, cached register
 snapshots, browser-side comparison and export. No HID commands are sent.
 See the [capability and protocol matrix](dl24m-bench-extension.md).
 
-The page authenticates one `/api/v1/ws` connection with the bearer token in its
-first message. Discovery, commands and explicit lease heartbeats use the same
+The page authenticates one `/api/v1/ws` connection with the shared UI password
+session: its first message proves the session CSRF token, bound to the upgrade
+cookie and trusted origin. API clients can still use a bearer first message. Discovery, commands and explicit lease heartbeats use the same
 USB-shaped API envelopes; monitoring, settings and operation completion are
 pushed. The default measurement interval is 1 s (selectable 500 ms/1 s/2 s),
 without changing BLE polling. There is no normal HTTP polling. STOP has priority

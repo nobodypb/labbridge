@@ -1,4 +1,4 @@
-# DL24M Bench capabilities and stream (LB-021)
+# DL24M Bench capabilities and stream (LB-023)
 
 The retained Bench controls use `Device.features` to distinguish supported,
 unverified and unavailable functions. An unavailable value is never replaced by
@@ -36,7 +36,14 @@ Manufacturer binaries and private captures are not distributed here.
 
 ## WebSocket contract
 
-Connect `/api/v1/ws` and send `StreamAuth` first, within three seconds. Failed
+Connect `/api/v1/ws` and send `StreamAuth` first, within three seconds.
+API clients supply `token`; the Bench supplies `csrf_token` from its shared
+password session. Exactly one is required. Browser access is bound to the upgrade
+request's HttpOnly cookie, trusted server origin and matching Origin. Session
+expiry/logout/password replacement ends stream access; client-supplied Cookie,
+Origin or Authorization RPC headers cannot replace that binding. Password and
+session-management operations stay on their dedicated HTTP worker so hashing
+cannot hold the instrument queue, STOP or explicit heartbeats. Failed
 or late authentication closes the connection without device data. The bearer
 secret is never put in a URL. The board profile allows one UI stream session;
 unauthenticated sessions occupy the same bounded slot until rejected/timed out.

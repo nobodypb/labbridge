@@ -2197,7 +2197,7 @@
       },
       "StreamAuth": {
         "type": "object",
-        "description": "First WebSocket text message within three seconds. Bearer token is never placed in URL or subprotocol.",
+        "description": "First WebSocket text message within three seconds, with exactly one credential: API bearer token, or the UI session CSRF token bound to the HttpOnly upgrade cookie and trusted same Origin. Cookie sessions are revalidated during RPC and pushes; logout, expiry and password replacement terminate access. Secrets never enter URLs or subprotocols.",
         "properties": {
           "type": {
             "type": "string",
@@ -2211,13 +2211,20 @@
             "description": "Existing LAN bearer token.",
             "minLength": 1,
             "maxLength": 255
+          },
+          "csrf_token": {
+            "type": "string",
+            "minLength": 64,
+            "maxLength": 64,
+            "description": "CSRF proof from the authenticated UI session. The browser supplies its HttpOnly session cookie during the upgrade; the same trusted Origin and shared HTTP authorization policy apply."
           }
         },
         "required": [
-          "type",
-          "token"
+          "type"
         ],
-        "additionalProperties": false
+        "additionalProperties": false,
+        "minProperties": 2,
+        "maxProperties": 2
       },
       "StreamSubscription": {
         "type": "object",

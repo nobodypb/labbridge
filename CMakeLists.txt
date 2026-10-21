@@ -11,7 +11,7 @@ add_library(labbridge_api_models ${API_MODELS} firmware/generated/c/src/list.c f
 target_include_directories(labbridge_api_models PUBLIC firmware/generated/c/model firmware/generated/c/include firmware/generated/c/external)
 target_link_libraries(labbridge_core PUBLIC labbridge_api_models Threads::Threads)
 enable_testing()
-foreach(test auth http_access resources dl24m_codec interlock temperature transaction guard rd60xx node dl24m_driver rd60xx_driver cell_guard interlock_delayed catalog timing driver_queue configuration_safety json output_deadline components meters rd_wifi stream dl24m_extended dl24m_modes stream_rpc json_allocation stream_memory)
+foreach(test stream_auth auth http_access resources dl24m_codec interlock temperature transaction guard rd60xx node dl24m_driver rd60xx_driver cell_guard interlock_delayed catalog timing driver_queue configuration_safety json output_deadline components meters rd_wifi stream dl24m_extended dl24m_modes stream_rpc json_allocation stream_memory)
  add_executable(test_${test} tests/test_${test}.cpp)
  target_link_libraries(test_${test} PRIVATE labbridge_core)
  add_test(NAME ${test} COMMAND test_${test})
